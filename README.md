@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Studytrix
 
-## Getting Started
+Studytrix is a Next.js App Router academic workspace for browsing department course catalogs, navigating Drive-backed study material, enriching file metadata for previews, and supporting offline-first workflows.
 
-First, run the development server:
+## What It Provides
+
+- Department and semester-aware dashboard navigation.
+- Static catalog API from `data/catalog.json` with strict runtime validation.
+- Secure, server-only Google Drive folder listing and file proxy routes.
+- Rich file metadata enrichment:
+  - PDF page count
+  - PPTX slide count
+  - Image dimensions
+- Offline subsystem with IndexedDB storage, queueing, integrity checks, and search indexing.
+
+## Tech Stack
+
+- Next.js 16 (App Router)
+- React 19 + TypeScript (strict)
+- Tailwind CSS v4
+- Google Drive API (`googleapis`) via service account JWT
+- Redis (`ioredis`) with memory fallback for cache/rate limiting
+- IndexedDB (`idb`) for offline blobs and local indexes
+- Zustand for reactive offline state
+
+## API Surface
+
+- `GET /api/catalog/[department]/[semester]`
+- `GET /api/drive/[folderId]?pageToken=...`
+- `GET /api/file/[fileId]/metadata`
+- `GET /api/file/[fileId]/stream`
+
+## Environment Variables
+
+Required for server routes:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+GOOGLE_DRIVE_CLIENT_EMAIL=
+GOOGLE_DRIVE_PRIVATE_KEY=
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Optional:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+FILE_METADATA_CACHE_TTL=86400
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Notes:
 
-## Learn More
+- Keep all keys server-side only.
+- `GOOGLE_DRIVE_PRIVATE_KEY` should preserve line breaks (`\\n` escaped in env files).
 
-To learn more about Next.js, take a look at the following resources:
+## Local Development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+App runs at `http://localhost:3000`.
 
-## Deploy on Vercel
+## Validation Commands
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run lint
+npx tsc --noEmit
+npm run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Documentation Index
+
+- `FEATURES.md`: product and platform capabilities
+- `ARCHITECTURE.md`: system layers, modules, and data flow
+- `SYSTEM_CONTEXT.md`: runtime behavior and operational contracts
+- `VISUAL_SYSTEM.md`: design language, interaction patterns, motion
