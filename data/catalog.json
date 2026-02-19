@@ -1,0 +1,423 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-02-16",
+  "departments": {
+    "ME": {
+      "name": "Mechanical Engineering",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": [
+            {
+              "courseCode": "CE2095E",
+              "courseName": "Strength of Materials Lab",
+              "credits": 1,
+              "driveFolderId": "1JGMMNH1Ic1fMUKAqBiSoB_Jnnat4em56",
+              "courseType": "lab"
+            },
+            {
+              "courseCode": "IE2001E",
+              "courseName": "Innovation and Entrepreneurship",
+              "credits": 3,
+              "driveFolderId": "1XkM9DNvaoQb4R21btgaerS-qXYin9K7X",
+              "courseType": "core"
+            },
+            {
+              "courseCode": "MA2013E",
+              "courseName": "Mathematics IV",
+              "credits": 3,
+              "driveFolderId": "1ePjnbGFzW0z7dr-H5WDcRN6A2Yx4CaE0",
+              "courseType": "core"
+            },
+            {
+              "courseCode": "ME2111E",
+              "courseName": "Essentials of Management",
+              "credits": 3,
+              "driveFolderId": "1yVuZAhZuvFFAD6BII52mMByEPT5ytYpC",
+              "courseType": "core"
+            },
+            {
+              "courseCode": "ME2211E",
+              "courseName": "Thermal Engineering",
+              "credits": 3,
+              "driveFolderId": "1uZPzIRxnGTGvFYzNsRHa7RS1ixeY2mTl",
+              "courseType": "core"
+            },
+            {
+              "courseCode": "ME2226E",
+              "courseName": "Waves on Fluid Interfaces",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME2226EOEG1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME2292E",
+              "courseName": "Thermal Engineering Lab",
+              "credits": 2,
+              "driveFolderId": "1LFoq1Tq6uZx8q3Bv0XOloM1XGjUCNK1j",
+              "courseType": "lab"
+            },
+            {
+              "courseCode": "ME2311E",
+              "courseName": "Manufacturing Science",
+              "credits": 3,
+              "driveFolderId": "1yXMRD09Y4Ijw8j2nQu-cxPMosT27uvNk",
+              "courseType": "core"
+            },
+            {
+              "courseCode": "ME3223E",
+              "courseName": "Aerospace Propulsion",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3223EOEG1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME3224E",
+              "courseName": "Refrigeration and Air Conditioning",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3224EOEF1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME3330E",
+              "courseName": "Fluid Power Controls",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3330EOEG1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME3335E",
+              "courseName": "Welding Science and Technology",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3335EOEG1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME3341E",
+              "courseName": "Applied Corrosion Engineering and Materials Protection",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3341EOEG1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME3343E",
+              "courseName": "Mechanical Behaviour and Testing of Engineering Materials",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3343EOEG1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME3430E",
+              "courseName": "Vibration with Control",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3430EOEG1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME3434E",
+              "courseName": "Design of Mechanical System",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3434EOEF1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME3435E",
+              "courseName": "Applied Data-Driven Techniques in Engineering",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3435EOEF1",
+              "courseType": "elective"
+            },
+            {
+              "courseCode": "ME3437E",
+              "courseName": "Experimental Vibration Analysis",
+              "credits": 3,
+              "driveFolderId": "UNAVAILABLE_ME3437EOEG1",
+              "courseType": "elective"
+            }
+          ]
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    },
+    "CS": {
+      "name": "Computer Science & Engineering",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": []
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    },
+    "CE": {
+      "name": "Civil Engineering",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": []
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    },
+    "EC": {
+      "name": "Electronics & Communication",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": []
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    },
+    "EE": {
+      "name": "Electrical Engineering",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": []
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    },
+    "IT": {
+      "name": "Information Technology",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": []
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    },
+    "CH": {
+      "name": "Chemical Engineering",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": []
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    },
+    "BT": {
+      "name": "Biotechnology",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": []
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    },
+    "MT": {
+      "name": "Metallurgical Engineering",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": []
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    },
+    "AE": {
+      "name": "Aerospace Engineering",
+      "semesters": {
+        "1": {
+          "courses": []
+        },
+        "2": {
+          "courses": []
+        },
+        "3": {
+          "courses": []
+        },
+        "4": {
+          "courses": []
+        },
+        "5": {
+          "courses": []
+        },
+        "6": {
+          "courses": []
+        },
+        "7": {
+          "courses": []
+        },
+        "8": {
+          "courses": []
+        }
+      }
+    }
+  }
+}

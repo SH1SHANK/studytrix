@@ -100,11 +100,39 @@ function mapDriveError(error: unknown): DriveServiceError {
       if (
         reason === "ratelimitexceeded" ||
         reason === "userratelimitexceeded" ||
-        reason === "quotaexceeded"
+        reason === "quotaexceeded" ||
+        reason === "dailylimitexceeded"
       ) {
         return new DriveServiceError("Drive quota exceeded", 429);
       }
+
+      if (
+        reason === "filenotfound" ||
+        reason === "teamdrivefilenotfound" ||
+        reason === "notfound"
+      ) {
+        return new DriveServiceError("Folder not found", 404);
+      }
+
+      if (
+        reason === "forbidden" ||
+        reason === "insufficientpermissions"
+      ) {
+        return new DriveServiceError("Folder access denied", 403);
+      }
     }
+  }
+
+  if (status === 400) {
+    return new DriveServiceError("Invalid folder ID", 400);
+  }
+
+  if (status === 403) {
+    return new DriveServiceError("Folder access denied", 403);
+  }
+
+  if (status === 404) {
+    return new DriveServiceError("Folder not found", 404);
   }
 
   if (status === 429) {

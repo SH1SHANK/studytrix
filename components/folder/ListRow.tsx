@@ -10,11 +10,13 @@ import {
 import {
   IconCloudDown,
   IconFolder,
-  IconPin,
+  IconStar,
   IconTrash,
 } from "@tabler/icons-react";
 
 import { cn } from "@/lib/utils";
+import { useTagStore } from "@/features/tags/tag.store";
+import { Button } from "@/components/ui/button";
 import { FolderActionsMenu } from "@/components/folder/FolderActionsMenu";
 
 const ACTION_PANEL_WIDTH = 132;
@@ -43,6 +45,8 @@ export function ListRow({
 }: ListRowProps) {
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const suppressClickRef = useRef(false);
+  const isStarred = useTagStore((state) => Boolean(state.assignments[id]?.starred));
+  const toggleStar = useTagStore((state) => state.toggleStar);
 
   const x = useMotionValue(0);
   const actionOpacity = useTransform(
@@ -98,6 +102,13 @@ export function ListRow({
     onOpen();
   }
 
+  function handleToggleStar() {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(8);
+    }
+    void toggleStar(id).catch(() => undefined);
+  }
+
   return (
     <div className="relative overflow-hidden rounded-lg">
       {/* Action Layer — static, behind content, always mounted */}
@@ -105,30 +116,42 @@ export function ListRow({
         className="absolute inset-y-0 right-0 z-0 flex w-[132px] items-center justify-around bg-stone-800 dark:bg-stone-700"
         style={{ opacity: actionOpacity }}
       >
-        <button
+        <Button
           type="button"
-          aria-label="Pin folder"
-          className="flex h-11 w-11 items-center justify-center rounded-md text-stone-300 transition-colors duration-200 hover:bg-stone-700 hover:text-stone-100 dark:hover:bg-stone-600"
-          onClick={(e) => e.stopPropagation()}
+          variant="ghost"
+          size="icon"
+          aria-label={isStarred ? "Unstar folder" : "Star folder"}
+          className={cn(
+            "flex h-11 w-11 items-center justify-center rounded-md transition-colors duration-200 hover:bg-stone-700 dark:hover:bg-stone-600",
+            isStarred ? "text-amber-300" : "text-amber-500",
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggleStar();
+          }}
         >
-          <IconPin className="size-4 opacity-80" />
-        </button>
-        <button
+          <IconStar className="size-4 opacity-90" />
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Make available offline"
           className="flex h-11 w-11 items-center justify-center rounded-md text-stone-300 transition-colors duration-200 hover:bg-stone-700 hover:text-stone-100 dark:hover:bg-stone-600"
           onClick={(e) => e.stopPropagation()}
         >
           <IconCloudDown className="size-4 opacity-80" />
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Delete folder"
           className="flex h-11 w-11 items-center justify-center rounded-md text-stone-300 transition-colors duration-200 hover:bg-stone-700 hover:text-rose-400 dark:hover:bg-stone-600"
           onClick={(e) => e.stopPropagation()}
         >
           <IconTrash className="size-4 opacity-80" />
-        </button>
+        </Button>
       </motion.div>
 
       {/* Draggable Content Layer — slides left to reveal actions */}
@@ -145,7 +168,7 @@ export function ListRow({
         className={cn(
           "relative z-10 flex h-16 cursor-pointer items-center gap-3 rounded-lg border px-4",
           variant === "accent"
-            ? "border-indigo-200/60 bg-indigo-50/70 dark:border-indigo-800/50 dark:bg-indigo-950/30"
+            ? "border-indigo-200/70 bg-indigo-50 dark:border-indigo-800/50 dark:bg-indigo-950/50"
             : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
         )}
         style={{ x }}
@@ -171,11 +194,15 @@ export function ListRow({
         </div>
 
         {/* Desktop: show actions menu; hidden on mobile where swipe is used */}
-        {!isTouchDevice && (
-          <div className="ml-auto pl-2">
-            <FolderActionsMenu triggerClassName="size-11" />
-          </div>
-        )}
+        <div className="ml-auto pl-2">
+          <FolderActionsMenu
+            entityId={id}
+            title={title}
+            description={meta}
+            triggerClassName="size-11"
+            onOpen={onOpen}
+          />
+        </div>
       </motion.div>
     </div>
   );

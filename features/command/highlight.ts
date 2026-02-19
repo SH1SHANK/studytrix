@@ -19,28 +19,68 @@ export interface HighlightSegment {
   matched: boolean;
 }
 
+function isAlphaNumeric(char: string | undefined): boolean {
+  if (!char) {
+    return false;
+  }
+
+  const code = char.charCodeAt(0);
+  const isNumeric = code >= 48 && code <= 57;
+  const isUpper = code >= 65 && code <= 90;
+  const isLower = code >= 97 && code <= 122;
+  return isNumeric || isUpper || isLower;
+}
+
+function markTerm(
+  lower: string,
+  term: string,
+  mask: Uint8Array,
+  wordBoundaryOnly: boolean,
+): boolean {
+  let found = false;
+  let start = 0;
+
+  while (start <= lower.length - term.length) {
+    const idx = lower.indexOf(term, start);
+    if (idx === -1) {
+      break;
+    }
+
+    const prev = idx > 0 ? lower[idx - 1] : undefined;
+    const isBoundary = !isAlphaNumeric(prev);
+    if (!wordBoundaryOnly || isBoundary) {
+      for (let i = idx; i < idx + term.length; i += 1) {
+        mask[i] = 1;
+      }
+      found = true;
+    }
+
+    start = idx + 1;
+  }
+
+  return found;
+}
+
 export function highlightText(text: string, query: string): HighlightSegment[] {
   if (!query.trim()) {
     return [{ text, matched: false }];
   }
 
-  const terms = query.trim().toLowerCase().split(/\s+/);
+  const terms = Array.from(
+    new Set(
+      query
+        .trim()
+        .toLowerCase()
+        .split(/[\s:._-]+/)
+        .filter((term) => term.length > 0),
+    ),
+  ).sort((left, right) => right.length - left.length);
   const lower = text.toLowerCase();
   const mask = new Uint8Array(text.length); // 0 = unmatched, 1 = matched
 
   for (const term of terms) {
-    if (term.length === 0) continue;
-
-    let start = 0;
-    while (start <= lower.length - term.length) {
-      const idx = lower.indexOf(term, start);
-      if (idx === -1) break;
-
-      for (let i = idx; i < idx + term.length; i++) {
-        mask[i] = 1;
-      }
-
-      start = idx + 1;
+    if (!markTerm(lower, term, mask, true)) {
+      markTerm(lower, term, mask, false);
     }
   }
 

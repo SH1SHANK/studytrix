@@ -1,23 +1,36 @@
+// Design tokens inherited from Dashboard — do not redefine
+// Section label: text-xs font-medium uppercase tracking-widest text-stone-400
+// Count pill: bg-indigo-100 px-2 text-[11px] font-semibold text-indigo-600
+// Accent bar: w-1 h-4 rounded-full bg-indigo-500
+// Skeleton: @/components/ui/skeleton
+// Separator: bg-linear-to-r from-transparent via-stone-200 to-transparent
+// Card entrance: card-entrance class defined in globals.css 280ms ease-out
+// Transition: transition-all duration-200, collapse duration-300
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { IconFolderOff, IconLoader2 } from "@tabler/icons-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { IconChevronDown, IconFolderOff, IconLoader2 } from "@tabler/icons-react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { useFileManagerViewMode } from "@/components/file-manager/ControlsBar";
 import { FileRow } from "@/components/file-manager/FileRow";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useDriveFolder } from "@/features/drive/drive.hooks";
+import type { DownloadTask as DownloadManagerTask } from "@/features/download/download.types";
+import { openLocalFirst } from "@/features/offline/offline.access";
+import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
 import { autoPrefetch } from "@/features/offline/offline.prefetch";
-import { useOfflineStore } from "@/features/offline/offline.store";
-import {
-  type CacheFileMetadata,
-  type DownloadTask,
-} from "@/features/offline/offline.types";
+import { type DownloadTask } from "@/features/offline/offline.types";
+import { useSettingsStore } from "@/features/settings/settings.store";
+import { useMotionTokens } from "@/features/motion/motion.tokens";
 import {
   formatFileSize,
   getMimeLabel,
 } from "@/features/drive/drive.types";
+import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
 
 type FileListProps = {
   driveFolderId: string | null;
@@ -35,13 +48,80 @@ type FileListRow = {
   webViewLink: string | null;
 };
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+/* ─── Section Header — matches dashboard section labels with accent bar ── */
+
+function SectionHeader({
+  label,
+  count,
+  isOpen,
+  onToggle,
+  sectionId,
+}: {
+  label: string;
+  count: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  sectionId: string;
+}) {
   return (
-    <div className="flex items-center gap-2 px-1">
-      <span className="h-4 w-1 rounded-full bg-indigo-500" />
-      <span className="text-xs font-medium uppercase tracking-widest text-stone-400">
-        {children}
+    <button
+      type="button"
+      className="flex w-full items-center gap-2.5 px-1 py-3 text-left transition-colors duration-200 hover:bg-stone-100/50 dark:hover:bg-stone-800/30 rounded-lg"
+      onClick={onToggle}
+      aria-expanded={isOpen}
+      aria-controls={sectionId}
+    >
+      {/* Accent bar */}
+      <span className="h-4 w-1 rounded-full bg-indigo-500 dark:bg-indigo-400" aria-hidden="true" />
+
+      {/* Label */}
+      <span className="text-xs font-semibold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+        {label}
       </span>
+
+      {/* Count pill — matches Dashboard badge */}
+      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">
+        {count}
+      </span>
+
+      {/* Spacer */}
+      <span className="flex-1" />
+
+      {/* Collapse chevron — rotates on toggle */}
+      <IconChevronDown
+        className="size-4 text-stone-400 transition-transform duration-300 ease-out dark:text-stone-500"
+        style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
+        aria-hidden="true"
+      />
+    </button>
+  );
+}
+
+/* ─── Skeleton Card — matches real card dimensions ────────────────────── */
+
+function SkeletonCard({ viewMode }: { viewMode: "grid" | "list" }) {
+  if (viewMode === "grid") {
+    return (
+      <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+        <div className="space-y-3">
+          <Skeleton className="h-11 w-11 rounded-lg" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-3/4 rounded" />
+            <Skeleton className="h-3 w-1/2 rounded" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-[64px] items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900">
+      <Skeleton className="h-11 w-11 shrink-0 rounded-lg" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <Skeleton className="h-4 w-3/4 rounded" />
+        <Skeleton className="h-3 w-1/2 rounded" />
+      </div>
+      <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
     </div>
   );
 }
@@ -52,10 +132,21 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const { viewMode, layoutMode } = useFileManagerViewMode();
   const [openRowId, setOpenRowId] = useState<string | null>(null);
   const [swipeEnabled, setSwipeEnabled] = useState(false);
-  const offlineFiles = useOfflineStore((state) => state.offlineFiles);
-  const downloading = useOfflineStore((state) => state.downloading);
-  const startDownload = useOfflineStore((state) => state.startDownload);
-  const removeOffline = useOfflineStore((state) => state.removeOffline);
+  const [foldersOpen, setFoldersOpen] = useState(true);
+  const [filesOpen, setFilesOpen] = useState(true);
+  const motionTokens = useMotionTokens();
+  const offlineFiles = useOfflineIndexStore((state) => state.snapshot.offlineFiles);
+  const removeOffline = useOfflineIndexStore((state) => state.removeOffline);
+  const autoPrefetchEnabled = useSettingsStore((state) => {
+    const candidate = state.values.auto_prefetch;
+    return typeof candidate === "boolean" ? candidate : true;
+  });
+  const virtualizedListsEnabled = useSettingsStore((state) => {
+    const candidate = state.values.virtualized_lists;
+    return typeof candidate === "boolean" ? candidate : true;
+  });
+  const [visibleCount, setVisibleCount] = useState(120);
+  const { tasks: downloadTasks, startDownload, animateDownload } = useDownloadManager();
 
   const { folders, files, isLoading, error } = useDriveFolder(driveFolderId);
 
@@ -106,9 +197,36 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   );
 
   const allRows = useMemo<FileListRow[]>(() => [...folderRows, ...fileRows], [folderRows, fileRows]);
+  const visibleRows = useMemo(() => {
+    if (!virtualizedListsEnabled) {
+      return {
+        folders: folderRows,
+        files: fileRows,
+        all: allRows,
+        hasMore: false,
+      };
+    }
+
+    const folders = folderRows.slice(0, visibleCount);
+    const remainingForFiles = Math.max(0, visibleCount - folders.length);
+    const files = fileRows.slice(0, remainingForFiles);
+    const all = allRows.slice(0, visibleCount);
+
+    return {
+      folders,
+      files,
+      all,
+      hasMore: allRows.length > all.length,
+    };
+  }, [allRows, fileRows, folderRows, visibleCount, virtualizedListsEnabled]);
 
   const isGridView = viewMode === "grid";
-  const rowContainerClass = isGridView ? "grid grid-cols-2 gap-3" : "space-y-2";
+  // Apply data-compact via group modifier implicitly when layout wraps it, 
+  // or use basic CSS targeting depending on how Settings provider sets it on HTML. 
+  // We use Tailwind arbitrary variants targeting the data-attribute on :root
+  const rowContainerClass = isGridView 
+    ? "grid grid-cols-2 gap-3 data-[compact=true]:gap-2" 
+    : "flex flex-col gap-2 data-[compact=true]:gap-1";
   const pathSegments = useMemo(() => pathname.split("/").filter(Boolean), [pathname]);
   const departmentSegment = pathSegments[0];
   const semesterSegment = pathSegments[1];
@@ -117,27 +235,16 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
     setOpenRowId(id);
   }, []);
 
-  const fetchOfflineStream = useCallback((fileId: string): Promise<Response> => {
-    return fetch(`/api/file/${encodeURIComponent(fileId)}/stream`);
-  }, []);
-
   const handleMakeOffline = useCallback(
-    async (item: FileListRow): Promise<void> => {
+    async (item: FileListRow, sourceElement?: HTMLElement): Promise<void> => {
       if (item.type !== "file") {
         return;
       }
 
-      const metadata: CacheFileMetadata = {
-        mimeType: item.mimeType ?? "application/octet-stream",
-        size: item.sizeBytes,
-        modifiedTime: item.modifiedTime,
-        name: item.title,
-        priority: 200,
-      };
-
-      await startDownload(item.id, metadata, fetchOfflineStream);
+      animateDownload(sourceElement ?? null);
+      await startDownload(item.id);
     },
-    [fetchOfflineStream, startDownload],
+    [animateDownload, startDownload],
   );
 
   const handleRemoveOffline = useCallback(
@@ -162,18 +269,27 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         return;
       }
 
-      const metadata: CacheFileMetadata = {
-        mimeType: item.mimeType ?? "application/octet-stream",
-        size: item.sizeBytes,
-        modifiedTime: item.modifiedTime,
-        name: item.title,
-        priority: task.priority,
-      };
-
-      void startDownload(item.id, metadata, fetchOfflineStream).catch(() => undefined);
+      void startDownload(item.id).catch(() => undefined);
     },
-    [fetchOfflineStream, fileRowsById, startDownload],
+    [fileRowsById, startDownload],
   );
+
+  const activeDownloadsByFileId = useMemo(() => {
+    const index = new Map<string, DownloadManagerTask>();
+
+    for (const task of Object.values(downloadTasks)) {
+      if (task.state === "completed" || task.state === "canceled" || task.state === "failed") {
+        continue;
+      }
+
+      const existing = index.get(task.fileId);
+      if (!existing || existing.updatedAt < task.updatedAt) {
+        index.set(task.fileId, task);
+      }
+    }
+
+    return index;
+  }, [downloadTasks]);
 
   const getRowSubtitle = useCallback(
     (item: FileListRow): string => {
@@ -181,9 +297,18 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         return item.subtitle;
       }
 
-      const progress = downloading[item.id];
-      if (progress) {
-        return `Downloading ${Math.round(progress.percent)}%`;
+      const active = activeDownloadsByFileId.get(item.id);
+      if (active) {
+        const pct = Math.round(active.progress);
+        if (active.state === "paused") {
+          return `Paused at ${pct}%`;
+        }
+
+        if (active.state === "queued") {
+          return pct > 0 ? `Queued ${pct}%` : "Queued";
+        }
+
+        return `Downloading ${pct}%`;
       }
 
       if (offlineFiles[item.id]) {
@@ -192,7 +317,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
 
       return item.subtitle;
     },
-    [downloading, offlineFiles],
+    [activeDownloadsByFileId, offlineFiles],
   );
 
   const handleOpenRow = useCallback(
@@ -209,25 +334,60 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
       }
 
       if (item.webViewLink) {
-        autoPrefetch(
-          item.id,
-          fileRows.map((row) => row.id),
-          enqueuePrefetch,
-        );
+        if (autoPrefetchEnabled) {
+          autoPrefetch(
+            item.id,
+            fileRows.map((row) => row.id),
+            enqueuePrefetch,
+          );
+        }
+
+        if (offlineFiles[item.id]) {
+          void openLocalFirst(
+            item.id,
+            `/api/file/${encodeURIComponent(item.id)}/stream`,
+          );
+          return;
+        }
+
         window.open(item.webViewLink, "_blank", "noopener,noreferrer");
       }
     },
-    [departmentSegment, enqueuePrefetch, fileRows, router, semesterSegment],
+    [autoPrefetchEnabled, departmentSegment, enqueuePrefetch, fileRows, offlineFiles, router, semesterSegment],
   );
 
-  // Loading state
+  // Loading state — skeleton cards matching real card dimensions
   if (isLoading) {
     return (
-      <div className="mt-6 flex min-h-[50vh] flex-col items-center justify-center px-4 pb-32">
-        <IconLoader2 className="size-6 animate-spin text-indigo-500" />
-        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-          Loading files…
-        </p>
+      <div className="mt-4 px-4 pb-32">
+        <div className="space-y-4">
+          {/* Skeleton section header */}
+          <div className="flex items-center gap-2.5 px-1 py-3">
+            <Skeleton className="h-4 w-1 rounded-full" />
+            <Skeleton className="h-3 w-16 rounded" />
+            <Skeleton className="h-5 w-6 rounded-full" />
+          </div>
+          <div className={isGridView ? "grid grid-cols-2 gap-3" : "space-y-2"}>
+            {Array.from({ length: isGridView ? 4 : 3 }, (_, index) => (
+              <SkeletonCard key={`sk-folder-${index}`} viewMode={viewMode} />
+            ))}
+          </div>
+
+          {/* Separator */}
+          <div className="h-px bg-linear-to-r from-transparent via-stone-200 to-transparent dark:via-stone-800" />
+
+          {/* Skeleton section header */}
+          <div className="flex items-center gap-2.5 px-1 py-3">
+            <Skeleton className="h-4 w-1 rounded-full" />
+            <Skeleton className="h-3 w-12 rounded" />
+            <Skeleton className="h-5 w-6 rounded-full" />
+          </div>
+          <div className={isGridView ? "grid grid-cols-2 gap-3" : "space-y-2"}>
+            {Array.from({ length: isGridView ? 4 : 3 }, (_, index) => (
+              <SkeletonCard key={`sk-file-${index}`} viewMode={viewMode} />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -264,104 +424,165 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.18 }}
-      className="mt-4 px-4 pb-32"
-    >
-      {/* Section container panel */}
-      <div className="rounded-xl border border-stone-200/60 bg-white/80 p-4 shadow-sm backdrop-blur-[2px] dark:border-stone-800/60 dark:bg-stone-900/70">
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={viewMode}
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.97 }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
+        className="mt-4 px-4 pb-32"
+      >
         {layoutMode === "separated" ? (
           <div className="space-y-4">
-            {folderRows.length > 0 && (
-              <div className="space-y-3">
-                <SectionLabel>Folders</SectionLabel>
-                <div className={rowContainerClass}>
-                  {folderRows.map((item) => (
-                    <FileRow
-                      key={item.id}
-                      id={item.id}
-                      type={item.type}
-                      title={item.title}
-                      subtitle={getRowSubtitle(item)}
-                      isOffline={Boolean(offlineFiles[item.id])}
-                      isDownloading={Boolean(downloading[item.id])}
-                      viewMode={viewMode}
-                      isOpen={openRowId === item.id}
-                      swipeEnabled={swipeEnabled && !isGridView}
-                      onToggleOpen={onToggleOpen}
-                      onOpen={() => handleOpenRow(item)}
-                      onRemoveOffline={() => {
-                        void handleRemoveOffline(item);
-                      }}
-                    />
-                  ))}
+            {/* Folders section */}
+            {visibleRows.folders.length > 0 && (
+              <section>
+                <SectionHeader
+                  label="Folders"
+                  count={visibleRows.folders.length}
+                  isOpen={foldersOpen}
+                  onToggle={() => setFoldersOpen((prev) => !prev)}
+                  sectionId="fm-folders-section"
+                />
+                <div
+                  id="fm-folders-section"
+                  className="overflow-hidden transition-all duration-300 ease-out"
+                  style={{
+                    maxHeight: foldersOpen ? "9999px" : "0",
+                    opacity: foldersOpen ? 1 : 0,
+                  }}
+                >
+                  <div className={rowContainerClass}>
+                    {visibleRows.folders.map((item, index) => (
+                      <FileRow
+                        key={item.id}
+                        id={item.id}
+                        type={item.type}
+                        title={item.title}
+                        subtitle={getRowSubtitle(item)}
+                        mimeType={item.mimeType}
+                        sizeBytes={item.sizeBytes}
+                        modifiedTime={item.modifiedTime}
+                        isOffline={Boolean(offlineFiles[item.id])}
+                        isDownloading={Boolean(activeDownloadsByFileId.get(item.id))}
+                        viewMode={viewMode}
+                        isOpen={openRowId === item.id}
+                        swipeEnabled={swipeEnabled && !isGridView}
+                        onToggleOpen={onToggleOpen}
+                        onOpen={() => handleOpenRow(item)}
+                        onRemoveOffline={() => {
+                          void handleRemoveOffline(item);
+                        }}
+                        animationIndex={index}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </section>
             )}
 
-            {folderRows.length > 0 && fileRows.length > 0 && (
+            {visibleRows.folders.length > 0 && visibleRows.files.length > 0 && (
               <div className="h-px bg-linear-to-r from-transparent via-stone-200 to-transparent dark:via-stone-800" />
             )}
 
-            {fileRows.length > 0 && (
-              <div className="space-y-3">
-                <SectionLabel>Files</SectionLabel>
-                <div className={rowContainerClass}>
-                  {fileRows.map((item) => (
-                    <FileRow
-                      key={item.id}
-                      id={item.id}
-                      type={item.type}
-                      title={item.title}
-                      subtitle={getRowSubtitle(item)}
-                      isOffline={Boolean(offlineFiles[item.id])}
-                      isDownloading={Boolean(downloading[item.id])}
-                      viewMode={viewMode}
-                      isOpen={openRowId === item.id}
-                      swipeEnabled={swipeEnabled && !isGridView}
-                      onToggleOpen={onToggleOpen}
-                      onOpen={() => handleOpenRow(item)}
-                      onMakeOffline={() => {
-                        void handleMakeOffline(item);
-                      }}
-                      onRemoveOffline={() => {
-                        void handleRemoveOffline(item);
-                      }}
-                    />
-                  ))}
+            {/* Files section */}
+            {visibleRows.files.length > 0 && (
+              <section>
+                <SectionHeader
+                  label="Files"
+                  count={visibleRows.files.length}
+                  isOpen={filesOpen}
+                  onToggle={() => setFilesOpen((prev) => !prev)}
+                  sectionId="fm-files-section"
+                />
+                <div
+                  id="fm-files-section"
+                  className="overflow-hidden transition-all duration-300 ease-out"
+                  style={{
+                    maxHeight: filesOpen ? "9999px" : "0",
+                    opacity: filesOpen ? 1 : 0,
+                  }}
+                >
+                  <div className={rowContainerClass}>
+                    {visibleRows.files.map((item, index) => (
+                      <FileRow
+                        key={item.id}
+                        id={item.id}
+                        type={item.type}
+                        title={item.title}
+                        subtitle={getRowSubtitle(item)}
+                        mimeType={item.mimeType}
+                        sizeBytes={item.sizeBytes}
+                        modifiedTime={item.modifiedTime}
+                        isOffline={Boolean(offlineFiles[item.id])}
+                        isDownloading={Boolean(activeDownloadsByFileId.get(item.id))}
+                        viewMode={viewMode}
+                        isOpen={openRowId === item.id}
+                        swipeEnabled={swipeEnabled && !isGridView}
+                        onToggleOpen={onToggleOpen}
+                        onOpen={() => handleOpenRow(item)}
+                        onMakeOffline={(sourceElement) => {
+                          void handleMakeOffline(item, sourceElement);
+                        }}
+                        onRemoveOffline={() => {
+                          void handleRemoveOffline(item);
+                        }}
+                        animationIndex={visibleRows.folders.length + index}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </section>
             )}
           </div>
         ) : (
           <div className={rowContainerClass}>
-            {allRows.map((item) => (
+            {visibleRows.all.map((item, index) => (
               <FileRow
                 key={item.id}
                 id={item.id}
                 type={item.type}
                 title={item.title}
                 subtitle={getRowSubtitle(item)}
+                mimeType={item.mimeType}
+                sizeBytes={item.sizeBytes}
+                modifiedTime={item.modifiedTime}
                 isOffline={Boolean(offlineFiles[item.id])}
-                isDownloading={Boolean(downloading[item.id])}
+                isDownloading={Boolean(activeDownloadsByFileId.get(item.id))}
                 viewMode={viewMode}
                 isOpen={openRowId === item.id}
                 swipeEnabled={swipeEnabled && !isGridView}
                 onToggleOpen={onToggleOpen}
                 onOpen={() => handleOpenRow(item)}
-                onMakeOffline={() => {
-                  void handleMakeOffline(item);
+                onMakeOffline={(sourceElement) => {
+                  void handleMakeOffline(item, sourceElement);
                 }}
                 onRemoveOffline={() => {
                   void handleRemoveOffline(item);
                 }}
+                animationIndex={index}
               />
             ))}
           </div>
         )}
-      </div>
-    </motion.div>
+
+        {visibleRows.hasMore ? (
+          <div className="mt-4 flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-lg border-stone-200 px-4 text-xs font-medium shadow-sm dark:border-stone-700"
+              onClick={() => {
+                setVisibleCount((current) => current + 120);
+              }}
+            >
+              Load more
+            </Button>
+          </div>
+        ) : null}
+      </motion.div>
+    </AnimatePresence>
   );
 }

@@ -24,6 +24,7 @@ type RouteContext = {
 const FOLDER_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const PAGE_TOKEN_PATTERN = /^[a-zA-Z0-9._-]{1,512}$/;
 const DRIVE_CACHE_TTL_SECONDS = 600;
+const UNAVAILABLE_FOLDER_PREFIX = "UNAVAILABLE_";
 
 let driveService: DriveService | null = null;
 
@@ -104,6 +105,13 @@ export async function GET(
       return NextResponse.json({ error: "Invalid folder ID" }, { status: 400 });
     }
 
+    if (folderId.startsWith(UNAVAILABLE_FOLDER_PREFIX)) {
+      return NextResponse.json(
+        { error: "This course folder is not available yet." },
+        { status: 404 },
+      );
+    }
+
     const url = new URL(request.url);
     const pageToken = validatePageToken(url.searchParams.get("pageToken"));
 
@@ -145,8 +153,22 @@ export async function GET(
 
     return NextResponse.json(data);
   } catch (error) {
-    if (error instanceof DriveServiceError && error.statusCode === 429) {
-      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+    if (error instanceof DriveServiceError) {
+      if (error.statusCode === 400) {
+        return NextResponse.json({ error: "Invalid folder ID" }, { status: 400 });
+      }
+
+      if (error.statusCode === 403) {
+        return NextResponse.json({ error: "Folder access denied" }, { status: 403 });
+      }
+
+      if (error.statusCode === 404) {
+        return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+      }
+
+      if (error.statusCode === 429) {
+        return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+      }
     }
 
     console.error("Drive route error:", error);

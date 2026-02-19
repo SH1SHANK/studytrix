@@ -1,11 +1,56 @@
-/**
- * Scope indicating where a command is valid.
- */
-export type CommandScope = "global" | "folder";
+export type FieldFilterKey =
+  | "tag"
+  | "type"
+  | "course"
+  | "ext"
+  | "mime";
 
-/**
- * Logical grouping used to organize command results.
- */
+export type BooleanFlagKey = "starred" | "offline";
+
+export type ComparisonKey = "size" | "modified" | "created";
+
+export interface ComparisonFilter {
+  field: ComparisonKey;
+  operator: ">" | "<" | ">=" | "<=" | "=";
+  value: number;
+}
+
+export interface FieldFilter {
+  field: FieldFilterKey;
+  values: string[];
+}
+
+export interface BooleanFilter {
+  field: BooleanFlagKey;
+  value: boolean;
+}
+
+export interface QueryAST {
+  keywords: string[];
+  fieldFilters: FieldFilter[];
+  comparisons: ComparisonFilter[];
+  booleanFilters: BooleanFilter[];
+  orGroups?: QueryAST[];
+}
+
+export type QueryTokenType = "WORD" | "COLON" | "OPERATOR" | "OR";
+
+export interface QueryToken {
+  type: QueryTokenType;
+  value: string;
+  start: number;
+  end: number;
+}
+
+export interface ParseResult {
+  ast: QueryAST;
+  errors: string[];
+}
+
+export type SearchEntryType = "file" | "folder" | "tag" | "command" | "course";
+
+export type CommandScope = "global" | "folder" | "file";
+
 export type CommandGroup =
   | "navigation"
   | "folders"
@@ -13,9 +58,6 @@ export type CommandGroup =
   | "actions"
   | "system";
 
-/**
- * Canonical command item used by indexing, ranking, and dispatching.
- */
 export interface CommandItem {
   id: string;
   title: string;

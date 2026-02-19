@@ -1,38 +1,44 @@
+// Design tokens inherited from Dashboard — do not redefine
+// Cards: rounded-xl, border-stone-200 bg-white shadow-sm, dark:border-stone-800 dark:bg-stone-900
+// Card hover: hover:-translate-y-0.5 hover:shadow-md, active:scale-[0.98]
+// Card focus: focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2
+// Icon container: h-11 w-11 rounded-lg, shadow-inner on Dashboard FolderCard
+// Folder tint: bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400
+// File PDF tint: bg-rose-50 text-rose-500, Doc: bg-blue-50 text-blue-500, Image: bg-emerald-50 text-emerald-500
+// Typography: title text-sm font-medium, subtitle text-xs text-stone-500
+// Transition: transition-all duration-200
+// Tag badges: rounded-full, text-[10px] font-semibold
+
 "use client";
 
-import { memo, useRef } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import { motion, type PanInfo } from "framer-motion";
 import {
-  IconArrowUpRight,
-  IconCircleCheck,
   IconCloudDown,
-  IconDeviceFloppy,
-  IconDotsVertical,
   IconFile,
   IconFileTypePdf,
   IconFileTypeDocx,
   IconFileTypePng,
-  IconFolder,
-  IconPin,
-  IconTrashX,
+  IconFolderOpen,
+  IconStar,
   IconTrash,
 } from "@tabler/icons-react";
+import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@/lib/utils";
+import { getTagChipTextColor } from "@/features/tags/tag.filter";
+import { useTagStore } from "@/features/tags/tag.store";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { EntityActionsMenu } from "@/components/file-manager/EntityActionsMenu";
 
 type FileRowProps = {
   id: string;
   type: "folder" | "file";
   title: string;
   subtitle: string;
+  mimeType: string | null;
+  sizeBytes: number;
+  modifiedTime: string | null;
   isOffline?: boolean;
   isDownloading?: boolean;
   viewMode: "grid" | "list";
@@ -40,8 +46,16 @@ type FileRowProps = {
   swipeEnabled: boolean;
   onToggleOpen: (id: string | null) => void;
   onOpen?: () => void;
-  onMakeOffline?: () => void;
+  onMakeOffline?: (sourceElement?: HTMLElement) => void;
   onRemoveOffline?: () => void;
+  /** Stagger index for entrance animation */
+  animationIndex?: number;
+};
+
+type FileTagBadge = {
+  id: string;
+  name: string;
+  color: string;
 };
 
 /* Derive file extension for semantic icon + color */
@@ -63,6 +77,7 @@ const FILE_ICON_MAP: Record<
   webp: IconFileTypePng,
 };
 
+/* Icon color classes — derived from existing Dashboard palette */
 function getFileIconColor(extension: string): string {
   switch (extension) {
     case "pdf":
@@ -80,18 +95,41 @@ function getFileIconColor(extension: string): string {
   }
 }
 
+/* Icon container background tint — derived from Dashboard palette */
+function getFileIconBgClass(extension: string): string {
+  switch (extension) {
+    case "pdf":
+      return "bg-rose-50 dark:bg-rose-950/30";
+    case "docx":
+    case "doc":
+      return "bg-blue-50 dark:bg-blue-950/30";
+    case "png":
+    case "jpg":
+    case "jpeg":
+    case "webp":
+      return "bg-emerald-50 dark:bg-emerald-950/30";
+    default:
+      return "bg-stone-100 dark:bg-stone-800";
+  }
+}
+
 function renderIcon(isFolder: boolean, ext: string) {
-  const Icon = isFolder ? IconFolder : (FILE_ICON_MAP[ext] ?? IconFile);
+  const Icon = isFolder ? IconFolderOpen : (FILE_ICON_MAP[ext] ?? IconFile);
   return <Icon className="size-5" />;
 }
 
 const ACTION_PANEL_WIDTH = 120;
+const EMPTY_TAG_IDS: string[] = [];
+const FILE_TAG_PREVIEW_LIMIT = 3;
 
 function FileRowComponent({
   id,
   type,
   title,
   subtitle,
+  mimeType,
+  sizeBytes,
+  modifiedTime,
   isOffline = false,
   isDownloading = false,
   viewMode,
@@ -101,6 +139,7 @@ function FileRowComponent({
   onOpen,
   onMakeOffline,
   onRemoveOffline,
+  animationIndex = 0,
 }: FileRowProps) {
   const suppressClickRef = useRef(false);
   const isFolder = type === "folder";
@@ -109,6 +148,17 @@ function FileRowComponent({
   const iconColor = isFolder
     ? "text-indigo-600 dark:text-indigo-400"
     : getFileIconColor(ext);
+  const iconBg = isFolder
+    ? "bg-indigo-50 dark:bg-indigo-950/30"
+    : getFileIconBgClass(ext);
+  const { isStarred, toggleStar, tags, assignedTagIds } = useTagStore(
+    useShallow((state) => ({
+      isStarred: Boolean(state.assignments[id]?.starred),
+      toggleStar: state.toggleStar,
+      tags: state.tags,
+      assignedTagIds: state.assignments[id]?.tagIds ?? EMPTY_TAG_IDS,
+    })),
+  );
   const menuStatus = isOffline
     ? "Saved for offline access"
     : isDownloading
@@ -116,6 +166,31 @@ function FileRowComponent({
       : isFolder
         ? "Folder actions"
         : "Online only";
+  const fileTags = useMemo<FileTagBadge[]>(() => {
+    if (isFolder || assignedTagIds.length === 0) {
+      return [];
+    }
+
+    const tagById = new Map(tags.map((tag) => [tag.id, tag]));
+    const mapped: FileTagBadge[] = [];
+
+    for (const tagId of assignedTagIds) {
+      const tag = tagById.get(tagId);
+      if (!tag) {
+        continue;
+      }
+
+      mapped.push({
+        id: tag.id,
+        name: tag.name,
+        color: tag.color,
+      });
+    }
+
+    return mapped;
+  }, [assignedTagIds, isFolder, tags]);
+  const visibleFileTags = fileTags.slice(0, FILE_TAG_PREVIEW_LIMIT);
+  const hiddenTagCount = fileTags.length - visibleFileTags.length;
 
   const triggerHaptic = (duration = 8) => {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
@@ -128,13 +203,13 @@ function FileRowComponent({
     onOpen?.();
   };
 
-  const handleMakeOfflineAction = () => {
+  const handleMakeOfflineAction = (sourceElement?: HTMLElement) => {
     if (isFolder || isOffline || isDownloading) {
       return;
     }
 
     triggerHaptic();
-    onMakeOffline?.();
+    onMakeOffline?.(sourceElement);
   };
 
   const handleRemoveOfflineAction = () => {
@@ -146,92 +221,86 @@ function FileRowComponent({
     onRemoveOffline?.();
   };
 
+  const handleToggleStarAction = useCallback(() => {
+    triggerHaptic(6);
+    void toggleStar(id).catch(() => undefined);
+  }, [id, toggleStar]);
+
   const renderActionMenu = () => (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-10 rounded-lg text-stone-500 transition-all duration-200 hover:-translate-y-px hover:bg-stone-100 hover:text-stone-700 active:scale-[0.98] dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-            onClick={(event) => event.stopPropagation()}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-              triggerHaptic(6);
-            }}
-          />
-        }
-      >
-        <IconDotsVertical className="size-4" />
-        <span className="sr-only">Open actions</span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-72 rounded-xl border border-stone-200/70 bg-white/95 p-1.5 shadow-xl shadow-stone-900/10 backdrop-blur-md dark:border-stone-700/80 dark:bg-stone-900/95"
-      >
-        <div className="mb-1 rounded-lg border border-stone-200/70 bg-stone-50/80 px-3 py-2.5 dark:border-stone-700/80 dark:bg-stone-800/70">
-          <p className="truncate text-sm font-semibold text-stone-800 dark:text-stone-100">
-            {title}
-          </p>
-          <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
-            {menuStatus}
-          </p>
-        </div>
-        <DropdownMenuItem
-          className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-indigo-50 focus:text-indigo-700 dark:focus:bg-indigo-500/20 dark:focus:text-indigo-200"
-          onClick={handleOpenAction}
-        >
-          <IconArrowUpRight className="size-4 text-indigo-500 dark:text-indigo-300" />
-          <div className="flex flex-col gap-0.5">
-            <span>{isFolder ? "Open Folder" : "Open File"}</span>
-            <span className="text-[11px] font-normal text-stone-500 dark:text-stone-400">
-              {isFolder ? "Navigate into this folder" : "Open in a new tab"}
-            </span>
-          </div>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-sky-50 focus:text-sky-700 disabled:opacity-45 dark:focus:bg-sky-500/20 dark:focus:text-sky-200"
-          onClick={handleMakeOfflineAction}
-          disabled={isFolder || isOffline || isDownloading}
-        >
-          {isOffline ? (
-            <IconCircleCheck className="size-4 text-emerald-500 dark:text-emerald-300" />
-          ) : (
-            <IconDeviceFloppy className="size-4 text-sky-500 dark:text-sky-300" />
-          )}
-          <div className="flex flex-col gap-0.5">
-            <span>
-              {isOffline
-                ? "Already Offline"
-                : isDownloading
-                  ? "Downloading..."
-                  : "Save Offline Copy"}
-            </span>
-            <span className="text-[11px] font-normal text-stone-500 dark:text-stone-400">
-              {isOffline
-                ? "This file is available without internet"
-                : "Download for quick offline access"}
-            </span>
-          </div>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator className="my-1" />
-        <DropdownMenuItem
-          className="min-h-11 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-rose-50 focus:text-rose-700 disabled:opacity-45 dark:focus:bg-rose-500/20 dark:focus:text-rose-200"
-          onClick={handleRemoveOfflineAction}
-          disabled={!isOffline || isDownloading}
-        >
-          <IconTrashX className="size-4 text-rose-500 dark:text-rose-300" />
-          <div className="flex flex-col gap-0.5">
-            <span>Remove Offline Copy</span>
-            <span className="text-[11px] font-normal text-stone-500 dark:text-stone-400">
-              Free storage and keep cloud-only
-            </span>
-          </div>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <EntityActionsMenu
+      entityId={id}
+      entityType={isFolder ? "folder" : "file"}
+      title={title}
+      description={menuStatus}
+      entityDetails={{
+        mimeType,
+        sizeBytes,
+        modifiedTime,
+      }}
+      align="end"
+      triggerClassName="size-11"
+      onOpen={handleOpenAction}
+      onMakeOffline={(sourceElement) => {
+        handleMakeOfflineAction(sourceElement);
+      }}
+      onRemoveOffline={handleRemoveOfflineAction}
+      isOffline={isOffline}
+      isDownloading={isDownloading}
+    />
   );
+
+  const renderTagBadges = () => {
+    if (isFolder || visibleFileTags.length === 0) {
+      return null;
+    }
+
+    return (
+      <div
+        className="mt-1.5 flex flex-wrap gap-1"
+        aria-label={`${fileTags.length} tags applied`}
+      >
+        {visibleFileTags.map((tag) => (
+          <span
+            key={`${id}-tag-${tag.id}`}
+            className="inline-flex max-w-full items-center truncate rounded-full border border-black/10 px-1.5 py-0.5 text-[10px] font-semibold"
+            style={{
+              backgroundColor: tag.color,
+              color: getTagChipTextColor(tag.color),
+            }}
+          >
+            {tag.name}
+          </span>
+        ))}
+        {hiddenTagCount > 0 ? (
+          <span className="inline-flex items-center rounded-full border border-stone-300 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:border-stone-600 dark:text-stone-300">
+            +{hiddenTagCount}
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderStatusBadge = () => {
+    if (isFolder) return null;
+
+    if (isOffline) {
+      return (
+        <span className="inline-flex shrink-0 items-center rounded-full border border-emerald-300/80 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300">
+          Offline
+        </span>
+      );
+    }
+
+    if (isDownloading) {
+      return (
+        <span className="inline-flex shrink-0 items-center rounded-full border border-sky-300/80 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300">
+          Syncing
+        </span>
+      );
+    }
+
+    return null;
+  };
 
   /* ─── Grid View ─── */
   if (viewMode === "grid") {
@@ -247,45 +316,49 @@ function FileRowComponent({
           }
         }}
         className={cn(
-          "group relative cursor-pointer rounded-lg border p-4 ring-1 ring-transparent transition-all duration-200",
-          "hover:-translate-y-px hover:shadow-md active:scale-[0.99]",
-          "focus-within:ring-2 focus-within:ring-indigo-400/40 focus-within:outline-none",
+          "group card-entrance relative cursor-pointer rounded-xl border p-4 shadow-sm transition-all duration-200 data-[compact=true]:p-3",
+          "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
+          "focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2",
           isFolder
             ? "border-indigo-200/40 bg-indigo-50/40 dark:border-indigo-800/40 dark:bg-indigo-950/20"
             : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
         )}
+        style={{ animationDelay: `${animationIndex * 40}ms` }}
       >
-        <div className="absolute right-2 top-2">
+        <div className="absolute right-2 top-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           {renderActionMenu()}
         </div>
 
         <div className="space-y-3">
-          {/* Upgraded icon container */}
+          {/* Icon container */}
           <div
             className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-lg border shadow-inner transition-colors duration-200",
-              isFolder
-                ? "border-indigo-200/60 bg-indigo-100 group-hover:bg-indigo-200/70 dark:border-indigo-800/60 dark:bg-indigo-900/40 dark:group-hover:bg-indigo-900/60"
-                : "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-800",
+              "flex h-11 w-11 items-center justify-center rounded-lg transition-colors duration-200",
+              iconBg,
               iconColor,
             )}
           >
             {icon}
           </div>
           <div className="space-y-1 pr-8">
-            <p
+            <div
               className={cn(
-                "line-clamp-1 text-stone-900 dark:text-stone-100",
+                "flex items-center gap-1.5 text-stone-900 dark:text-stone-100",
                 isFolder
-                  ? "text-base font-semibold tracking-tight"
+                  ? "text-base font-medium tracking-tight"
                   : "text-sm font-medium",
               )}
             >
-              {title}
-            </p>
-            <p className="line-clamp-1 text-xs text-stone-500 dark:text-stone-400">
+              <span className="line-clamp-2">{title}</span>
+              {renderStatusBadge()}
+              {isStarred ? (
+                <IconStar className="size-3.5 shrink-0 text-amber-500 dark:text-amber-300" />
+              ) : null}
+            </div>
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               {subtitle}
             </p>
+            {renderTagBadges()}
           </div>
         </div>
       </div>
@@ -322,22 +395,37 @@ function FileRowComponent({
   };
 
   return (
-    <div className="relative overflow-hidden rounded-lg">
+    <div
+      className="card-entrance relative overflow-hidden rounded-xl"
+      style={{ animationDelay: `${animationIndex * 40}ms` }}
+    >
       {/* Swipe action panel — static behind content */}
       <div className="absolute inset-y-0 right-0 z-0 flex w-[120px] items-center justify-around bg-linear-to-l from-stone-900 to-stone-800 dark:from-stone-800 dark:to-stone-700">
-        <button
+        <Button
           type="button"
-          aria-label="Pin"
-          className="flex size-10 items-center justify-center rounded-md text-amber-400 transition-colors duration-200 hover:bg-stone-700 hover:text-amber-300"
-          onClick={(event) => event.stopPropagation()}
+          variant="ghost"
+          size="icon"
+          aria-label={isStarred ? "Unstar item" : "Star item"}
+          className={cn(
+            "flex size-11 items-center justify-center rounded-md transition-colors duration-200 hover:bg-stone-700",
+            isStarred
+              ? "text-amber-300 hover:text-amber-200"
+              : "text-amber-500 hover:text-amber-300",
+          )}
+          onClick={(event) => {
+            event.stopPropagation();
+            handleToggleStarAction();
+          }}
         >
-          <IconPin className="size-4" />
-        </button>
-        <button
+          <IconStar className="size-4" />
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Make available offline"
           className={cn(
-            "flex size-10 items-center justify-center rounded-md transition-colors duration-200 active:scale-[0.96]",
+            "flex size-11 items-center justify-center rounded-md transition-colors duration-200 active:scale-[0.96]",
             isFolder || isOffline || isDownloading
               ? "cursor-not-allowed text-stone-500"
               : "text-sky-400 hover:bg-stone-700 hover:text-sky-300",
@@ -345,21 +433,23 @@ function FileRowComponent({
           onClick={(event) => {
             event.stopPropagation();
             if (!isFolder && !isOffline && !isDownloading) {
-              handleMakeOfflineAction();
+              handleMakeOfflineAction(event.currentTarget);
             }
           }}
           disabled={isFolder || isOffline || isDownloading}
         >
           <IconCloudDown className="size-4" />
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Delete"
-          className="flex size-10 items-center justify-center rounded-md text-rose-400 transition-colors duration-200 hover:bg-stone-700 hover:text-rose-300"
+          className="flex size-11 items-center justify-center rounded-md text-rose-400 transition-colors duration-200 hover:bg-stone-700 hover:text-rose-300"
           onClick={(event) => event.stopPropagation()}
         >
           <IconTrash className="size-4" />
-        </button>
+        </Button>
       </div>
 
       {/* Draggable content layer */}
@@ -373,24 +463,22 @@ function FileRowComponent({
         animate={{ x: isOpen ? -ACTION_PANEL_WIDTH : 0 }}
         transition={{ type: "spring", stiffness: 230, damping: 28, mass: 0.6 }}
         className={cn(
-          "relative z-10 cursor-pointer rounded-lg border transition-all duration-200",
-          "hover:-translate-y-1px hover:shadow-md active:scale-[0.99]",
-          "focus-within:ring-2 focus-within:ring-indigo-400/40 focus-within:outline-none",
+          "relative z-10 cursor-pointer rounded-xl border shadow-sm transition-all duration-200",
+          "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]",
+          "focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2",
           isOpen && "ring-1 ring-indigo-400/30",
           isFolder
-            ? "border-indigo-200/40 bg-indigo-50 dark:border-indigo-800/40 dark:bg-stone-900"
+            ? "border-indigo-200/70 bg-indigo-50 dark:border-indigo-800/50 dark:bg-stone-900"
             : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
         )}
         onClick={handleRowClick}
       >
-        <div className="flex h-16 items-center gap-4 px-4">
-          {/* Upgraded icon container */}
+        <div className="flex min-h-[64px] items-center gap-3 px-4 py-3 data-[compact=true]:min-h-[52px] data-[compact=true]:px-3 data-[compact=true]:py-2">
+          {/* Icon container — uses Dashboard-matching tinted backgrounds */}
           <div
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border shadow-inner transition-colors duration-200",
-              isFolder
-                ? "border-indigo-200/60 bg-indigo-100 dark:border-indigo-800/60 dark:bg-indigo-900/40"
-                : "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-800",
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors duration-200 data-[compact=true]:h-9 data-[compact=true]:w-9",
+              iconBg,
               iconColor,
             )}
           >
@@ -398,19 +486,24 @@ function FileRowComponent({
           </div>
 
           <div className="min-w-0 flex-1">
-            <p
+            <div
               className={cn(
-                "truncate text-stone-900 dark:text-stone-100",
+                "flex items-center gap-1.5 truncate text-stone-900 dark:text-stone-100",
                 isFolder
-                  ? "text-base font-semibold tracking-tight"
+                  ? "text-sm font-medium tracking-tight"
                   : "text-sm font-medium",
               )}
             >
-              {title}
-            </p>
+              <span className="truncate">{title}</span>
+              {renderStatusBadge()}
+              {isStarred ? (
+                <IconStar className="size-3.5 shrink-0 text-amber-500 dark:text-amber-300" />
+              ) : null}
+            </div>
             <p className="truncate text-xs text-stone-500 dark:text-stone-400">
               {subtitle}
             </p>
+            {renderTagBadges()}
           </div>
 
           {renderActionMenu()}

@@ -316,6 +316,21 @@ export async function setMetadata(record: MetadataRecord): Promise<void> {
   }
 }
 
+export async function getAllMetadata(): Promise<MetadataRecord[]> {
+  const db = await getDB();
+
+  if (!db) {
+    return Array.from(memoryMetadata.values()).map(cloneMetadataRecord);
+  }
+
+  try {
+    const records = await db.getAll(METADATA_STORE);
+    return records.map(cloneMetadataRecord);
+  } catch {
+    return Array.from(memoryMetadata.values()).map(cloneMetadataRecord);
+  }
+}
+
 export async function clearMetadata(): Promise<void> {
   memoryMetadata.clear();
 

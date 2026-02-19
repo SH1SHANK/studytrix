@@ -4,9 +4,9 @@ import { Readable } from "node:stream";
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { getDriveClient } from "@/lib/drive.client";
 import { enforceDriveRateLimit } from "@/features/drive/drive.rateLimit";
 import { FileService, FileServiceError } from "@/features/file/file.service";
+import { getDriveClient } from "@/lib/drive.client";
 
 export const runtime = "nodejs";
 
@@ -18,6 +18,25 @@ type RouteContext = {
   params: Promise<RouteParams>;
 };
 
+type StreamRouteErrorPayload = {
+  status: number;
+  errorCode: string;
+  message: string;
+};
+
+class StreamRouteError extends Error {
+  readonly status: number;
+
+  readonly errorCode: string;
+
+  constructor(payload: StreamRouteErrorPayload) {
+    super(payload.message);
+    this.name = "StreamRouteError";
+    this.status = payload.status;
+    this.errorCode = payload.errorCode;
+  }
+}
+
 const FILE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const fileService = new FileService();
 
@@ -25,6 +44,35 @@ const SAFE_PREVIEW_MIME_TYPES = new Set<string>([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ]);
+
+const GOOGLE_EXPORT_FORMATS: Record<
+  string,
+  { mimeType: string; extension: string }
+> = {
+  "application/vnd.google-apps.document": {
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    extension: "docx",
+  },
+  "application/vnd.google-apps.spreadsheet": {
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    extension: "xlsx",
+  },
+  "application/vnd.google-apps.presentation": {
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    extension: "pptx",
+  },
+  "application/vnd.google-apps.drawing": {
+    mimeType: "image/png",
+    extension: "png",
+  },
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function decodeParam(value: string): string | null {
   try {
@@ -75,6 +123,128 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[\r\n"\\]/g, "_").trim() || "file";
 }
 
+function ensureExtension(fileName: string, extension: string): string {
+  const normalizedName = sanitizeFilename(fileName);
+  if (normalizedName.toLowerCase().endsWith(`.${extension.toLowerCase()}`)) {
+    return normalizedName;
+  }
+
+  return `${normalizedName}.${extension}`;
+}
+
+function resolveExportFormat(
+  mimeType: string | null | undefined,
+): { mimeType: string; extension: string } | null {
+  if (!mimeType) {
+    return null;
+  }
+
+  return GOOGLE_EXPORT_FORMATS[mimeType] ?? null;
+}
+
+function mapGoogleApiError(error: unknown): StreamRouteError | null {
+  if (!isRecord(error)) {
+    return null;
+  }
+
+  const response = isRecord(error.response) ? error.response : null;
+  const statusCode =
+    response && typeof response.status === "number" ? response.status : null;
+
+  if (response && isRecord(response.data) && isRecord(response.data.error)) {
+    const driveError = response.data.error;
+    const errors = Array.isArray(driveError.errors) ? driveError.errors : [];
+
+    for (const entry of errors) {
+      if (!isRecord(entry)) {
+        continue;
+      }
+
+      const reason =
+        typeof entry.reason === "string" ? entry.reason.toLowerCase() : "";
+
+      if (
+        reason === "ratelimitexceeded" ||
+        reason === "userratelimitexceeded" ||
+        reason === "quotaexceeded" ||
+        reason === "dailylimitexceeded"
+      ) {
+        return new StreamRouteError({
+          status: 429,
+          errorCode: "RATE_LIMITED",
+          message: "Drive quota exceeded",
+        });
+      }
+
+      if (
+        reason === "filenotfound" ||
+        reason === "teamdrivefilenotfound" ||
+        reason === "notfound"
+      ) {
+        return new StreamRouteError({
+          status: 404,
+          errorCode: "FILE_NOT_FOUND",
+          message: "File not found",
+        });
+      }
+
+      if (
+        reason === "forbidden" ||
+        reason === "insufficientpermissions" ||
+        reason === "cannotdownloadfile"
+      ) {
+        return new StreamRouteError({
+          status: 403,
+          errorCode: "FILE_ACCESS_DENIED",
+          message: "File access denied",
+        });
+      }
+
+      if (reason === "cannotexportfile") {
+        return new StreamRouteError({
+          status: 415,
+          errorCode: "UNSUPPORTED_EXPORT",
+          message: "File export is not supported",
+        });
+      }
+    }
+  }
+
+  if (statusCode === 400) {
+    return new StreamRouteError({
+      status: 400,
+      errorCode: "INVALID_FILE_ID",
+      message: "Invalid file ID",
+    });
+  }
+
+  if (statusCode === 403) {
+    return new StreamRouteError({
+      status: 403,
+      errorCode: "FILE_ACCESS_DENIED",
+      message: "File access denied",
+    });
+  }
+
+  if (statusCode === 404) {
+    return new StreamRouteError({
+      status: 404,
+      errorCode: "FILE_NOT_FOUND",
+      message: "File not found",
+    });
+  }
+
+  if (statusCode === 429) {
+    return new StreamRouteError({
+      status: 429,
+      errorCode: "RATE_LIMITED",
+      message: "Rate limit exceeded",
+    });
+  }
+
+  return null;
+}
+
 function buildContentDisposition(
   fileName: string,
   mimeType: string,
@@ -86,26 +256,85 @@ function buildContentDisposition(
   return `${mode}; filename="${safeName}"; filename*=UTF-8''${encodedName}`;
 }
 
+function toErrorResponse(error: StreamRouteError): NextResponse {
+  return NextResponse.json(
+    {
+      errorCode: error.errorCode,
+      message: error.message,
+    },
+    {
+      status: error.status,
+      headers: {
+        "Accept-Ranges": "none",
+      },
+    },
+  );
+}
+
 function mapStreamError(error: unknown): NextResponse {
+  if (error instanceof StreamRouteError) {
+    return toErrorResponse(error);
+  }
+
   if (isRateLimitError(error)) {
-    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+    return toErrorResponse(
+      new StreamRouteError({
+        status: 429,
+        errorCode: "RATE_LIMITED",
+        message: "Rate limit exceeded",
+      }),
+    );
   }
 
   if (error instanceof FileServiceError) {
     if (error.statusCode === 400) {
-      return NextResponse.json({ error: "Invalid file ID" }, { status: 400 });
+      return toErrorResponse(
+        new StreamRouteError({
+          status: 400,
+          errorCode: "INVALID_FILE_ID",
+          message: "Invalid file ID",
+        }),
+      );
+    }
+
+    if (error.statusCode === 403) {
+      return toErrorResponse(
+        new StreamRouteError({
+          status: 403,
+          errorCode: "FILE_ACCESS_DENIED",
+          message: "File access denied",
+        }),
+      );
     }
 
     if (error.statusCode === 404) {
-      return NextResponse.json({ error: "File not found" }, { status: 404 });
+      return toErrorResponse(
+        new StreamRouteError({
+          status: 404,
+          errorCode: "FILE_NOT_FOUND",
+          message: "File not found",
+        }),
+      );
     }
 
     if (error.statusCode === 429) {
-      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+      return toErrorResponse(
+        new StreamRouteError({
+          status: 429,
+          errorCode: "RATE_LIMITED",
+          message: "Rate limit exceeded",
+        }),
+      );
     }
   }
 
-  return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  return toErrorResponse(
+    new StreamRouteError({
+      status: 500,
+      errorCode: "INTERNAL_ERROR",
+      message: "Internal error",
+    }),
+  );
 }
 
 export async function GET(
@@ -117,7 +346,23 @@ export async function GET(
     const fileId = validateFileId(routeFileId);
 
     if (!fileId) {
-      return NextResponse.json({ error: "Invalid file ID" }, { status: 400 });
+      return toErrorResponse(
+        new StreamRouteError({
+          status: 400,
+          errorCode: "INVALID_FILE_ID",
+          message: "Invalid file ID",
+        }),
+      );
+    }
+
+    if (request.headers.has("range")) {
+      return toErrorResponse(
+        new StreamRouteError({
+          status: 416,
+          errorCode: "RANGE_NOT_SUPPORTED",
+          message: "Byte ranges are not supported for this endpoint",
+        }),
+      );
     }
 
     const ip = getClientIp(request);
@@ -125,33 +370,89 @@ export async function GET(
 
     const raw = await fileService.getRawMetadata(fileId);
 
-    const drive = getDriveClient();
-    const mediaResponse = await drive.files.get(
-      {
-        fileId,
-        alt: "media",
-        supportsAllDrives: true,
-      },
-      {
-        responseType: "stream",
-      },
-    );
-
-    if (!(mediaResponse.data instanceof Readable)) {
-      throw new Error("Drive stream unavailable");
+    if (raw.mimeType === "application/vnd.google-apps.folder") {
+      throw new StreamRouteError({
+        status: 400,
+        errorCode: "UNSUPPORTED_FILE_TYPE",
+        message: "Folders cannot be streamed",
+      });
     }
 
-    const webStream = Readable.toWeb(mediaResponse.data) as ReadableStream<Uint8Array>;
+    const drive = getDriveClient();
+    const exportFormat = resolveExportFormat(raw.mimeType);
+
+    if (
+      raw.mimeType.startsWith("application/vnd.google-apps.")
+      && !exportFormat
+    ) {
+      throw new StreamRouteError({
+        status: 415,
+        errorCode: "UNSUPPORTED_EXPORT",
+        message: "This Google file type cannot be exported",
+      });
+    }
+
+    let streamData: Readable;
+    let responseMimeType = raw.mimeType || "application/octet-stream";
+    let responseFileName = raw.name;
+
+    if (exportFormat) {
+      const exportResponse = await drive.files.export(
+        {
+          fileId,
+          mimeType: exportFormat.mimeType,
+        },
+        {
+          responseType: "stream",
+        },
+      );
+
+      if (!(exportResponse.data instanceof Readable)) {
+        throw new StreamRouteError({
+          status: 502,
+          errorCode: "DRIVE_STREAM_UNAVAILABLE",
+          message: "Drive export stream unavailable",
+        });
+      }
+
+      streamData = exportResponse.data;
+      responseMimeType = exportFormat.mimeType;
+      responseFileName = ensureExtension(raw.name, exportFormat.extension);
+    } else {
+      const mediaResponse = await drive.files.get(
+        {
+          fileId,
+          alt: "media",
+          supportsAllDrives: true,
+        },
+        {
+          responseType: "stream",
+        },
+      );
+
+      if (!(mediaResponse.data instanceof Readable)) {
+        throw new StreamRouteError({
+          status: 502,
+          errorCode: "DRIVE_STREAM_UNAVAILABLE",
+          message: "Drive stream unavailable",
+        });
+      }
+
+      streamData = mediaResponse.data;
+    }
+
+    const webStream = Readable.toWeb(streamData) as ReadableStream<Uint8Array>;
 
     const headers = new Headers();
-    headers.set("Content-Type", raw.mimeType || "application/octet-stream");
+    headers.set("Content-Type", responseMimeType);
     headers.set(
       "Content-Disposition",
-      buildContentDisposition(raw.name, raw.mimeType),
+      buildContentDisposition(responseFileName, responseMimeType),
     );
     headers.set("Cache-Control", "private, max-age=60");
+    headers.set("Accept-Ranges", "none");
 
-    if (Number.isFinite(raw.size) && raw.size > 0) {
+    if (!exportFormat && Number.isFinite(raw.size) && raw.size > 0) {
       headers.set("Content-Length", String(raw.size));
     }
 
@@ -160,6 +461,11 @@ export async function GET(
       headers,
     });
   } catch (error) {
+    const mapped = mapGoogleApiError(error);
+    if (mapped) {
+      return mapStreamError(mapped);
+    }
+
     console.error("File stream route error:", error);
     return mapStreamError(error);
   }

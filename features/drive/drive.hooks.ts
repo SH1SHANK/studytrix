@@ -12,6 +12,10 @@ type DriveState = {
   error: string | null;
 };
 
+function isUnavailableFolderId(folderId: string): boolean {
+  return folderId.trim().toUpperCase().startsWith("UNAVAILABLE_");
+}
+
 export function useDriveFolder(folderId: string | null): DriveState {
   const [state, setState] = useState<DriveState>({
     items: [],
@@ -31,6 +35,17 @@ export function useDriveFolder(folderId: string | null): DriveState {
         files: [],
         isLoading: false,
         error: null,
+      });
+      return;
+    }
+
+    if (isUnavailableFolderId(folderId)) {
+      setState({
+        items: [],
+        folders: [],
+        files: [],
+        isLoading: false,
+        error: "This course folder is not available yet.",
       });
       return;
     }

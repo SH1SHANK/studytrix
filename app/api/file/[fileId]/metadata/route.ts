@@ -66,7 +66,7 @@ export async function GET(
     const ip = getClientIp(request);
     await enforceDriveRateLimit(ip);
 
-    const metadata = await fileService.getEnrichedMetadata(fileId);
+    const metadata = await fileService.getMetadata(fileId);
 
     return NextResponse.json({ metadata }, { status: 200 });
   } catch (error) {
@@ -74,8 +74,22 @@ export async function GET(
       return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
     }
 
-    if (error instanceof FileServiceError && error.statusCode === 400) {
-      return NextResponse.json({ error: "Invalid file ID" }, { status: 400 });
+    if (error instanceof FileServiceError) {
+      if (error.statusCode === 400) {
+        return NextResponse.json({ error: "Invalid file ID" }, { status: 400 });
+      }
+
+      if (error.statusCode === 403) {
+        return NextResponse.json({ error: "File access denied" }, { status: 403 });
+      }
+
+      if (error.statusCode === 404) {
+        return NextResponse.json({ error: "File not found" }, { status: 404 });
+      }
+
+      if (error.statusCode === 429) {
+        return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+      }
     }
 
     console.error("File metadata route error:", error);

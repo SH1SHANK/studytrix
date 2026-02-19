@@ -12,13 +12,56 @@ export interface OfflineFileRecord {
 export interface DownloadTask {
   fileId: string;
   priority: number;
+  startByte?: number;
 }
+
+export type DownloadStatus =
+  | "idle"
+  | "queued"
+  | "downloading"
+  | "paused"
+  | "cached"
+  | "error";
 
 export interface DownloadProgress {
   fileId: string;
   loaded: number;
   total: number;
+  status: DownloadStatus;
+  errorMessage?: string;
+  bytesReceived?: number;
+  // -1 means indeterminate progress (content-length is unknown).
   percent: number;
+}
+
+export interface OfflineDownloadRecord {
+  fileId: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+  status: DownloadStatus;
+  progress: number;
+  bytesReceived: number;
+  downloadUrl: string;
+  cachedAt?: number;
+  error?: string;
+}
+
+export type OfflineErrorCode =
+  | "FETCH_FAILED"
+  | "STORAGE_WRITE_FAILED"
+  | "BODY_NULL"
+  | "ABORT"
+  | "QUEUE_TIMEOUT";
+
+export class OfflineError extends Error {
+  constructor(
+    public code: OfflineErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "OfflineError";
+  }
 }
 
 export interface StorageStats {
@@ -51,10 +94,16 @@ export interface CacheFileMetadata {
   modifiedTime: string | null;
   name?: string;
   priority?: number;
-  extractedText?: string;
+  entityId?: string;
+  courseCode?: string;
+  source?: "manual" | "prefetch";
 }
 
-export type FetchStreamFn = (fileId: string) => Promise<Response>;
+export type FetchStreamFn = (
+  fileId: string,
+  signal?: AbortSignal,
+  startByte?: number,
+) => Promise<Response>;
 
 export type StorageEstimate = {
   usage: number;

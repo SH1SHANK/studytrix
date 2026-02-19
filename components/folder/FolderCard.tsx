@@ -7,6 +7,7 @@ import { FolderActionsMenu } from "@/components/folder/FolderActionsMenu";
 type FolderColor = "indigo" | "emerald" | "amber" | "sky" | "rose" | "stone";
 
 type FolderCardProps = {
+  entityId: string;
   title: string;
   meta: string;
   variant?: "default" | "accent";
@@ -64,6 +65,7 @@ const iconGlowMap: Record<FolderColor, string> = {
 };
 
 export function FolderCard({
+  entityId,
   title,
   meta,
   variant = "default",
@@ -84,16 +86,22 @@ export function FolderCard({
         }
       }}
       className={cn(
-        "group relative min-h-[110px] cursor-pointer py-0 shadow-sm transition-all duration-200",
+        "group relative min-h-[120px] cursor-pointer rounded-xl py-0 shadow-sm transition-all duration-200",
         "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
         isAccent ? accentTintMap[color] : cardTintMap[color],
       )}
     >
-      <div className="absolute right-3 top-3 z-20">
-        <FolderActionsMenu triggerClassName="size-11" />
+      <div className="absolute right-3 top-3 z-20 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <FolderActionsMenu
+          entityId={entityId}
+          title={title}
+          description={meta}
+          triggerClassName="size-9"
+          onOpen={onOpen}
+        />
       </div>
 
-      <CardContent className="flex min-h-[110px] flex-col justify-between space-y-2 p-5 pr-14">
+      <CardContent className="flex min-h-[120px] flex-col justify-between space-y-2 p-5 pr-14">
         {/* Upgraded icon container: inner shadow, border, glow on accent */}
         <div
           className={cn(
@@ -106,7 +114,7 @@ export function FolderCard({
         </div>
 
         <div className="space-y-1">
-          <h3 className="line-clamp-1 text-base font-medium text-stone-900 dark:text-stone-100">
+          <h3 className="line-clamp-2 text-base font-medium text-stone-900 dark:text-stone-100">
             {title}
           </h3>
           <p className="text-sm text-stone-500 dark:text-stone-400">{meta}</p>

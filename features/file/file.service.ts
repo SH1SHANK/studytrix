@@ -9,8 +9,7 @@ import {
   getCachedMetadata,
   setCachedMetadata,
 } from "./file.cache";
-import { enrichMetadata } from "./file.enrich";
-import type { DriveFileRaw, EnrichedFileMetadata } from "./file.types";
+import type { DriveFileRaw, FileMetadata } from "./file.types";
 
 const FILE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
@@ -58,12 +57,12 @@ function isValidDriveMetadata(
   mimeType: string;
 } {
   return (
-    typeof data.id === "string" &&
-    data.id.length > 0 &&
-    typeof data.name === "string" &&
-    data.name.length > 0 &&
-    typeof data.mimeType === "string" &&
-    data.mimeType.length > 0
+    typeof data.id === "string"
+    && data.id.length > 0
+    && typeof data.name === "string"
+    && data.name.length > 0
+    && typeof data.mimeType === "string"
+    && data.mimeType.length > 0
   );
 }
 
@@ -76,18 +75,57 @@ function mapDriveError(error: unknown): FileServiceError {
   const statusCode =
     response && typeof response.status === "number" ? response.status : 500;
 
+  if (response && isRecord(response.data) && isRecord(response.data.error)) {
+    const driveError = response.data.error;
+    const errors = Array.isArray(driveError.errors) ? driveError.errors : [];
+
+    for (const entry of errors) {
+      if (!isRecord(entry)) {
+        continue;
+      }
+
+      const reason =
+        typeof entry.reason === "string" ? entry.reason.toLowerCase() : "";
+
+      if (
+        reason === "ratelimitexceeded"
+        || reason === "userratelimitexceeded"
+        || reason === "quotaexceeded"
+        || reason === "dailylimitexceeded"
+      ) {
+        return new FileServiceError("Drive quota exceeded", 429);
+      }
+
+      if (
+        reason === "forbidden"
+        || reason === "insufficientpermissions"
+        || reason === "cannotdownloadfile"
+      ) {
+        return new FileServiceError("File access denied", 403);
+      }
+    }
+  }
+
   if (statusCode === 404) {
     return new FileServiceError("File not found", 404);
   }
 
-  if (statusCode === 403 || statusCode === 429) {
+  if (statusCode === 403) {
+    return new FileServiceError("File access denied", 403);
+  }
+
+  if (statusCode === 429) {
     return new FileServiceError("Drive quota exceeded", 429);
+  }
+
+  if (statusCode === 400) {
+    return new FileServiceError("Invalid file ID", 400);
   }
 
   return new FileServiceError("Failed to access Drive file", 500);
 }
 
-const inFlightEnrichment = new Map<string, Promise<EnrichedFileMetadata>>();
+const inFlightMetadata = new Map<string, Promise<FileMetadata>>();
 
 export class FileService {
   async getRawMetadata(fileId: string): Promise<DriveFileRaw> {
@@ -124,7 +162,7 @@ export class FileService {
     }
   }
 
-  async getEnrichedMetadata(fileId: string): Promise<EnrichedFileMetadata> {
+  async getMetadata(fileId: string): Promise<FileMetadata> {
     const normalizedFileId = normalizeFileId(fileId);
 
     const cached = await getCachedMetadata(normalizedFileId);
@@ -132,25 +170,25 @@ export class FileService {
       return cached;
     }
 
-    const active = inFlightEnrichment.get(normalizedFileId);
+    const active = inFlightMetadata.get(normalizedFileId);
     if (active) {
       return active;
     }
 
-    const enrichmentPromise = (async (): Promise<EnrichedFileMetadata> => {
-      const raw = await this.getRawMetadata(normalizedFileId);
-      const enriched = await enrichMetadata(normalizedFileId, raw);
-      await setCachedMetadata(
-        normalizedFileId,
-        enriched,
-        DEFAULT_FILE_METADATA_CACHE_TTL,
-      );
-      return enriched;
-    })().finally(() => {
-      inFlightEnrichment.delete(normalizedFileId);
-    });
+    const metadataPromise = this.getRawMetadata(normalizedFileId)
+      .then(async (raw) => {
+        await setCachedMetadata(
+          normalizedFileId,
+          raw,
+          DEFAULT_FILE_METADATA_CACHE_TTL,
+        );
+        return raw;
+      })
+      .finally(() => {
+        inFlightMetadata.delete(normalizedFileId);
+      });
 
-    inFlightEnrichment.set(normalizedFileId, enrichmentPromise);
-    return enrichmentPromise;
+    inFlightMetadata.set(normalizedFileId, metadataPromise);
+    return metadataPromise;
   }
 }

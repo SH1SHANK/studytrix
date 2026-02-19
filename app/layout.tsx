@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Outfit } from "next/font/google";
+import { Toaster } from "sonner";
 
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { SettingsProvider } from "@/components/providers/SettingsProvider";
+import { DownloadDrawer } from "@/components/download/DownloadDrawer";
+import { DownloadFloatingIndicator } from "@/components/download/DownloadFloatingIndicator";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -40,7 +44,14 @@ export default function RootLayout({
       className={`${outfit.variable} ${switzer.variable}`}
     >
       <body className="min-h-screen bg-linear-to-b from-stone-50 to-stone-100 text-stone-900 antialiased transition-colors dark:from-stone-950 dark:to-stone-900 dark:text-stone-100">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <SettingsProvider>
+            {children}
+            <DownloadDrawer />
+            <DownloadFloatingIndicator />
+            <Toaster position="bottom-right" />
+          </SettingsProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

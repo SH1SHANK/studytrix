@@ -1,8 +1,12 @@
 import { Suspense, type ReactNode } from "react";
 
 import { CommandBar } from "@/components/command/CommandBar";
+import { DownloadDrawer } from "@/components/download/DownloadDrawer";
+import { ShareProgressDrawer } from "@/components/share/ShareProgressDrawer";
+import { DownloadFloatingIndicator } from "@/components/download/DownloadFloatingIndicator";
 import { AcademicProvider } from "@/components/layout/AcademicContext";
 import { Header } from "@/components/layout/Header";
+import { Toaster } from "@/components/ui/sonner";
 
 type AppShellProps = {
   children: ReactNode;
@@ -27,6 +31,10 @@ export function AppShell({
         <Suspense fallback={null}>
           <CommandBar placeholder={commandPlaceholder} />
         </Suspense>
+        <DownloadDrawer />
+        <ShareProgressDrawer />
+        <DownloadFloatingIndicator />
+        <Toaster />
       </div>
     </AcademicProvider>
   );

@@ -1,62 +1,4 @@
-# Architecture
-
-## System Overview
-
-Studytrix uses a layered App Router architecture:
-
-1. UI components issue requests to internal API routes.
-2. Route handlers validate input and enforce abuse controls.
-3. Feature services call Google Drive and normalize data.
-4. Cache/rate-limit modules reduce upstream load.
-5. Offline modules persist selected content in IndexedDB.
-
-## Runtime Boundaries
-
-### Server Runtime (Node.js)
-
-- `app/api/catalog/[department]/[semester]/route.ts`
-- `app/api/drive/[folderId]/route.ts`
-- `app/api/file/[fileId]/metadata/route.ts`
-- `app/api/file/[fileId]/stream/route.ts`
-- `lib/drive.server.ts`, `lib/drive.client.ts`, `lib/redis.server.ts`
-- `features/drive/*`, `features/file/*`
-
-### Client Runtime
-
-- Dashboard, folder/file manager, command bar, and popovers (`components/*`).
-- Hook/store-driven state and interactions (`features/*/*.hooks.ts`, Zustand stores).
-- Offline orchestration modules (`features/offline/*`) built for browser APIs.
-
-## API Layer Contracts
-
-### Catalog Endpoint
-
-- Path: `/api/catalog/[department]/[semester]`
-- Source: `data/catalog.json`
-- Returns: `{ courses: Course[] }`
-- Validation:
-  - Department: uppercase ASCII letters only
-  - Semester: bounded positive integer
-- Error contract: `400`, `404`, `500`
-
-### Drive Folder Endpoint
-
-- Path: `/api/drive/[folderId]?pageToken=...`
-- Returns: `{ items: DriveItem[], nextPageToken?: string }`
-- Features:
-  - Folder ID validation
-  - Per-IP rate limiting
-  - Cache lookup + request dedupe
-  - Paginated Drive listing
-
-### File Metadata Endpoint
-
-- Path: `/api/file/[fileId]/metadata`
-- Returns: `{ metadata: EnrichedFileMetadata }`
-- Features:
-  - Input validation
-  - Metadata enrichment and cache
-  - Rate-limit enforcement
+## API Layer
 
 ### File Stream Endpoint
 
@@ -65,6 +7,7 @@ Studytrix uses a layered App Router architecture:
 - Features:
   - Safe content headers
   - Drive binary proxy without exposing credentials
+  - Deterministic error normalization with diagnostics
   - Rate-limit enforcement
 
 ## Feature Module Layout
@@ -78,22 +21,27 @@ Studytrix uses a layered App Router architecture:
 
 ### `features/file`
 
-- `file.service.ts`: metadata orchestration
-- `file.enrich.ts`: MIME-specific enrichers and formatting
+- `file.service.ts`: raw metadata orchestration
 - `file.cache.ts`: TTL metadata cache
-- `file.types.ts`: strict metadata union types
+- `file.types.ts`: strict metadata types
 
 ### `features/offline`
 
 - `offline.db.ts`: IndexedDB abstraction
 - `offline.rules.ts`: pure download eligibility rules
-- `offline.queue.ts`: concurrent priority queue
 - `offline.prefetch.ts`: low-priority prefetch logic
-- `offline.search.ts`: offline text index/search
 - `offline.integrity.ts`: checksum/integrity checks
 - `offline.sync.ts`: stale cache invalidation against remote metadata
-- `offline.service.ts`: orchestration layer
-- `offline.store.ts`: reactive state adapter for UI
+- `offline.access.ts`: local-first blob access/open helpers
+- `offline.index.store.ts`: reactive offline availability snapshot
+- `offline.flags.ts`: feature toggle configuration
+- `offline.migration.ts`: reset-on-upgrade migration
+
+### `features/download`
+
+- `download.queue.ts`: concurrent priority queue
+- `download.controller.ts`: canonical download + persistence orchestration
+- `download.store.ts`: reactive state adapter for UI
 
 ## Caching and Rate Limiting
 

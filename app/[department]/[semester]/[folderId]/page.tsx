@@ -108,10 +108,25 @@ export default async function Page({
     : null;
   const folderName = courseInfo?.courseName ?? folderNameFromQuery ?? routeFolderId;
   const driveFolderId = courseInfo?.driveFolderId ?? routeFolderId;
-  const breadcrumbSegments: [string, string, string] = [
-    departmentLabel,
-    semesterLabel,
-    folderName,
+  const semesterForLink = semesterNumber ?? Number.parseInt(semester, 10);
+  const rootQueryBase = `department=${encodeURIComponent(departmentId)}`;
+  const rootQueryWithSemester = Number.isInteger(semesterForLink)
+    ? `${rootQueryBase}&semester=${encodeURIComponent(String(semesterForLink))}`
+    : rootQueryBase;
+  const currentFolderHref = `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semester)}/${encodeURIComponent(routeFolderId)}?name=${encodeURIComponent(folderName)}`;
+  const breadcrumbSegments = [
+    {
+      label: departmentLabel,
+      href: `/?${rootQueryWithSemester}`,
+    },
+    {
+      label: semesterLabel,
+      href: `/?${rootQueryWithSemester}`,
+    },
+    {
+      label: folderName,
+      href: currentFolderHref,
+    },
   ];
 
   return (
@@ -119,7 +134,7 @@ export default async function Page({
       showHeader={false}
       commandPlaceholder={`Search in ${folderName}...`}
     >
-      <div className="min-h-full bg-gradient-to-b from-stone-50 to-stone-100 dark:from-stone-950 dark:to-stone-900">
+      <div className="min-h-full bg-[#F7F7F5] dark:bg-stone-950">
         <StickyHeader
           folderName={folderName}
           breadcrumbSegments={breadcrumbSegments}

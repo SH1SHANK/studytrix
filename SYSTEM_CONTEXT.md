@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Studytrix is an academic content platform that presents course data, Google Drive-backed study materials, enriched file metadata for previews, and offline persistence for selected content.
+Studytrix is an academic content platform that presents course data, Google Drive-backed study materials, and offline persistence for selected content.
 
 ## Product Constraints
 
@@ -16,8 +16,8 @@ Studytrix is an academic content platform that presents course data, Google Driv
 ### Browser Context
 
 - UI rendering, interactions, and optimistic local state.
-- IndexedDB-backed offline storage and search index.
-- Zustand store for download progress, rules, and cached status.
+- IndexedDB-backed offline storage.
+- Zustand store for download progress and offline availability snapshot.
 
 ### Server Context
 
@@ -45,7 +45,6 @@ Studytrix is an academic content platform that presents course data, Google Driv
 
 - IndexedDB stores:
   - `files`: cached blobs + metadata
-  - `search_index`: extracted searchable text
   - `metadata`: local engine metadata/config
 
 ## Core Domain Models
@@ -62,8 +61,7 @@ Studytrix is an academic content platform that presents course data, Google Driv
 
 ### File Domain
 
-- `EnrichedFileMetadata`
-- `RichMetadata` union (`pdf`, `ppt`, `image`, `other`)
+- `FileMetadata`
 
 ### Offline Domain
 
@@ -72,6 +70,7 @@ Studytrix is an academic content platform that presents course data, Google Driv
 - `DownloadProgress`
 - `StorageStats`
 - `DownloadRules`
+- `OfflineSnapshot`
 
 ## API Behavior Guarantees
 

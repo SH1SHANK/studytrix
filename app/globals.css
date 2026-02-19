@@ -130,7 +130,7 @@
     font-family: var(--font-primary);
   }
   body {
-    @apply bg-gradient-to-b from-stone-50 to-stone-100 text-stone-900 transition-colors dark:from-stone-950 dark:to-stone-900 dark:text-stone-100;
+    @apply bg-[#F7F7F5] text-stone-900 transition-colors dark:bg-stone-950 dark:text-stone-100;
     font-family: var(--font-secondary);
     min-height: 100vh;
   }
@@ -171,6 +171,43 @@
 
 .animate-breathe {
   animation: breathe 4s ease-in-out infinite;
+}
+
+/* File Manager — staggered card entrance */
+@keyframes cardEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-entrance {
+  animation: cardEntrance 280ms ease-out both;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* Accessibility: respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Hide scrollbar utility */

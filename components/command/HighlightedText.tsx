@@ -12,12 +12,12 @@ export function HighlightedText({ text, query }: HighlightedTextProps) {
   const segments = useMemo(() => highlightText(text, query), [text, query]);
 
   return (
-    <>
+    <span className="inline">
       {segments.map((seg, i) =>
         seg.matched ? (
           <span
             key={i}
-            className="bg-indigo-200/60 dark:bg-indigo-800/60 rounded-sm px-0.5"
+            className="rounded-sm bg-linear-to-r from-indigo-500/35 to-cyan-500/35 px-0.5 font-semibold text-stone-900 ring-1 ring-indigo-400/40 transition-colors dark:text-stone-100 dark:ring-indigo-300/30"
           >
             {seg.text}
           </span>
@@ -25,6 +25,6 @@ export function HighlightedText({ text, query }: HighlightedTextProps) {
           <span key={i}>{seg.text}</span>
         ),
       )}
-    </>
+    </span>
   );
 }

@@ -1,67 +1,70 @@
 "use client";
 
-import { useState } from "react";
+import { IconTag } from "@tabler/icons-react";
 
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import type { FilterMode } from "@/features/tags/tag.types";
+import { getTagChipTextColor } from "@/features/tags/tag.filter";
 
-const tags = [
-  { label: "All", color: "indigo" },
-  { label: "PYQ", color: "indigo" },
-  { label: "Notes", color: "blue" },
-  { label: "Lab", color: "emerald" },
-  { label: "Important", color: "rose" },
-  { label: "Revision", color: "amber" },
-] as const;
-
-const activeColorMap: Record<string, string> = {
-  indigo:
-    "bg-linear-to-r from-indigo-600 to-indigo-500 text-white shadow-sm dark:from-indigo-500 dark:to-indigo-400",
-  blue: "bg-linear-to-r from-blue-600 to-blue-500 text-white shadow-sm dark:from-blue-500 dark:to-blue-400",
-  emerald:
-    "bg-linear-to-r from-emerald-600 to-emerald-500 text-white shadow-sm dark:from-emerald-500 dark:to-emerald-400",
-  rose: "bg-linear-to-r from-rose-600 to-rose-500 text-white shadow-sm dark:from-rose-500 dark:to-rose-400",
-  amber:
-    "bg-linear-to-r from-amber-600 to-amber-500 text-white shadow-sm dark:from-amber-500 dark:to-amber-400",
+export type DashboardTagFilterOption = {
+  id: string;
+  label: string;
+  color: string;
+  uses: number;
+  count: number;
 };
 
-const hoverTintMap: Record<string, string> = {
-  indigo: "hover:bg-stone-100 dark:hover:bg-stone-700",
-  blue: "hover:bg-stone-100 dark:hover:bg-stone-700",
-  emerald: "hover:bg-stone-100 dark:hover:bg-stone-700",
-  rose: "hover:bg-stone-100 dark:hover:bg-stone-700",
-  amber: "hover:bg-stone-100 dark:hover:bg-stone-700",
+type TagFilterRowProps = {
+  options: readonly DashboardTagFilterOption[];
+  activeTagIds: readonly string[];
+  filterMode: FilterMode;
+  onToggleTag: (tagId: string) => void;
+  onFilterModeChange: (mode: FilterMode) => void;
+  onClearFilters: () => void;
 };
 
-export function TagFilterRow() {
-  const [activeTag, setActiveTag] = useState("All");
+export function TagFilterRow({
+  options,
+  activeTagIds,
+  onToggleTag,
+}: TagFilterRowProps) {
+  const activeSet = new Set(activeTagIds);
 
   return (
-    <div className="flex gap-2 overflow-x-auto px-4 no-scrollbar">
-      {tags.map((tag) => {
-        const isActive = tag.label === activeTag;
+    <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
+      {options.length > 0 ? (
+        options.map((option) => {
+          const isActive = activeSet.has(option.id);
+          const textColor = getTagChipTextColor(option.color);
 
-        return (
-          <Badge
-            key={tag.label}
-            render={
-              <button type="button" onClick={() => setActiveTag(tag.label)} />
-            }
-            variant="secondary"
-            className={cn(
-              "h-9 shrink-0 cursor-pointer rounded-md px-3.5 text-xs font-medium tracking-tight transition-all duration-150 active:scale-[0.97]",
-              isActive
-                ? cn(activeColorMap[tag.color], "animate-tag-press")
-                : cn(
-                    "border border-stone-200 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-400",
-                    hoverTintMap[tag.color],
-                  ),
-            )}
-          >
-            {tag.label}
-          </Badge>
-        );
-      })}
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onToggleTag(option.id)}
+              className={cn(
+                "flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-all duration-150 active:scale-[0.97]",
+                isActive
+                  ? "border-transparent shadow-sm"
+                  : "border-stone-200 bg-white text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800",
+              )}
+              style={
+                isActive
+                  ? { backgroundColor: option.color, color: textColor }
+                  : undefined
+              }
+              aria-pressed={isActive}
+            >
+              <IconTag className="size-3" />
+              {option.label}
+            </button>
+          );
+        })
+      ) : (
+        <p className="py-1 text-xs text-stone-400 dark:text-stone-500">
+          No tags yet
+        </p>
+      )}
     </div>
   );
 }

@@ -1,8 +1,13 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState } from "react";
-import { IconChevronDown, IconLayoutGrid, IconList } from "@tabler/icons-react";
+import {
+  IconChevronDown,
+  IconLayoutGrid,
+  IconList,
+} from "@tabler/icons-react";
 
+import { DownloadButton } from "@/components/download/DownloadButton";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -65,28 +70,34 @@ export function useFileManagerViewMode() {
 }
 
 export function ControlsBar() {
-  const { viewMode, setViewMode, layoutMode, setLayoutMode } =
-    useFileManagerViewMode();
+  const { viewMode, setViewMode } = useFileManagerViewMode();
   const [sortLabel, setSortLabel] = useState("Recent");
 
   return (
-    <div className="mt-4">
+    <div className="sticky top-0 z-20 bg-[#F7F7F5] dark:bg-stone-950">
+      {/* Gradient separator — matches Dashboard */}
       <div className="h-px bg-linear-to-r from-transparent via-stone-200 to-transparent dark:via-stone-800" />
 
-      <div className="mt-4 flex items-center justify-between px-4">
+      <div className="flex items-center justify-between gap-2 px-4 py-3">
+        {/* Left group — Downloads + Sort */}
         <div className="flex items-center gap-2">
+          <DownloadButton
+            className="h-9 gap-1.5 rounded-lg border-stone-200 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition-all duration-200 hover:bg-stone-50 active:scale-[0.97] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
+            compact
+          />
+
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 gap-2 rounded-md border-stone-200 px-3 text-stone-700 dark:border-stone-800 dark:text-stone-200"
+                  className="h-9 gap-1.5 rounded-lg border-stone-200 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition-all duration-200 hover:bg-stone-50 active:scale-[0.97] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
                 />
               }
             >
               Sort: {sortLabel}
-              <IconChevronDown className="size-4 opacity-70" />
+              <IconChevronDown className="size-3.5 opacity-50" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
@@ -95,42 +106,23 @@ export function ControlsBar() {
               <DropdownMenuItem onClick={() => setSortLabel("Recent")}>
                 Recent
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSortLabel("Name")}>
-                Name
+              <DropdownMenuItem onClick={() => setSortLabel("Name A–Z")}>
+                Name A–Z
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortLabel("Name Z–A")}>
+                Name Z–A
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortLabel("Size")}>
+                Size
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortLabel("Type")}>
                 Type
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 gap-2 rounded-md border-stone-200 px-3 text-stone-700 dark:border-stone-800 dark:text-stone-200"
-                />
-              }
-            >
-              {layoutMode === "separated" ? "Separated" : "Combined"}
-              <IconChevronDown className="size-4 opacity-70" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="w-40 border-stone-200 dark:border-stone-800"
-            >
-              <DropdownMenuItem onClick={() => setLayoutMode("separated")}>
-                Separated View
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setLayoutMode("combined")}>
-                Combined View
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
 
+        {/* Right group — View toggle */}
         <ToggleGroup
           type="single"
           value={[viewMode]}
@@ -146,14 +138,14 @@ export function ControlsBar() {
           <ToggleGroupItem
             value="grid"
             aria-label="Grid view"
-            className="h-9 min-w-9 rounded-md border-stone-200 data-pressed:bg-indigo-600 data-pressed:text-white data-pressed:shadow-sm dark:border-stone-800 dark:data-pressed:bg-indigo-500"
+            className="h-9 min-w-9 rounded-lg border-stone-200 shadow-sm transition-all duration-200 data-pressed:bg-indigo-600 data-pressed:text-white data-pressed:shadow-sm dark:border-stone-700 dark:data-pressed:bg-indigo-500"
           >
             <IconLayoutGrid className="size-4" />
           </ToggleGroupItem>
           <ToggleGroupItem
             value="list"
             aria-label="List view"
-            className="h-9 min-w-9 rounded-md border-stone-200 data-pressed:bg-indigo-600 data-pressed:text-white data-pressed:shadow-sm dark:border-stone-800 dark:data-pressed:bg-indigo-500"
+            className="h-9 min-w-9 rounded-lg border-stone-200 shadow-sm transition-all duration-200 data-pressed:bg-indigo-600 data-pressed:text-white data-pressed:shadow-sm dark:border-stone-700 dark:data-pressed:bg-indigo-500"
           >
             <IconList className="size-4" />
           </ToggleGroupItem>

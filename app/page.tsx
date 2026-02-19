@@ -1,10 +1,13 @@
+import { Suspense } from "react";
 import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
 import { AppShell } from "@/components/layout/AppShell";
 
 export default function Page() {
   return (
-    <AppShell>
-      <DashboardGrid />
+    <AppShell showHeader={false}>
+      <Suspense fallback={<div className="p-8 text-center text-sm text-stone-500">Loading dashboard...</div>}>
+        <DashboardGrid />
+      </Suspense>
     </AppShell>
   );
 }
