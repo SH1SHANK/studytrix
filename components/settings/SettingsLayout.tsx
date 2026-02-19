@@ -15,9 +15,10 @@ import { exportSettings, importSettings } from "@/features/settings/settings.ser
 import { useSettingsStore } from "@/features/settings/settings.store";
 import type { SettingItem } from "@/features/settings/settings.types";
 import { useSettingsSearch } from "@/ui/hooks/useSettings";
-import { IconSearch } from "@tabler/icons-react";
+import { IconSearch, IconArrowLeft } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useSetting } from "@/ui/hooks/useSettings";
+import Link from "next/link";
 
 import {
   AlertDialog,
@@ -210,20 +211,31 @@ export function SettingsLayout() {
     }
 
     reset();
+    reset();
     setStatus("Settings reset to defaults");
     setError(null);
   }, [reset]);
 
   return (
-    <div className="flex flex-col md:flex-row gap-8 pb-36 max-w-[1200px] mx-auto w-full relative">
+    <div className="flex flex-col md:flex-row gap-8 pb-36 max-w-[1000px] mx-auto w-full relative">
       <aside className="w-full md:w-[260px] shrink-0 space-y-6 md:sticky md:top-24 md:h-[calc(100vh-8rem)] md:overflow-y-auto no-scrollbar">
-        <div className="space-y-1.5 px-1">
-          <h1 className="text-[2rem] leading-none font-semibold tracking-tight text-stone-900 dark:text-stone-100">
-            Settings
-          </h1>
-          <p className="text-sm leading-snug text-stone-500 dark:text-stone-400">
-            Configure behavior and aesthetics.
-          </p>
+        <div className="space-y-4 px-1">
+          <Link
+            href="/dashboard"
+            className="group flex w-fit items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 shadow-sm transition-all hover:border-stone-300 hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-400 dark:hover:border-stone-700 dark:hover:bg-stone-900 dark:hover:text-stone-100"
+          >
+            <IconArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" />
+            <span>Dashboard</span>
+          </Link>
+
+          <div className="space-y-1.5">
+            <h1 className="text-[2rem] leading-none font-semibold tracking-tight text-stone-900 dark:text-stone-100">
+              Settings
+            </h1>
+            <p className="text-sm leading-snug text-stone-500 dark:text-stone-400">
+              Configure behavior and aesthetics.
+            </p>
+          </div>
         </div>
 
         <div className="space-y-3">

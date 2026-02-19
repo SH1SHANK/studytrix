@@ -12,8 +12,10 @@
 "use client";
 
 import { memo, useCallback, useMemo, useRef } from "react";
-import { motion, type PanInfo } from "framer-motion";
+import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import {
+  IconCircle,
+  IconCircleCheckFilled,
   IconCloudDown,
   IconFile,
   IconFileTypePdf,
@@ -28,6 +30,7 @@ import { useShallow } from "zustand/react/shallow";
 import { cn } from "@/lib/utils";
 import { getTagChipTextColor } from "@/features/tags/tag.filter";
 import { useTagStore } from "@/features/tags/tag.store";
+import { useSelectionStore } from "@/features/selection/selection.store";
 import { Button } from "@/components/ui/button";
 import { EntityActionsMenu } from "@/components/file-manager/EntityActionsMenu";
 
@@ -159,6 +162,16 @@ function FileRowComponent({
       assignedTagIds: state.assignments[id]?.tagIds ?? EMPTY_TAG_IDS,
     })),
   );
+
+  const { isSelectionMode, selectedIds, toggleSelection } = useSelectionStore(
+    useShallow((state) => ({
+      isSelectionMode: state.isSelectionMode,
+      selectedIds: state.selectedIds,
+      toggleSelection: state.toggleSelection,
+    })),
+  );
+
+  const isSelected = selectedIds.has(id);
   const menuStatus = isOffline
     ? "Saved for offline access"
     : isDownloading
@@ -319,12 +332,37 @@ function FileRowComponent({
           "group card-entrance relative cursor-pointer rounded-xl border p-4 shadow-sm transition-all duration-200 data-[compact=true]:p-3",
           "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
           "focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2",
-          isFolder
+          isSelected && "ring-2 ring-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30",
+          !isSelected && isFolder
             ? "border-indigo-200/40 bg-indigo-50/40 dark:border-indigo-800/40 dark:bg-indigo-950/20"
-            : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
+            : !isSelected && "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
         )}
         style={{ animationDelay: `${animationIndex * 40}ms` }}
       >
+        <div className="absolute left-2 top-2 z-20">
+          <AnimatePresence>
+            {(isSelectionMode || isSelected) && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  triggerHaptic(5);
+                  toggleSelection(id);
+                }}
+                className="flex size-6 items-center justify-center rounded-full bg-white/80 text-stone-400 shadow-sm backdrop-blur-md transition-colors hover:bg-white hover:text-stone-600 dark:bg-stone-900/80 dark:hover:bg-stone-800"
+              >
+                {isSelected ? (
+                  <IconCircleCheckFilled className="size-6 text-indigo-500 dark:text-indigo-400" />
+                ) : (
+                  <IconCircle className="size-6" />
+                )}
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+
         <div className="absolute right-2 top-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           {renderActionMenu()}
         </div>
@@ -387,6 +425,13 @@ function FileRowComponent({
 
   const handleRowClick = () => {
     if (suppressClickRef.current) return;
+    
+    if (isSelectionMode) {
+      triggerHaptic(5);
+      toggleSelection(id);
+      return;
+    }
+
     if (isOpen) {
       onToggleOpen(null);
       return;
@@ -466,15 +511,40 @@ function FileRowComponent({
           "relative z-10 cursor-pointer rounded-xl border shadow-sm transition-all duration-200",
           "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]",
           "focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2",
-          isOpen && "ring-1 ring-indigo-400/30",
-          isFolder
+          isOpen && !isSelected && "ring-1 ring-indigo-400/30",
+          isSelected && "ring-2 ring-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30",
+          !isSelected && isFolder
             ? "border-indigo-200/70 bg-indigo-50 dark:border-indigo-800/50 dark:bg-stone-900"
-            : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
+            : !isSelected && "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
         )}
         onClick={handleRowClick}
       >
         <div className="flex min-h-[64px] items-center gap-3 px-4 py-3 data-[compact=true]:min-h-[52px] data-[compact=true]:px-3 data-[compact=true]:py-2">
-          {/* Icon container — uses Dashboard-matching tinted backgrounds */}
+          
+          {/* Checkbox Overlay for List View */}
+          <AnimatePresence>
+            {(isSelectionMode || isSelected) && (
+              <motion.button
+                initial={{ opacity: 0, width: 0, paddingRight: 0 }}
+                animate={{ opacity: 1, width: "auto", paddingRight: 4 }}
+                exit={{ opacity: 0, width: 0, paddingRight: 0 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  triggerHaptic(5);
+                  toggleSelection(id);
+                }}
+                className="flex items-center justify-center text-stone-400 transition-colors hover:text-stone-600 dark:hover:text-stone-300"
+              >
+                {isSelected ? (
+                  <IconCircleCheckFilled className="size-6 text-indigo-500 dark:text-indigo-400" />
+                ) : (
+                  <IconCircle className="size-6" />
+                )}
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          {/* Icon container */}
           <div
             className={cn(
               "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors duration-200 data-[compact=true]:h-9 data-[compact=true]:w-9",

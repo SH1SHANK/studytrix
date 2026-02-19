@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Outfit } from "next/font/google";
 import { Toaster } from "sonner";
@@ -7,6 +7,8 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { SettingsProvider } from "@/components/providers/SettingsProvider";
 import { DownloadDrawer } from "@/components/download/DownloadDrawer";
 import { DownloadFloatingIndicator } from "@/components/download/DownloadFloatingIndicator";
+import { SelectionToolbar } from "@/components/file-manager/SelectionToolbar";
+import { AssignTagsDrawer } from "@/components/tags/AssignTagsDrawer";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -27,9 +29,28 @@ const switzer = localFont({
   fallback: ["Inter", "Satoshi", "system-ui", "sans-serif"],
 });
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#090a0b" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export const metadata: Metadata = {
   title: "Studytrix Dashboard",
   description: "Dashboard UI scaffold",
+  appleWebApp: {
+    capable: true,
+    title: "Studytrix",
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({
@@ -47,6 +68,8 @@ export default function RootLayout({
         <ThemeProvider>
           <SettingsProvider>
             {children}
+            <SelectionToolbar />
+            <AssignTagsDrawer />
             <DownloadDrawer />
             <DownloadFloatingIndicator />
             <Toaster position="bottom-right" />
