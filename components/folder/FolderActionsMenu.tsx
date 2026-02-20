@@ -9,6 +9,10 @@ type FolderActionsMenuProps = {
   onOpen?: () => void;
   align?: "start" | "end";
   triggerClassName?: string;
+  onMakeOffline?: (sourceElement?: HTMLElement) => void;
+  onRemoveOffline?: () => void;
+  isOffline?: boolean;
+  isDownloading?: boolean;
 };
 
 export function FolderActionsMenu({
@@ -18,6 +22,10 @@ export function FolderActionsMenu({
   onOpen,
   align = "end",
   triggerClassName,
+  onMakeOffline,
+  onRemoveOffline,
+  isOffline,
+  isDownloading,
 }: FolderActionsMenuProps) {
   return (
     <EntityActionsMenu
@@ -28,6 +36,10 @@ export function FolderActionsMenu({
       align={align}
       triggerClassName={triggerClassName}
       onOpen={onOpen}
+      onMakeOffline={onMakeOffline}
+      onRemoveOffline={onRemoveOffline}
+      isOffline={isOffline}
+      isDownloading={isDownloading}
     />
   );
 }

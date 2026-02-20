@@ -21,8 +21,11 @@ import { useTagStore } from "@/features/tags/tag.store";
 import type { EntityType, Tag } from "@/features/tags/tag.types";
 import { Button } from "@/components/ui/button";
 import { shareNativeFile } from "@/features/share/share.service";
-import { downloadFolderAsZip, shareFolderAsZip } from "@/features/folder/folder.zip";
 import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
+import { expandFolders } from "@/features/bulk/bulk.service";
+import { makeFilesOffline } from "@/features/bulk/bulk.offline";
+import { toast } from "sonner";
+import { bulkShare } from "@/features/bulk/bulk.share";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -96,7 +99,6 @@ export function EntityActionsMenu({
   isOffline = false,
   isDownloading = false,
 }: EntityActionsMenuProps) {
-  const [folderZipBusy, setFolderZipBusy] = useState(false);
   const hydrationRequestedRef = useRef(false);
   const {
     tags,
@@ -129,7 +131,8 @@ export function EntityActionsMenu({
   const assignedTagIds = assignment?.tagIds ?? EMPTY_TAG_IDS;
   const assignedTagIdSet = useMemo(() => new Set(assignedTagIds), [assignedTagIds]);
   const isStarred = assignment?.starred ?? false;
-  const supportsOfflineActions = entityType === "file";
+  // Previously restricted offline actions and share to 'file' only. We now allow it for 'folder' as well.
+  const supportsOfflineActions = true;
 
   const assignedTags = useMemo(
     () => tags.filter((tag) => assignedTagIdSet.has(tag.id)),
@@ -257,57 +260,7 @@ export function EntityActionsMenu({
           </div>
         </DropdownMenuItem>
 
-        {entityType === "folder" ? (
-          <>
-            <DropdownMenuItem
-              className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-sky-50 focus:text-sky-700 disabled:opacity-45 dark:focus:bg-sky-500/20 dark:focus:text-sky-200"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (folderZipBusy) {
-                  return;
-                }
-                triggerHaptic();
-                setFolderZipBusy(true);
-                void downloadFolderAsZip(entityId, title)
-                  .catch(() => undefined)
-                  .finally(() => setFolderZipBusy(false));
-              }}
-              disabled={folderZipBusy}
-            >
-              <IconArchive className="size-4 text-sky-500 dark:text-sky-300" />
-              <div className="flex flex-col gap-0.5">
-                <span>{folderZipBusy ? "Preparing..." : "Download Folder (.zip)"}</span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  Zip and download complete folder contents
-                </span>
-              </div>
-            </DropdownMenuItem>
 
-            <DropdownMenuItem
-              className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-violet-50 focus:text-violet-700 disabled:opacity-45 dark:focus:bg-violet-500/20 dark:focus:text-violet-200"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (folderZipBusy) {
-                  return;
-                }
-                triggerHaptic();
-                setFolderZipBusy(true);
-                void shareFolderAsZip(entityId, title)
-                  .catch(() => undefined)
-                  .finally(() => setFolderZipBusy(false));
-              }}
-              disabled={folderZipBusy}
-            >
-              <IconShare className="size-4 text-violet-500 dark:text-violet-300" />
-              <div className="flex flex-col gap-0.5">
-                <span>{folderZipBusy ? "Preparing..." : "Share Folder (.zip)"}</span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  Share zipped folder via system share sheet
-                </span>
-              </div>
-            </DropdownMenuItem>
-          </>
-        ) : null}
 
         {supportsOfflineActions ? (
           <>
@@ -316,14 +269,31 @@ export function EntityActionsMenu({
               onClick={(event) => {
                 event.stopPropagation();
                 triggerHaptic();
-                void shareNativeFile(entityId, title, entityDetails?.mimeType ?? "application/octet-stream");
+                
+                if (entityType === "folder") {
+                  const sharePromise = expandFolders([entityId])
+                    .then((files) => {
+                      if (files.length === 0) {
+                        throw new Error("Folder is empty");
+                      }
+                      return bulkShare(files, "zip");
+                    });
+                  
+                  toast.promise(sharePromise, {
+                    loading: `Preparing to share "${title}"...`,
+                    success: `Shared "${title}"`,
+                    error: (err) => err instanceof Error ? err.message : `Failed to share "${title}"`,
+                  });
+                } else {
+                  void shareNativeFile(entityId, title, entityDetails?.mimeType ?? "application/octet-stream");
+                }
               }}
             >
               <IconShare className="size-4 text-violet-500 dark:text-violet-300" />
               <div className="flex flex-col gap-0.5">
-                <span>Share File</span>
+                <span>{entityType === "folder" ? "Share Folder" : "Share File"}</span>
                 <span className="text-[11px] font-normal text-muted-foreground">
-                  Send to people, apps, or AI chatbots
+                  {entityType === "folder" ? "Send as a ZIP archive" : "Send to people, apps, or AI chatbots"}
                 </span>
               </div>
             </DropdownMenuItem>
@@ -336,7 +306,24 @@ export function EntityActionsMenu({
                   return;
                 }
                 triggerHaptic();
-                onMakeOffline?.(event.currentTarget as HTMLElement);
+                
+                if (entityType === "folder") {
+                  const downloadPromise = expandFolders([entityId])
+                    .then((files) => {
+                      if (files.length === 0) {
+                        throw new Error("Folder is empty");
+                      }
+                      return makeFilesOffline(files);
+                    });
+
+                  toast.promise(downloadPromise, {
+                    loading: `Gathering files in "${title}"...`,
+                    success: `Started downloading folder "${title}"`,
+                    error: (err) => err instanceof Error ? err.message : `Failed to download "${title}"`,
+                  });
+                } else {
+                  onMakeOffline?.(event.currentTarget as HTMLElement);
+                }
               }}
               disabled={isOffline || isDownloading}
             >
