@@ -6,7 +6,7 @@ const SHELL_CACHE = `studytrix-shell-${version}`;
 const STATIC_CACHE = `studytrix-static-${version}`;
 const CACHE_PREFIXES = ["studytrix-shell-", "studytrix-static-"];
 const NAV_TIMEOUT_MS = 3000;
-const OFFLINE_FALLBACK_PATH = "/offline";
+const OFFLINE_FALLBACK_PATH = "/offline.html";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -45,6 +45,16 @@ self.addEventListener("message", (event) => {
 
 function isApiRequest(requestUrl) {
   return requestUrl.pathname.startsWith("/api/");
+}
+
+function isDevRuntimeRequest(requestUrl) {
+  return (
+    requestUrl.pathname.startsWith("/_next/webpack-hmr")
+    || requestUrl.pathname.startsWith("/__nextjs")
+    || requestUrl.pathname.startsWith("/__nextjs_original-stack-frames")
+    || requestUrl.pathname.startsWith("/_next/static/chunks/webpack")
+    || requestUrl.pathname.startsWith("/_next/static/development/")
+  );
 }
 
 function isStaticAsset(requestUrl) {
@@ -128,6 +138,10 @@ self.addEventListener("fetch", (event) => {
 
   const requestUrl = new URL(request.url);
   if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  if (isDevRuntimeRequest(requestUrl)) {
     return;
   }
 

@@ -17,6 +17,7 @@ import {
 import {
   IconArrowLeft,
   IconBolt,
+  IconCloudOff,
   IconClockHour4,
   IconDatabase,
   IconDownload,
@@ -76,6 +77,10 @@ import {
 } from "@/features/drive/drive.types";
 import { openLocalFirst } from "@/features/offline/offline.access";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
+import {
+  loadOfflineLibrarySnapshot,
+  type OfflineLibrarySnapshot,
+} from "@/features/offline/offline.library";
 import { buildNestedRootSignature } from "@/features/offline/offline.query-cache.keys";
 
 type CommandBarProps = {
@@ -153,6 +158,7 @@ const QUICK_QUERIES: ReadonlyArray<{
   { label: "Tags", query: "tag", icon: IconTag },
   { label: "Settings", query: "settings", icon: IconSettings },
   { label: "Storage", query: "storage", icon: IconDatabase },
+  { label: "Offline", query: "offline", icon: IconCloudOff },
 ];
 
 const DEPARTMENT_SEGMENT_PATTERN = /^[A-Z]{2,5}$/;
@@ -161,6 +167,11 @@ const MAX_RECENT_QUERIES = 6;
 const RECENT_COMMAND_STORAGE_KEY = "studytrix.command.recentCommands.v1";
 const MAX_RECENT_COMMANDS = 24;
 const NESTED_INDEX_TTL_MS = 30 * 60 * 1000;
+const EMPTY_OFFLINE_LIBRARY: OfflineLibrarySnapshot = {
+  files: [],
+  folders: [],
+  totalBytes: 0,
+};
 
 type NestedRootPayload = {
   folderId: string;
@@ -280,6 +291,10 @@ function getCommandIcon(item: EngineCommandItem): ComponentType<{ className?: st
     return IconDatabase;
   }
 
+  if (item.id === "open-offline-library") {
+    return IconCloudOff;
+  }
+
   if (item.id.startsWith("tag:")) {
     return IconTag;
   }
@@ -309,6 +324,10 @@ function getCommandIconTone(item: EngineCommandItem): string {
   }
 
   if (item.id === "open-storage") {
+    return "text-primary";
+  }
+
+  if (item.id === "open-offline-library") {
     return "text-primary";
   }
 
@@ -473,6 +492,7 @@ export function CommandBar({
   const [recentQueries, setRecentQueries] = useState<string[]>([]);
   const [recentCommandIds, setRecentCommandIds] = useState<string[]>([]);
   const [nestedFileEntries, setNestedFileEntries] = useState<NestedCommandFileEntry[]>([]);
+  const [offlineLibrary, setOfflineLibrary] = useState<OfflineLibrarySnapshot>(EMPTY_OFFLINE_LIBRARY);
   const [nestedIndexUpdatedAt, setNestedIndexUpdatedAt] = useState(0);
   const [isNestedSnapshotHydrated, setIsNestedSnapshotHydrated] = useState(false);
   const [isNestedIndexing, setIsNestedIndexing] = useState(false);
@@ -702,6 +722,38 @@ export function CommandBar({
     nestedScopeKey,
   ]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshOfflineLibrary = async () => {
+      try {
+        const snapshot = await loadOfflineLibrarySnapshot({
+          force: open,
+          maxAgeMs: open ? 8_000 : 20_000,
+        });
+        if (!cancelled) {
+          setOfflineLibrary(snapshot);
+        }
+      } catch {
+        if (!cancelled) {
+          setOfflineLibrary(EMPTY_OFFLINE_LIBRARY);
+        }
+      }
+    };
+
+    void refreshOfflineLibrary();
+
+    if (!open) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, offlineFiles]);
+
   const activeFolderTitle = useMemo(() => {
     if (!folderId) {
       return "Dashboard";
@@ -723,8 +775,8 @@ export function CommandBar({
   }, [catalogCourses, folderId, searchParams]);
 
   const folderCommands = useMemo<EngineCommandItem[]>(() => {
-    if (isFolderScope) {
-      return driveItems.filter(isDriveFolder).map((item) => ({
+    const baseCommands: EngineCommandItem[] = isFolderScope
+      ? driveItems.filter(isDriveFolder).map((item) => ({
         id: `folder-${item.id}`,
         title: item.name,
         subtitle: "Folder",
@@ -736,23 +788,51 @@ export function CommandBar({
           route:
             `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(item.id)}?name=${encodeURIComponent(item.name)}`,
         },
+      }))
+      : catalogCourses.map((course) => ({
+        id: `folder-${course.courseCode}`,
+        title: course.courseName,
+        subtitle: getCourseSubtitle(course),
+        keywords: ["course", "folder", course.courseCode],
+        group: "folders",
+        scope: "global",
+        entityId: course.driveFolderId,
+        payload: {
+          route:
+            `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(course.driveFolderId)}?name=${encodeURIComponent(course.courseName)}`,
+        },
       }));
-    }
 
-    return catalogCourses.map((course) => ({
-      id: `folder-${course.courseCode}`,
-      title: course.courseName,
-      subtitle: getCourseSubtitle(course),
-      keywords: ["course", "folder", course.courseCode],
-      group: "folders",
-      scope: "global",
-      entityId: course.driveFolderId,
-      payload: {
-        route:
-          `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(course.driveFolderId)}?name=${encodeURIComponent(course.courseName)}`,
-      },
-    }));
-  }, [catalogCourses, departmentId, driveItems, isFolderScope, semesterId]);
+    const existingFolderIds = new Set(
+      baseCommands
+        .map((item) => item.entityId)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    );
+
+    const offlineFolderCommands = offlineLibrary.folders
+      .filter((folder) => !existingFolderIds.has(folder.folderId))
+      .map((folder, index) => ({
+        id: `offline-folder-${folder.folderId}-${index}`,
+        title: folder.path,
+        subtitle: `${folder.fileCount} file${folder.fileCount === 1 ? "" : "s"} · Offline folder`,
+        keywords: ["offline", "folder", folder.name, folder.path],
+        group: "folders" as const,
+        scope: "global" as const,
+        entityId: folder.folderId,
+        payload: {
+          route: `/offline-library?folder=${encodeURIComponent(folder.folderId)}`,
+        },
+      }));
+
+    return [...baseCommands, ...offlineFolderCommands];
+  }, [
+    catalogCourses,
+    departmentId,
+    driveItems,
+    isFolderScope,
+    offlineLibrary.folders,
+    semesterId,
+  ]);
 
   const activeFolderFileCommands = useMemo<EngineCommandItem[]>(() => {
     if (!isFolderScope) {
@@ -824,17 +904,65 @@ export function CommandBar({
 
   const fileCommands = useMemo<EngineCommandItem[]>(() => {
     const merged = new Map<string, EngineCommandItem>();
+    const seenEntityIds = new Set<string>();
 
     for (const item of nestedFileCommands) {
       merged.set(item.id, item);
+      if (item.entityId) {
+        seenEntityIds.add(item.entityId);
+      }
     }
 
     for (const item of activeFolderFileCommands) {
       merged.set(item.id, item);
+      if (item.entityId) {
+        seenEntityIds.add(item.entityId);
+      }
+    }
+
+    for (const file of offlineLibrary.files) {
+      if (seenEntityIds.has(file.fileId)) {
+        continue;
+      }
+
+      const mimeLabel = getMimeLabel(file.mimeType, file.name);
+      const subtitle = [
+        formatFileSize(file.size),
+        mimeLabel,
+        `${file.courseCode} · ${file.folderPath}`,
+        "Offline",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      merged.set(`offline-file-${file.fileId}`, {
+        id: `offline-file-${file.fileId}`,
+        title: file.name,
+        subtitle,
+        keywords: [
+          "offline",
+          "file",
+          "open",
+          "local",
+          mimeLabel,
+          file.courseCode,
+          file.folderName,
+          file.folderPath,
+        ],
+        group: "files",
+        scope: "global",
+        entityId: file.fileId,
+        payload: {
+          route: `/offline-library?folder=${encodeURIComponent(file.folderId)}`,
+          url: `/api/file/${encodeURIComponent(file.fileId)}/stream`,
+          offlineOnly: true,
+        },
+      });
+      seenEntityIds.add(file.fileId);
     }
 
     return Array.from(merged.values());
-  }, [activeFolderFileCommands, nestedFileCommands]);
+  }, [activeFolderFileCommands, nestedFileCommands, offlineLibrary.files]);
   const deferredQuery = useDeferredValue(query);
   const trimmedDeferredQuery = deferredQuery.trim();
 
@@ -912,6 +1040,7 @@ export function CommandBar({
     registry.register("go-back", () => router.back());
     registry.register("open-settings", () => router.push("/settings"));
     registry.register("open-storage", () => router.push("/storage"));
+    registry.register("open-offline-library", () => router.push("/offline-library"));
     registry.register("toggle-view", () => undefined);
     registry.register("mark-offline", (item) => {
       if (!item.entityId) {
@@ -1086,7 +1215,11 @@ export function CommandBar({
       pushRecentCommandId(item.id);
 
       const externalUrl = item.payload?.url;
-      const isOfflineFile = item.group === "files" && !!item.entityId && !!offlineFiles[item.entityId];
+      const isOfflinePreferred = item.payload?.offlineOnly === true;
+      const isOfflineFile =
+        item.group === "files"
+        && !!item.entityId
+        && (isOfflinePreferred || !!offlineFiles[item.entityId]);
       if (isOfflineFile && item.entityId) {
         void openLocalFirst(
           item.entityId,
@@ -1613,7 +1746,7 @@ export function CommandBar({
                               const isOfflineFile =
                                 item.group === "files"
                                 && Boolean(item.entityId)
-                                && Boolean(item.entityId && offlineFiles[item.entityId]);
+                                && (item.payload?.offlineOnly === true || Boolean(item.entityId && offlineFiles[item.entityId]));
                               const contentBadge = getContentBadge(item);
                               const flatIndex = results.indexOf(item);
                               const isActive = flatIndex === activeIndex;

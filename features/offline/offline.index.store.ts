@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-import { deleteFile, deleteSearchIndex, getAllFiles, getFile } from "./offline.db";
+import { deleteFile, deleteSearchIndex, getAllFileIds, getFile } from "./offline.db";
 
 export type OfflineAvailability = {
   fileId: string;
@@ -38,11 +38,11 @@ export const useOfflineIndexStore = create<OfflineIndexState>((set, get) => ({
   hydrated: false,
 
   hydrate: async () => {
-    const files = await getAllFiles();
+    const fileIds = await getAllFileIds();
     const next: Record<string, boolean> = {};
 
-    for (const file of files) {
-      next[file.fileId] = true;
+    for (const fileId of fileIds) {
+      next[fileId] = true;
     }
 
     set({

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { IconWifiOff, IconX } from "@tabler/icons-react";
+import { useRouter } from "next/navigation";
 
 import { useOfflineConnectivityStore } from "@/features/offline/offline.connectivity.store";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ function formatRelativeTimestamp(timestamp: number | null): string {
 }
 
 export function ConnectivityBanner() {
+  const router = useRouter();
   const isOnline = useOfflineConnectivityStore((state) => state.isOnline);
   const lastOfflineAt = useOfflineConnectivityStore((state) => state.lastOfflineAt);
   const lastSyncAt = useOfflineConnectivityStore((state) => state.lastSyncAt);
@@ -91,6 +93,15 @@ export function ConnectivityBanner() {
           </div>
           <Button
             type="button"
+            variant="outline"
+            size="xs"
+            className="border-amber-300/70 bg-amber-100/70 text-amber-900 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-900/20 dark:text-amber-100 dark:hover:bg-amber-900/40"
+            onClick={() => router.push("/offline-library")}
+          >
+            Offline Library
+          </Button>
+          <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="size-6 text-amber-800 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
@@ -110,9 +121,20 @@ export function ConnectivityBanner() {
   }
 
   return (
-    <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-amber-300/60 bg-amber-50/80 px-2.5 py-1 text-[11px] font-medium text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100">
-      <span className="inline-block size-1.5 rounded-full bg-amber-500" />
-      Offline · Last sync {syncLabel}
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/60 bg-amber-50/80 px-2.5 py-1 text-[11px] font-medium text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100">
+        <span className="inline-block size-1.5 rounded-full bg-amber-500" />
+        Offline · Last sync {syncLabel}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        className="border-amber-300/60 bg-amber-50/80 text-amber-900 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-900/40"
+        onClick={() => router.push("/offline-library")}
+      >
+        Open Offline Library
+      </Button>
     </div>
   );
 }

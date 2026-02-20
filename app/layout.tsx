@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Outfit } from "next/font/google";
+import Script from "next/script";
 
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { SettingsProvider } from "@/components/providers/SettingsProvider";
@@ -61,6 +62,9 @@ export default function RootLayout({
       className={`${outfit.variable} ${switzer.variable}`}
     >
       <body className="min-h-screen bg-background text-foreground antialiased transition-colors">
+        <Script id="studytrix-startup-guard" strategy="beforeInteractive">
+          {`(function(){try{var host=window.location.hostname;var isLocal=host==="localhost"||host==="127.0.0.1";if(isLocal){if("serviceWorker"in navigator){navigator.serviceWorker.getRegistrations().then(function(registrations){registrations.forEach(function(registration){var worker=registration.active||registration.waiting||registration.installing;if(!worker){return;}try{var pathname=new URL(worker.scriptURL).pathname;if(pathname==="/studytrix-sw.js"){registration.unregister();}}catch(_){}});}).catch(function(){});}if("caches"in window){caches.keys().then(function(keys){keys.forEach(function(key){if(key.indexOf("studytrix-shell-")===0||key.indexOf("studytrix-static-")===0){caches.delete(key);}});}).catch(function(){});}}var isOfflineChunkError=function(message){if(navigator.onLine!==false){return false;}var text=String(message||"");return text.indexOf("ChunkLoadError")>=0||text.indexOf("Loading chunk")>=0||text.indexOf("Failed to fetch dynamically imported module")>=0||text.indexOf("Failed to load chunk")>=0;};window.addEventListener("error",function(event){if(isOfflineChunkError(event&&event.message)){window.location.replace("/offline.html");}},true);window.addEventListener("unhandledrejection",function(event){var reason=event&&event.reason;var message=typeof reason==="string"?reason:(reason&&reason.message)||String(reason||"");if(isOfflineChunkError(message)){window.location.replace("/offline.html");}});}catch(_){}})();`}
+        </Script>
         <ThemeProvider>
           <SettingsProvider>
             <OfflineRuntime />

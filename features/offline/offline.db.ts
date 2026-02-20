@@ -215,6 +215,24 @@ export async function getAllFiles(): Promise<OfflineFileRecord[]> {
   }
 }
 
+export async function getAllFileIds(): Promise<string[]> {
+  const db = await getDB();
+
+  if (!db) {
+    return Array.from(memoryFiles.keys());
+  }
+
+  try {
+    const keys = await db.getAllKeys(FILES_STORE);
+    return keys
+      .filter((key): key is string => typeof key === "string")
+      .map((key) => key.trim())
+      .filter((key) => key.length > 0);
+  } catch {
+    return Array.from(memoryFiles.keys());
+  }
+}
+
 export async function clearFiles(): Promise<void> {
   memoryFiles.clear();
 
@@ -378,6 +396,40 @@ export async function getAllMetadata(): Promise<MetadataRecord[]> {
     return records.map(cloneMetadataRecord);
   } catch {
     return Array.from(memoryMetadata.values()).map(cloneMetadataRecord);
+  }
+}
+
+export async function getMetadataByPrefix(prefix: string): Promise<MetadataRecord[]> {
+  const normalizedPrefix = prefix.trim();
+  if (!normalizedPrefix) {
+    return [];
+  }
+
+  const db = await getDB();
+
+  if (!db) {
+    return Array.from(memoryMetadata.values())
+      .filter((record) => record.key.startsWith(normalizedPrefix))
+      .map(cloneMetadataRecord);
+  }
+
+  try {
+    if (typeof IDBKeyRange !== "undefined") {
+      const lowerBound = normalizedPrefix;
+      const upperBound = `${normalizedPrefix}\uffff`;
+      const range = IDBKeyRange.bound(lowerBound, upperBound);
+      const records = await db.getAll(METADATA_STORE, range);
+      return records.map(cloneMetadataRecord);
+    }
+
+    const records = await db.getAll(METADATA_STORE);
+    return records
+      .filter((record) => record.key.startsWith(normalizedPrefix))
+      .map(cloneMetadataRecord);
+  } catch {
+    return Array.from(memoryMetadata.values())
+      .filter((record) => record.key.startsWith(normalizedPrefix))
+      .map(cloneMetadataRecord);
   }
 }
 

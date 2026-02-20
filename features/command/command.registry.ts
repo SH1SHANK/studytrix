@@ -207,6 +207,15 @@ export const SYSTEM_COMMANDS: StructuredCommand[] = [
     },
   },
   {
+    id: "open-offline-library",
+    label: "Open Offline Library",
+    description: "Browse downloaded offline folders and files",
+    keywords: ["offline", "library", "downloads", "folders", "files"],
+    execute() {
+      return;
+    },
+  },
+  {
     id: "toggle-view",
     label: "Toggle View Mode",
     description: "Toggle between available view modes",

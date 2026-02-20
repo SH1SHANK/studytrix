@@ -216,3 +216,30 @@ export async function setNestedCommandSnapshot(
     // memory fallback already updated
   }
 }
+
+export async function getAllNestedCommandSnapshots(): Promise<NestedCommandFileSnapshot[]> {
+  const fromMemory = Array.from(memorySnapshots.values()).map((snapshot) =>
+    cloneSnapshot(snapshot),
+  );
+
+  const db = await getDb();
+  if (!db) {
+    return fromMemory.sort((left, right) => right.updatedAt - left.updatedAt);
+  }
+
+  try {
+    const values = await db.getAll(SNAPSHOTS_STORE);
+    const parsed = values
+      .map((value) => parseSnapshot(value))
+      .filter((value): value is NestedCommandFileSnapshot => value !== null)
+      .map((snapshot) => cloneSnapshot(snapshot));
+
+    for (const snapshot of parsed) {
+      memorySnapshots.set(snapshot.scopeKey, cloneSnapshot(snapshot));
+    }
+
+    return parsed.sort((left, right) => right.updatedAt - left.updatedAt);
+  } catch {
+    return fromMemory.sort((left, right) => right.updatedAt - left.updatedAt);
+  }
+}

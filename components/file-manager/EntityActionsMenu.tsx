@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   IconArrowUpRight,
+  IconArchive,
   IconCircleCheck,
   IconCloudDown,
   IconDeviceFloppy,
@@ -20,6 +21,7 @@ import { useTagStore } from "@/features/tags/tag.store";
 import type { EntityType, Tag } from "@/features/tags/tag.types";
 import { Button } from "@/components/ui/button";
 import { shareNativeFile } from "@/features/share/share.service";
+import { downloadFolderAsZip, shareFolderAsZip } from "@/features/folder/folder.zip";
 import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import {
   DropdownMenu,
@@ -94,6 +96,7 @@ export function EntityActionsMenu({
   isOffline = false,
   isDownloading = false,
 }: EntityActionsMenuProps) {
+  const [folderZipBusy, setFolderZipBusy] = useState(false);
   const hydrationRequestedRef = useRef(false);
   const {
     tags,
@@ -253,6 +256,58 @@ export function EntityActionsMenu({
             </span>
           </div>
         </DropdownMenuItem>
+
+        {entityType === "folder" ? (
+          <>
+            <DropdownMenuItem
+              className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-sky-50 focus:text-sky-700 disabled:opacity-45 dark:focus:bg-sky-500/20 dark:focus:text-sky-200"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (folderZipBusy) {
+                  return;
+                }
+                triggerHaptic();
+                setFolderZipBusy(true);
+                void downloadFolderAsZip(entityId, title)
+                  .catch(() => undefined)
+                  .finally(() => setFolderZipBusy(false));
+              }}
+              disabled={folderZipBusy}
+            >
+              <IconArchive className="size-4 text-sky-500 dark:text-sky-300" />
+              <div className="flex flex-col gap-0.5">
+                <span>{folderZipBusy ? "Preparing..." : "Download Folder (.zip)"}</span>
+                <span className="text-[11px] font-normal text-muted-foreground">
+                  Zip and download complete folder contents
+                </span>
+              </div>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-violet-50 focus:text-violet-700 disabled:opacity-45 dark:focus:bg-violet-500/20 dark:focus:text-violet-200"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (folderZipBusy) {
+                  return;
+                }
+                triggerHaptic();
+                setFolderZipBusy(true);
+                void shareFolderAsZip(entityId, title)
+                  .catch(() => undefined)
+                  .finally(() => setFolderZipBusy(false));
+              }}
+              disabled={folderZipBusy}
+            >
+              <IconShare className="size-4 text-violet-500 dark:text-violet-300" />
+              <div className="flex flex-col gap-0.5">
+                <span>{folderZipBusy ? "Preparing..." : "Share Folder (.zip)"}</span>
+                <span className="text-[11px] font-normal text-muted-foreground">
+                  Share zipped folder via system share sheet
+                </span>
+              </div>
+            </DropdownMenuItem>
+          </>
+        ) : null}
 
         {supportsOfflineActions ? (
           <>

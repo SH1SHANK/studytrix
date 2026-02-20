@@ -18,6 +18,7 @@ import {
 
 const SW_PATHNAME = "/studytrix-sw.js";
 const SW_CACHE_PREFIXES = ["studytrix-shell-", "studytrix-static-"];
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 async function clearOfflineV3SwCaches(): Promise<void> {
   if (typeof window === "undefined" || !("caches" in window)) {
@@ -64,6 +65,12 @@ async function unregisterOfflineV3Sw(): Promise<void> {
 }
 
 async function ensureOfflineV3SwRegistered(): Promise<void> {
+  if (!IS_PRODUCTION) {
+    await unregisterOfflineV3Sw();
+    await clearOfflineV3SwCaches();
+    return;
+  }
+
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
     return;
   }
@@ -85,7 +92,7 @@ async function applyRuntimeFlags(): Promise<void> {
 
   startOfflineSyncScheduler();
 
-  if (isOfflineV3SwEnabled()) {
+  if (isOfflineV3SwEnabled() && IS_PRODUCTION) {
     await ensureOfflineV3SwRegistered();
     return;
   }

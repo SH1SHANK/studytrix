@@ -46,7 +46,7 @@ export function isOfflineV3Enabled(): boolean {
   return readFlag(OFFLINE_V3_FLAG_KEY, {
     server: false,
     production: false,
-    development: true,
+    development: false,
   });
 }
 
@@ -58,7 +58,7 @@ export function isOfflineV3SwEnabled(): boolean {
   return readFlag(OFFLINE_V3_SW_FLAG_KEY, {
     server: false,
     production: false,
-    development: true,
+    development: false,
   });
 }
 

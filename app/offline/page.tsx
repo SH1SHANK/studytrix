@@ -10,10 +10,10 @@ export default function OfflinePage() {
         </p>
         <div className="mt-4">
           <Link
-            href="/"
+            href="/offline-library"
             className="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
           >
-            Go to Dashboard
+            Go to Offline Library
           </Link>
         </div>
       </div>
