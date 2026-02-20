@@ -1,3 +1,41 @@
+# System Architecture
+
+Studytrix is built as an offline-first, service-oriented Next.js application. It orchestrates between upstream cloud storage (Google Drive), local persistence (IndexedDB/FileSystem API), and high-performance caching layers (Redis).
+
+## High-Level System Overview
+
+```mermaid
+graph TD
+    User([User])
+    
+    subgraph Client ["Client Browser"]
+        UI[React UI Components]
+        ZS[Zustand Stores]
+        IDB[(IndexedDB / FS API)]
+        
+        UI <--> ZS
+        ZS <--> IDB
+    end
+    
+    subgraph Server ["Next.js Server"]
+        API[API Routes]
+        CAD[Catalog Data]
+        RED[(Redis Cache)]
+        
+        API <--> CAD
+        API <--> RED
+    end
+    
+    subgraph External ["External Services"]
+        GDA[Google Drive API]
+        ANJ[API Ninjas]
+    end
+    
+    UI <--> API
+    API <--> GDA
+    API <--> ANJ
+```
+
 ## API Layer
 
 ### File Stream Endpoint
@@ -27,6 +65,7 @@
 
 ### `features/offline`
 
+- `offline.storage-location.ts`: Abstraction layer resolving to either native FileSystem Access API or IndexedDB.
 - `offline.db.ts`: IndexedDB abstraction
 - `offline.rules.ts`: pure download eligibility rules
 - `offline.prefetch.ts`: low-priority prefetch logic
@@ -42,6 +81,40 @@
 - `download.queue.ts`: concurrent priority queue
 - `download.controller.ts`: canonical download + persistence orchestration
 - `download.store.ts`: reactive state adapter for UI
+
+### `features/bulk`
+
+- `bulk.types.ts`: selection state contracts
+- `bulk.share.ts`: orchestration for individual file sharing and client-side ZIP generation
+- `bulk.download.ts`: orchestration for batched downloads
+
+### `features/command`
+
+- Contextually aware (local folder scope vs. global workspace scope) search and navigation index.
+
+### `features/dashboard`
+
+- `dashboard.quote.store.ts`: localized daily caching of motivational quotes.
+
+## Offline Data Flow
+
+```mermaid
+sequenceDiagram
+    participant UI as UI Store
+    participant QC as Queue Controller
+    participant API as Server API
+    participant DR as Google Drive
+    participant DB as Local Storage (IDB/FS)
+
+    UI->>QC: Trigger Download
+    QC->>API: Request File Stream
+    API->>DR: Fetch Binary
+    DR-->>API: Binary Stream
+    API-->>QC: Chunked Response
+    QC->>DB: Write Blob
+    DB-->>QC: Success
+    QC-->>UI: Update Progress
+```
 
 ## Caching and Rate Limiting
 

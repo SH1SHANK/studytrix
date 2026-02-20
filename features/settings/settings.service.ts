@@ -140,6 +140,26 @@ export async function setSetting(id: string, value: unknown): Promise<void> {
   }
 }
 
+export async function removeSetting(id: string): Promise<void> {
+  const key = id.trim();
+  if (!key) {
+    return;
+  }
+
+  memorySettings.delete(key);
+
+  const db = await getDb();
+  if (!db) {
+    return;
+  }
+
+  try {
+    await db.delete(STORE_NAME, key);
+  } catch (error) {
+    console.error("Failed to remove setting from IndexedDB", error);
+  }
+}
+
 export async function resetSettings(): Promise<void> {
   memorySettings.clear();
 

@@ -4,7 +4,10 @@
 
 - Department and semester-scoped academic browsing.
 - Folder-first file manager for course material discovery.
-- Command-centered interactions for quick navigation and actions.
+- Command-centered interactions for quick navigation and actions (Global vs. Local scope filtering).
+- Dynamic "Quote of the Day" powered by API Ninjas with client-side daily caching.
+- Contextual entity actions via long-press and persistent grid menus.
+- Intelligently sorted lists (starred items pinned to top).
 
 ## Catalog API Layer
 
@@ -34,7 +37,7 @@
 
 ## Offline Engine
 
-- IndexedDB blob persistence for offline files.
+- IndexedDB and native FileSystem Access API abstractions for blob persistence.
 - Selective download rules (allow/exclude MIME, max size).
 - Priority download queue with concurrency control and retry.
 - Progressive download updates for UI progress tracking.
@@ -42,6 +45,12 @@
 - Offline text indexing and local search.
 - Integrity checksum generation and verification.
 - Sync invalidation flow for modified remote files.
+
+## Bulk Operations & Sharing
+
+- Client-side ZIP archive generation (`fflate`) for bulk downloading/sharing.
+- Native device sharing via Web Share API fallback mechanism.
+- Selection toolbars for batch processing.
 
 ## Reliability and Safety
 

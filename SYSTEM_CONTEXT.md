@@ -35,17 +35,21 @@ Studytrix is an academic content platform that presents course data, Google Driv
 
 ### Drive Source
 
-- Google Drive API v3.
+- **Provider**: LaunchPad Community Drive (maintained by the **LaunchPad NITC Community**).
+- **Access**: Authorized via senior community members for proxying within Studytrix.
+- **Service**: Google Drive API v3.
 - Data fetched:
-  - Folder children
-  - File metadata
-  - File binary streams
+    - Folder child hierarchies with pagination support.
+    - Extended file metadata (MIME-specific enrichment).
+    - Binary streaming for secure resource access.
 
 ### Local Persistence
 
-- IndexedDB stores:
-  - `files`: cached blobs + metadata
-  - `metadata`: local engine metadata/config
+- **FileSystem Access API**: Native directory handle persistence for high-performance blob management.
+- **IndexedDB**: Fallback storage for browsers without native FS API access.
+- Stores:
+    - `files`: Block-level blob storage and encrypted metadata references.
+    - `metadata`: Engine configuration, download rules, and sync registry.
 
 ## Core Domain Models
 
@@ -63,14 +67,12 @@ Studytrix is an academic content platform that presents course data, Google Driv
 
 - `FileMetadata`
 
-### Offline Domain
+### Offline & Bulk Domain
 
-- `OfflineFileRecord`
-- `DownloadTask`
-- `DownloadProgress`
-- `StorageStats`
-- `DownloadRules`
-- `OfflineSnapshot`
+- `OfflineFileRecord`: Persistent descriptor of local availability.
+- `DownloadTask`: Canonical unit of work for the priority queue.
+- `Zippable`: In-memory transport type for bulk archive generation (`fflate`).
+- `StorageStats`: Reactive capacity tracking for the user's local disk.
 
 ## API Behavior Guarantees
 
@@ -100,9 +102,9 @@ Studytrix is an academic content platform that presents course data, Google Driv
 - In-flight dedupe to reduce repeated upstream requests.
 - Secret isolation in server env vars only.
 
-## Operational Notes
+## Operational Integrity
 
-- Redis outages should degrade gracefully to memory fallback for local resiliency.
-- IndexedDB failures must not crash primary browsing paths.
-- Binary streaming is preferred over full buffering to control memory usage.
-- Documentation and env templates must stay aligned with route/service changes.
+- **Attendrix Maintenance**: The project is strictly maintained by the Attendrix Team; updates to core Drive proxying or storage abstractions must undergo rigorous testing.
+- **Graceful Degradation**: If Redis is unreachable, the system must fall back to local memory caching immediately to prevent downtime.
+- **User Privacy**: Local storage handles (FileSystem API) are scoped only to the user-selected directory; Studytrix has no visibility into other system files.
+- **Streaming Reliability**: High-volume binary streams use piping to avoid memory pressure, ensuring stability on lower-end mobile devices.

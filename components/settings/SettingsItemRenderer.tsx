@@ -4,10 +4,10 @@ import { memo } from "react";
 
 import { SettingAction } from "./SettingAction";
 import { SettingRowShell } from "./SettingCardShell";
-import { SettingColor } from "./SettingColor";
 import { SettingDanger } from "./SettingDanger";
 import { SettingSelect } from "./SettingSelect";
 import { SettingSlider } from "./SettingSlider";
+import { SettingTheme } from "./SettingTheme";
 import { SettingToggle } from "./SettingToggle";
 import type { SettingItem } from "@/features/settings/settings.types";
 
@@ -34,8 +34,8 @@ function SettingsItemRendererComponent({
     return <SettingSlider setting={setting} />;
   }
 
-  if (setting.type === "color") {
-    return <SettingColor setting={setting} />;
+  if (setting.type === "theme") {
+    return <SettingTheme setting={setting} />;
   }
 
   if (setting.type === "action") {

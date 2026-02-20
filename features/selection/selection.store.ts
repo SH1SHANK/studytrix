@@ -1,8 +1,11 @@
 import { create } from "zustand";
 
+import type { DriveItem } from "@/features/drive/drive.types";
+
 interface SelectionState {
   isSelectionMode: boolean;
   selectedIds: Set<string>;
+  contextItems: DriveItem[];
 }
 
 interface SelectionActions {
@@ -10,17 +13,19 @@ interface SelectionActions {
   toggleSelection: (id: string) => void;
   selectAll: (ids: string[]) => void;
   clearSelection: () => void;
+  setContextItems: (items: DriveItem[]) => void;
 }
 
 export const useSelectionStore = create<SelectionState & SelectionActions>()((set) => ({
   isSelectionMode: false,
   selectedIds: new Set<string>(),
+  contextItems: [],
 
   setSelectionMode: (active: boolean) => {
     set((state) => {
       // If turning off selection mode, also clear all selected items
       if (!active) {
-        return { isSelectionMode: false, selectedIds: new Set() };
+        return { isSelectionMode: false, selectedIds: new Set(), contextItems: [] };
       }
       return { isSelectionMode: true };
     });
@@ -56,6 +61,12 @@ export const useSelectionStore = create<SelectionState & SelectionActions>()((se
     set({
       selectedIds: new Set(),
       isSelectionMode: false,
+      contextItems: [],
     });
   },
+
+  setContextItems: (items: DriveItem[]) => {
+    set({ contextItems: items });
+  },
 }));
+

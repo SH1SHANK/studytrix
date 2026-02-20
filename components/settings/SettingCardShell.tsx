@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 interface SettingRowShellProps {
   label: string;
-  description?: string;
+  description?: ReactNode;
   requiresRestart?: boolean;
   trailing?: ReactNode;
   children?: ReactNode;

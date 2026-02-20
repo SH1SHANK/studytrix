@@ -2,14 +2,13 @@
 
 ## Design Intent
 
-Studytrix UI should feel focused, readable, and tactile across mobile-first academic workflows.
+Studytrix implements an **Academic Premium** design language. It should feel focused, readable, and tactile across mobile-first academic workflows, bridging the gap between a utility tool and a refined workspace.
 
 Core principles:
-
-- Fast comprehension over visual noise.
-- Strong hierarchy between course, folder, and file states.
-- Touch-friendly interactions with clear feedback.
-- Subtle motion that supports orientation, not decoration.
+- **Clarity over Clutter**: Fast comprehension over visual noise.
+- **Hierarchy**: Strong visual distinction between departments, courses, folders, and files.
+- **Intentionality**: Touch-friendly interactions with explicit feedback loops.
+- **Orienting Motion**: Subtle animations that support spatial orientation rather than decoration.
 
 ## Typography
 
@@ -41,11 +40,13 @@ Core principles:
 
 ## Component Interaction Patterns
 
-### Folder and File Rows
+### Folder and File Interactions
 
-- Hover: subtle tint or elevation only.
-- Active/pressed: quick scale down and stronger surface shift.
-- Selection: accent border or badge state, never color-only semantics.
+- **Standard Tap**: Immediate navigation or preview launch.
+- **Long-Press (Tactile)**: Triggers haptic feedback and opens the contextual action menu (Share, Star, Offline, Delete).
+- **Persistent Grid Menus**: For desktop/tablet layouts, actions are accessible via a secondary menu trigger within the entity card.
+- **Hover Transitions**: Subtle surface tint and elevation shift to indicate interactivity.
+- **Selection State**: Indicated via high-contrast borders and badge states, ensuring visibility across different device brightness levels.
 
 ### Popovers and Menus
 
@@ -66,13 +67,11 @@ Core principles:
 - Use easing that decelerates into final state.
 - Stagger list reveals only for first-load context building.
 
-## Haptic and Feedback Guidelines
+## Feedback Systems
 
-- Trigger light haptic feedback on high-value mobile actions:
-  - Open file actions menu
-  - Confirm download/offline toggle
-  - Destructive confirmations
-- Pair haptics with visible state change; never rely on haptics alone.
+- **Tactile Feedback**: Medium-impact haptics on long-press menu triggers and high-value actions (Offline toggle, ZIP generation).
+- **Visual Affirmation**: Use of "Sonner" toasts for action confirmations (e.g., "ZIP Ready", "Download Started").
+- **Motion Persistence**: All menu entries use a coordinated staggered entry (Framer Motion) to guide the eye toward primary actions.
 
 ## Accessibility Baseline
 

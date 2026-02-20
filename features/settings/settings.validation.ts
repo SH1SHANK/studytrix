@@ -1,6 +1,5 @@
 import type { SettingItem } from "./settings.types";
 
-const HEX_COLOR_PATTERN = /^#([0-9A-Fa-f]{6})$/;
 const FLOAT_EPSILON = 1e-8;
 
 function isFiniteNumber(value: unknown): value is number {
@@ -47,16 +46,12 @@ export function validateSetting(setting: SettingItem, value: unknown): boolean {
     return typeof value === "boolean";
   }
 
-  if (setting.type === "select") {
+  if (setting.type === "select" || setting.type === "theme") {
     return validateSelect(setting, value);
   }
 
   if (setting.type === "slider") {
     return validateSlider(setting, value);
-  }
-
-  if (setting.type === "color") {
-    return typeof value === "string" && HEX_COLOR_PATTERN.test(value);
   }
 
   if (setting.type === "action" || setting.type === "danger" || setting.type === "info") {

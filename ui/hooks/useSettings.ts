@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo } from "react";
-import { useTheme } from "next-themes";
 
 import { getSettingDefinition } from "@/features/settings/settings.registry";
 import { searchSettings } from "@/features/settings/settings.search";
@@ -40,18 +39,6 @@ export function useSetting(id: string): [unknown, (value: unknown) => void] {
     },
     [id],
   );
-
-  const { setTheme } = useTheme();
-
-  useEffect(() => {
-    if (id !== "theme_mode") {
-      return;
-    }
-
-    if (settingValue === "light" || settingValue === "dark" || settingValue === "system") {
-      setTheme(settingValue);
-    }
-  }, [id, setTheme, settingValue]);
 
   return [settingValue, setValue];
 }

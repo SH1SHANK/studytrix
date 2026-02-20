@@ -2,7 +2,7 @@ export type SettingType =
   | "toggle"
   | "select"
   | "slider"
-  | "color"
+  | "theme"
   | "action"
   | "danger"
   | "info";
@@ -16,6 +16,7 @@ export interface SettingItem {
   id: string;
   label: string;
   description?: string;
+  buttonLabel?: string;
   type: SettingType;
   defaultValue?: unknown;
   options?: SettingOption[];

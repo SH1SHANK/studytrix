@@ -5,6 +5,7 @@ import type {
   OfflineFileRecord,
   SearchIndexRecord,
 } from "./offline.types";
+import { getActiveProvider } from "./offline.storage-location";
 
 const DB_NAME = "studytrix_offline";
 const VERSION = 1;
@@ -99,6 +100,30 @@ async function getDB(): Promise<IDBPDatabase<OfflineDBSchema> | null> {
 }
 
 export async function getFile(fileId: string): Promise<OfflineFileRecord | undefined> {
+  // Try the active storage provider first (single source of truth for blobs).
+  const provider = getActiveProvider();
+  if (provider) {
+    try {
+      const blob = await provider.readFile(fileId);
+      if (blob) {
+        // Return a synthetic record with the blob from the provider.
+        const inMemory = memoryFiles.get(fileId);
+        return {
+          fileId,
+          blob,
+          size: blob.size,
+          mimeType: inMemory?.mimeType ?? (blob.type || "application/octet-stream"),
+          modifiedTime: inMemory?.modifiedTime ?? null,
+          checksum: inMemory?.checksum,
+          cachedAt: inMemory?.cachedAt ?? Date.now(),
+          lastAccessedAt: inMemory?.lastAccessedAt ?? Date.now(),
+        };
+      }
+    } catch {
+      // Fall through to IndexedDB.
+    }
+  }
+
   const db = await getDB();
 
   if (!db) {
@@ -117,6 +142,21 @@ export async function getFile(fileId: string): Promise<OfflineFileRecord | undef
 
 export async function putFile(record: OfflineFileRecord): Promise<void> {
   const cloned = cloneFileRecord(record);
+
+  // Write blob to the active provider (single source of truth).
+  const provider = getActiveProvider();
+  if (provider) {
+    try {
+      await provider.writeFile(record.fileId, cloned.blob);
+    } catch (error) {
+      if (isQuotaError(error)) {
+        throw new Error("Storage quota exceeded");
+      }
+      // If provider write fails, fall through to IndexedDB.
+    }
+  }
+
+  // Also store in IndexedDB (metadata cache / fallback).
   const db = await getDB();
 
   if (!db) {
@@ -138,6 +178,16 @@ export async function putFile(record: OfflineFileRecord): Promise<void> {
 
 export async function deleteFile(fileId: string): Promise<void> {
   memoryFiles.delete(fileId);
+
+  // Delete from active provider.
+  const provider = getActiveProvider();
+  if (provider) {
+    try {
+      await provider.deleteFile(fileId);
+    } catch {
+      // Best effort.
+    }
+  }
 
   const db = await getDB();
   if (!db) {
