@@ -68,20 +68,22 @@ function CommandDialog({
 
 function CommandInput({
   className,
+  prefixNode,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Input>) {
+}: React.ComponentProps<typeof CommandPrimitive.Input> & { prefixNode?: React.ReactNode }) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="bg-input/20 dark:bg-input/30 h-11!">
+      <InputGroup className="bg-input/20 dark:bg-input/30 h-11! flex items-center overflow-x-hidden p-0">
+        {prefixNode}
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
-            "w-full text-xs/relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
+            "w-full text-xs/relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50 min-w-0 flex-1 bg-transparent px-3",
             className
           )}
           {...props}
         />
-        <InputGroupAddon>
+        <InputGroupAddon className="shrink-0 pr-3">
           <IconSearch className="size-3.5 shrink-0 opacity-50" />
         </InputGroupAddon>
       </InputGroup>

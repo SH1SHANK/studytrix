@@ -30,7 +30,7 @@ import {
   IconTag,
   IconX,
 } from "@tabler/icons-react";
-import { AnimatePresence, motion, type Easing } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
 import { DEPARTMENT_MAP, getDepartmentName } from "@/lib/academic";
@@ -106,11 +106,6 @@ const staggerContainer = {
       staggerChildren: 0.03,
     },
   },
-};
-
-const staggerItem = {
-  hidden: { opacity: 0, x: -6 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.15, ease: "easeOut" as Easing } },
 };
 
 const GROUP_META: Record<
@@ -2346,19 +2341,7 @@ export function CommandBar({
     return scopePills.map((pill) => pill.label).join(" + ");
   }, [scopePills]);
 
-  const scopeInputPaddingClass = useMemo(() => {
-    if (scopePills.length === 0) {
-      return "";
-    }
-
-    if (scopePills.length === 1) {
-      return "pl-40";
-    }
-    if (scopePills.length === 2) {
-      return "pl-52";
-    }
-    return "pl-64";
-  }, [scopePills.length]);
+  const scopeInputPaddingClass = "";
 
   useEffect(() => {
     if (scopePills.length === 0) {
@@ -2596,45 +2579,54 @@ export function CommandBar({
                   transition={{ type: "spring", ...motionTokens.spring }}
                   className="relative mx-auto w-full max-w-2xl"
                 >
-                  {scopePills.length > 0 ? (
-                    <div className="pointer-events-none absolute left-3 top-1/2 z-20 -translate-y-1/2">
-                      <div className="pointer-events-auto flex max-w-80 items-center gap-1 overflow-hidden">
-                        {scopePills.map((pill) => (
-                          <span key={pill.key} className="inline-flex max-w-36 items-center gap-1 rounded-full border border-border/80 bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
-                            {pill.icon === "folder" ? (
-                              <IconFolder className="size-3 text-primary" />
-                            ) : pill.icon === "tag" ? (
-                              <IconTag className="size-3 text-primary" />
-                            ) : pill.icon === "domain" ? (
-                              <IconDatabase className="size-3 text-primary" />
-                            ) : pill.label === "Actions" ? (
-                              <IconBolt className="size-3 text-primary" />
-                            ) : (
-                              <IconClockHour4 className="size-3 text-primary" />
-                            )}
-                            <span className="truncate">{pill.label}</span>
-                            <button
-                              type="button"
-                              className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-                              onClick={pill.onRemove}
-                              aria-label={`Remove ${pill.label} scope`}
-                            >
-                              <IconX className="size-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
                   <CommandInput
                     value={query}
                     onValueChange={handleQueryChange}
-                    placeholder={placeholder}
+                    placeholder={scopePills.length > 0 ? "Search..." : placeholder}
                     autoFocus
                     className={cn(
-                      scopeInputPaddingClass,
                       trimmedDeferredQuery ? "pr-10" : undefined,
                     )}
+                    prefixNode={
+                      scopePills.length > 0 ? (
+                        <div className="flex max-w-[55vw] shrink-0 items-center gap-1.5 overflow-x-auto no-scrollbar pl-1.5 py-1 sm:max-w-80">
+                          <AnimatePresence mode="popLayout">
+                            {scopePills.map((pill) => (
+                              <motion.div
+                                layout
+                                initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                                animate={{ opacity: 1, scale: 1, x: 0 }}
+                                exit={{ opacity: 0, scale: 0.8, x: -10 }}
+                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                key={pill.key}
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary shadow-sm"
+                              >
+                                {pill.icon === "folder" ? (
+                                  <IconFolder className="size-3.5 shrink-0" />
+                                ) : pill.icon === "tag" ? (
+                                  <IconTag className="size-3.5 shrink-0" />
+                                ) : pill.icon === "domain" ? (
+                                  <IconDatabase className="size-3.5 shrink-0" />
+                                ) : pill.label === "Actions" ? (
+                                  <IconBolt className="size-3.5 shrink-0" />
+                                ) : (
+                                  <IconClockHour4 className="size-3.5 shrink-0" />
+                                )}
+                                <span className="max-w-24 truncate">{pill.label}</span>
+                                <button
+                                  type="button"
+                                  className="shrink-0 rounded-full p-0.5 opacity-60 transition-all hover:bg-primary/20 hover:opacity-100"
+                                  onClick={pill.onRemove}
+                                  aria-label={`Remove ${pill.label} scope`}
+                                >
+                                  <IconX className="size-3 shrink-0" />
+                                </button>
+                              </motion.div>
+                            ))}
+                          </AnimatePresence>
+                        </div>
+                      ) : null
+                    }
                   />
                   {trimmedDeferredQuery ? (
                     <Button
@@ -2783,7 +2775,7 @@ export function CommandBar({
                             </div>
                             <motion.div
                               variants={staggerContainer}
-                              initial="hidden"
+                              initial={false}
                               animate="visible"
                             >
                             {group.items.map((item) => {
@@ -2800,7 +2792,9 @@ export function CommandBar({
                               return (
                                 <motion.div
                                   key={item.id}
-                                  variants={staggerItem}
+                                  initial={false}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ duration: 0.12, ease: "easeOut" }}
                                   ref={isActive ? activeItemRef : undefined}
                                 >
                                 <CommandItem
