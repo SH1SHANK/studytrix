@@ -134,7 +134,7 @@ export default async function Page({
       showHeader={false}
       commandPlaceholder={`Search in ${folderName}...`}
     >
-      <div className="min-h-full bg-[#F7F7F5] dark:bg-stone-950">
+      <div className="min-h-full bg-background">
         <StickyHeader
           folderName={folderName}
           breadcrumbSegments={breadcrumbSegments}

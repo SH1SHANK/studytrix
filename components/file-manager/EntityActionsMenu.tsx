@@ -159,7 +159,7 @@ export function EntityActionsMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "size-10 rounded-lg text-stone-500 transition-all duration-200 hover:-translate-y-px hover:bg-stone-100 hover:text-stone-700 active:scale-[0.98] dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-200",
+                "size-10 rounded-lg text-muted-foreground transition-all duration-200 hover:-translate-y-px hover:bg-muted hover:text-foreground active:scale-[0.98]",
                 triggerClassName,
               )}
               onClick={(event) => event.stopPropagation()}
@@ -174,50 +174,50 @@ export function EntityActionsMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align={align}
-          className="w-72 rounded-xl border border-stone-200/70 bg-white/95 p-1.5 shadow-xl shadow-stone-900/10 backdrop-blur-md dark:border-stone-700/80 dark:bg-stone-900/95"
+          className="w-72 rounded-xl border border-border/80 bg-card/95 p-1.5 shadow-xl backdrop-blur-md"
         >
-        <div className="mb-1 rounded-lg border border-stone-200/70 bg-stone-50/80 px-3 py-2.5 dark:border-stone-700/80 dark:bg-stone-800/70">
-          <p className="truncate text-sm font-semibold text-stone-800 dark:text-stone-100">
-            {title}
-          </p>
-          <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
-            {description ?? "Quick actions"}
-          </p>
-          {supportsOfflineActions ? (
-            <div className="mt-1.5">
-              {isOffline ? (
-                <span className="inline-flex items-center rounded-full border border-emerald-300/80 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300">
-                  Available Offline
-                </span>
-              ) : isDownloading ? (
-                <span className="inline-flex items-center rounded-full border border-sky-300/80 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300">
-                  Downloading
-                </span>
-              ) : (
-                <span className="inline-flex items-center rounded-full border border-stone-300/80 bg-white px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:border-stone-600/80 dark:bg-stone-900/70 dark:text-stone-300">
-                  Cloud only
-                </span>
-              )}
-            </div>
-          ) : null}
-        </div>
-
-        <DropdownMenuItem
-          className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-indigo-50 focus:text-indigo-700 dark:focus:bg-indigo-500/20 dark:focus:text-indigo-200"
-          onClick={(event) => {
-            event.stopPropagation();
-            triggerHaptic();
-            onOpen?.();
-          }}
-        >
-          <IconArrowUpRight className="size-4 text-indigo-500 dark:text-indigo-300" />
-          <div className="flex flex-col gap-0.5">
-            <span>{entityType === "folder" ? "Open Folder" : "Open File"}</span>
-            <span className="text-[11px] font-normal text-stone-500 dark:text-stone-400">
-              {entityType === "folder" ? "Navigate into this folder" : "Open preview"}
-            </span>
+          <div className="mb-1 rounded-lg border border-border/80 bg-muted/70 px-3 py-2.5">
+            <p className="truncate text-sm font-semibold text-foreground">
+              {title}
+            </p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {description ?? "Quick actions"}
+            </p>
+            {supportsOfflineActions ? (
+              <div className="mt-1.5">
+                {isOffline ? (
+                  <span className="inline-flex items-center rounded-full border border-emerald-300/80 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300">
+                    Available Offline
+                  </span>
+                ) : isDownloading ? (
+                  <span className="inline-flex items-center rounded-full border border-sky-300/80 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300">
+                    Downloading
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full border border-border/80 bg-card/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    Cloud only
+                  </span>
+                )}
+              </div>
+            ) : null}
           </div>
-        </DropdownMenuItem>
+
+          <DropdownMenuItem
+            className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-indigo-50 focus:text-indigo-700 dark:focus:bg-indigo-500/20 dark:focus:text-indigo-200"
+            onClick={(event) => {
+              event.stopPropagation();
+              triggerHaptic();
+              onOpen?.();
+            }}
+          >
+            <IconArrowUpRight className="size-4 text-indigo-500 dark:text-indigo-300" />
+            <div className="flex flex-col gap-0.5">
+              <span>{entityType === "folder" ? "Open Folder" : "Open File"}</span>
+              <span className="text-[11px] font-normal text-muted-foreground">
+                {entityType === "folder" ? "Navigate into this folder" : "Open preview"}
+              </span>
+            </div>
+          </DropdownMenuItem>
 
         <DropdownMenuItem
           className="min-h-11 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-amber-50 focus:text-amber-700 dark:focus:bg-amber-500/20 dark:focus:text-amber-200"
@@ -229,7 +229,7 @@ export function EntityActionsMenu({
           <IconStar className="size-4 text-amber-500 dark:text-amber-300" />
           <div className="flex flex-col gap-0.5">
             <span>{isStarred ? "Unstar" : "Star"}</span>
-            <span className="text-[11px] font-normal text-stone-500 dark:text-stone-400">
+            <span className="text-[11px] font-normal text-muted-foreground">
               {isStarred ? "Remove pinned priority" : "Pin this item to the top"}
             </span>
           </div>
@@ -248,7 +248,7 @@ export function EntityActionsMenu({
           <IconTag className="size-4 text-indigo-500 dark:text-indigo-300" />
           <div className="flex flex-col gap-0.5">
             <span>Assign Tags</span>
-            <span className="text-[11px] font-normal text-stone-500 dark:text-stone-400">
+            <span className="text-[11px] font-normal text-muted-foreground">
               Categorize and organize
             </span>
           </div>
@@ -267,7 +267,7 @@ export function EntityActionsMenu({
               <IconShare className="size-4 text-violet-500 dark:text-violet-300" />
               <div className="flex flex-col gap-0.5">
                 <span>Share File</span>
-                <span className="text-[11px] font-normal text-stone-500 dark:text-stone-400">
+                <span className="text-[11px] font-normal text-muted-foreground">
                   Send to people, apps, or AI chatbots
                 </span>
               </div>
@@ -298,7 +298,7 @@ export function EntityActionsMenu({
                       ? "Downloading..."
                       : "Save Offline Copy"}
                 </span>
-                <span className="text-[11px] font-normal text-stone-500 dark:text-stone-400">
+                <span className="text-[11px] font-normal text-muted-foreground">
                   {isOffline
                     ? "This file is available without internet"
                     : "Download for quick offline access"}
@@ -320,7 +320,7 @@ export function EntityActionsMenu({
               <IconCloudDown className="size-4 text-rose-500 dark:text-rose-300" />
               <div className="flex flex-col gap-0.5">
                 <span>Remove Offline Copy</span>
-                <span className="text-[11px] font-normal text-stone-500 dark:text-stone-400">
+                <span className="text-[11px] font-normal text-muted-foreground">
                   Free storage and keep cloud-only
                 </span>
               </div>

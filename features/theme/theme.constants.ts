@@ -1,4 +1,11 @@
-export type ThemeId = "classic" | "midnight" | "forest" | "sunset" | "minimal";
+export type ThemeId =
+  | "classic"
+  | "midnight"
+  | "forest"
+  | "sunset"
+  | "minimal"
+  | "eclipse"
+  | "graphite";
 
 export interface ThemePreview {
   primary: string;
@@ -38,6 +45,16 @@ export const THEMES: ThemeOption[] = [
     label: "Minimal",
     preview: { primary: "#64748b", background: "#f8fafc", accent: "#e2e8f0" },
   },
+  {
+    id: "eclipse",
+    label: "Eclipse",
+    preview: { primary: "#a855f7", background: "#0d0a1a", accent: "#2e1f5e" },
+  },
+  {
+    id: "graphite",
+    label: "Graphite",
+    preview: { primary: "#3b82f6", background: "#111111", accent: "#2a2a2a" },
+  },
 ];
 
 export const DEFAULT_THEME_ID: ThemeId = "classic";
@@ -52,6 +69,8 @@ export const TAG_COLOR_PALETTES: Record<ThemeId, readonly string[]> = {
   forest: ["#15803D", "#22C55E", "#4D7C0F", "#EA580C", "#0F766E", "#65A30D", "#16A34A", "#0D9488"],
   sunset: ["#F97316", "#EA580C", "#FB7185", "#EF4444", "#F59E0B", "#06B6D4", "#EC4899", "#F43F5E"],
   minimal: ["#475569", "#64748B", "#0EA5E9", "#14B8A6", "#94A3B8", "#334155", "#0F766E", "#6B7280"],
+  eclipse: ["#A855F7", "#8B5CF6", "#C084FC", "#22D3EE", "#F472B6", "#F59E0B", "#34D399", "#60A5FA"],
+  graphite: ["#3B82F6", "#60A5FA", "#22C55E", "#F59E0B", "#F87171", "#A78BFA", "#38BDF8", "#94A3B8"],
 };
 
 export function getTagColorPalette(themeId: string | null | undefined): readonly string[] {

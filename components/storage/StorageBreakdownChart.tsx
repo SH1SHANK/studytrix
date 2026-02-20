@@ -11,12 +11,12 @@ interface StorageBreakdownChartProps {
 }
 
 const MIME_COLORS = [
-  "#4F46E5",
-  "#06B6D4",
-  "#16A34A",
-  "#EA580C",
-  "#DC2626",
-  "#A855F7",
+  "var(--primary)",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
 ] as const;
 
 export function StorageBreakdownChart({ breakdown }: StorageBreakdownChartProps) {
@@ -70,30 +70,30 @@ export function StorageBreakdownChart({ breakdown }: StorageBreakdownChartProps)
   }, [breakdown]);
 
   return (
-    <Card className="rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/80">
+    <Card className="rounded-2xl border border-border/80 bg-card/80 shadow-sm">
       <CardHeader className="pb-0">
-        <CardTitle id="storage-breakdown-title" className="text-base font-semibold text-stone-900 dark:text-stone-100">
+        <CardTitle id="storage-breakdown-title" className="text-base font-semibold text-foreground">
           MIME Breakdown
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 p-4 sm:p-5">
         {slices.length === 0 ? (
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+          <p className="text-sm text-muted-foreground">
             No offline files yet.
           </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-start">
             <div className="relative mx-auto h-36 w-36">
               <div
-                className="h-full w-full rounded-full border border-stone-200/80 dark:border-stone-700/80"
+                className="h-full w-full rounded-full border border-border/80"
                 style={{ background: gradient }}
                 aria-hidden="true"
               />
-              <div className="absolute inset-6 flex flex-col items-center justify-center rounded-full bg-white/95 text-center dark:bg-stone-900/95">
-                <p className="text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-400">
+              <div className="absolute inset-6 flex flex-col items-center justify-center rounded-full bg-card/95 text-center">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                   Total
                 </p>
-                <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                <p className="text-sm font-semibold text-foreground">
                   {formatBytes(totalBytes)}
                 </p>
               </div>
@@ -103,12 +103,12 @@ export function StorageBreakdownChart({ breakdown }: StorageBreakdownChartProps)
               {slices.map((entry) => (
                 <li key={entry.mime} className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="truncate text-stone-800 dark:text-stone-200">{entry.mime}</span>
-                    <span className="text-xs text-stone-500 dark:text-stone-400">
+                    <span className="truncate text-foreground/90">{entry.mime}</span>
+                    <span className="text-xs text-muted-foreground">
                       {entry.count} files · {formatBytes(entry.bytes)}
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-700/80">
+                  <div className="h-2 overflow-hidden rounded-full bg-border/80">
                     <div
                       className="h-full rounded-full"
                       style={{

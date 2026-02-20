@@ -17,7 +17,7 @@ export function HighlightedText({ text, query }: HighlightedTextProps) {
         seg.matched ? (
           <span
             key={i}
-            className="rounded-sm bg-linear-to-r from-indigo-500/35 to-cyan-500/35 px-0.5 font-semibold text-stone-900 ring-1 ring-indigo-400/40 transition-colors dark:text-stone-100 dark:ring-indigo-300/30"
+            className="rounded-sm bg-primary/20 px-0.5 font-semibold text-foreground ring-1 ring-ring/35 transition-colors"
           >
             {seg.text}
           </span>

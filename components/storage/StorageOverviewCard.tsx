@@ -51,9 +51,9 @@ export function StorageOverviewCard({
   ];
 
   return (
-    <Card className="rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/80">
+    <Card className="rounded-2xl border border-border/80 bg-card/80 shadow-sm">
       <CardHeader className="pb-0">
-        <CardTitle id="storage-overview-title" className="text-base font-semibold text-stone-900 dark:text-stone-100">
+        <CardTitle id="storage-overview-title" className="text-base font-semibold text-foreground">
           Overview
         </CardTitle>
       </CardHeader>
@@ -64,13 +64,13 @@ export function StorageOverviewCard({
             return (
               <div
                 key={item.id}
-                className="rounded-xl border border-stone-200/70 bg-stone-50/80 p-3 dark:border-stone-700/70 dark:bg-stone-800/70"
+                className="rounded-xl border border-border/70 bg-muted/70 p-3"
               >
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <Icon className="size-3.5" />
                   {item.label}
                 </div>
-                <p className="mt-1.5 text-base font-semibold text-stone-900 dark:text-stone-100">
+                <p className="mt-1.5 text-base font-semibold text-foreground">
                   {item.value}
                 </p>
               </div>
@@ -78,7 +78,7 @@ export function StorageOverviewCard({
           })}
         </div>
 
-        <p className="text-xs text-stone-500 dark:text-stone-400">
+        <p className="text-xs text-muted-foreground">
           Quota: {stats?.usageBytes !== null && stats?.usageBytes !== undefined
             ? formatBytes(stats.usageBytes)
             : "Unavailable"}

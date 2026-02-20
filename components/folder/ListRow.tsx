@@ -160,7 +160,7 @@ export function ListRow({
     <div className="relative overflow-hidden rounded-xl">
       {/* ── Action Panel (behind content) ─────────────────── */}
       <motion.div
-        className="absolute inset-y-0 right-0 z-0 flex w-[180px] items-center justify-around rounded-r-xl bg-gradient-to-l from-stone-900 via-stone-850 to-stone-800 px-1 dark:from-stone-800 dark:via-stone-750 dark:to-stone-700"
+        className="absolute inset-y-0 right-0 z-0 flex w-[180px] items-center justify-around rounded-r-xl bg-gradient-to-l from-muted/95 via-muted/85 to-muted/70 px-1"
         style={{ opacity: progress }}
       >
         {/* Star Action */}
@@ -209,7 +209,7 @@ export function ListRow({
             type="button"
             variant="ghost"
             aria-label="Assign tags"
-            className="flex h-14 w-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium text-indigo-400 transition-colors duration-150 hover:bg-indigo-500/15 hover:text-indigo-300"
+            className="flex h-14 w-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium text-primary transition-colors duration-150 hover:bg-primary/15 hover:text-primary"
             onClick={(e) => {
               e.stopPropagation();
               handleManageTags();
@@ -236,11 +236,11 @@ export function ListRow({
           "relative z-10 flex h-16 cursor-pointer items-center gap-3 rounded-xl border px-4 shadow-sm transition-shadow duration-200",
           "hover:shadow-md active:scale-[0.99]",
           variant === "accent"
-            ? "border-indigo-200/70 bg-indigo-50 dark:border-indigo-800/50 dark:bg-indigo-950/50"
-            : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
-          isOpen && "ring-1 ring-indigo-400/30",
+            ? "border-primary/35 bg-primary/10"
+            : "border-border bg-card",
+          isOpen && "ring-1 ring-ring/35",
         )}
-        style={{ x }}
+        style={{ x, touchAction: "pan-y" }}
         drag={isTouchDevice ? "x" : false}
         dragConstraints={{ left: -ACTION_PANEL_WIDTH, right: 0 }}
         dragDirectionLock
@@ -249,15 +249,15 @@ export function ListRow({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-indigo-600 dark:bg-stone-800 dark:text-indigo-400">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <IconFolder className="size-5" />
         </div>
 
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-medium text-stone-900 dark:text-stone-100">
+          <h3 className="truncate text-sm font-medium text-foreground">
             {title}
           </h3>
-          <p className="truncate text-xs text-stone-500 dark:text-stone-400">
+          <p className="truncate text-xs text-muted-foreground">
             {meta}
           </p>
         </div>

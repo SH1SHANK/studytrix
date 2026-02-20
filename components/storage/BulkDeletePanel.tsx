@@ -54,7 +54,7 @@ export function BulkDeletePanel({
 
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <Label htmlFor="older-than-days" className="text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-300">
+            <Label htmlFor="older-than-days" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Older than days
             </Label>
             <Input

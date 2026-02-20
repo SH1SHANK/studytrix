@@ -37,9 +37,9 @@ export function CourseStorageTable({ courses }: CourseStorageTableProps) {
   const maxBytes = sortedCourses[0]?.bytes ?? 0;
 
   return (
-    <Card className="rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/80">
+    <Card className="rounded-2xl border border-border/80 bg-card/80 shadow-sm">
       <CardHeader className="pb-0">
-        <CardTitle id="course-storage-title" className="text-base font-semibold text-stone-900 dark:text-stone-100">
+        <CardTitle id="course-storage-title" className="text-base font-semibold text-foreground">
           Storage by Course
         </CardTitle>
       </CardHeader>
@@ -70,7 +70,7 @@ export function CourseStorageTable({ courses }: CourseStorageTableProps) {
         </div>
 
         {sortedCourses.length === 0 ? (
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+          <p className="text-sm text-muted-foreground">
             No course storage data available yet.
           </p>
         ) : (
@@ -81,27 +81,30 @@ export function CourseStorageTable({ courses }: CourseStorageTableProps) {
               return (
                 <li
                   key={course.courseCode}
-                  className="rounded-xl border border-stone-200/70 bg-stone-50/80 p-3 dark:border-stone-700/80 dark:bg-stone-800/70"
+                  className="rounded-xl border border-border/80 bg-muted/70 p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-900 dark:text-stone-100">
-                      <IconStack2 className="size-3.5 shrink-0 text-stone-500 dark:text-stone-400" />
+                    <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+                      <IconStack2 className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate">{course.courseCode}</span>
                     </div>
-                    <span className="text-xs text-stone-500 dark:text-stone-400">
+                    <span className="text-xs text-muted-foreground">
                       #{index + 1}
                     </span>
                   </div>
 
-                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-700/80">
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-border/80">
                     <div
-                      className="h-full rounded-full bg-indigo-500"
-                      style={{ width: `${percent.toFixed(1)}%` }}
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${percent.toFixed(1)}%`,
+                        backgroundColor: "var(--primary)",
+                      }}
                       aria-hidden="true"
                     />
                   </div>
 
-                  <div className="mt-2 flex items-center justify-between gap-2 text-xs text-stone-600 dark:text-stone-300">
+                  <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>{course.fileCount} files</span>
                     <span>{formatBytes(course.bytes)}</span>
                   </div>

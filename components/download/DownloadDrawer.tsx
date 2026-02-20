@@ -17,14 +17,14 @@ import { DownloadList } from "./DownloadList";
 
 function EmptyState() {
   return (
-    <section className="mt-2 flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed border-stone-200 bg-stone-50/70 px-4 text-center dark:border-stone-800 dark:bg-stone-900/40">
-      <div className="flex size-10 items-center justify-center rounded-full bg-white shadow-sm dark:bg-stone-800">
-        <IconDownloadOff className="size-5 text-stone-400 dark:text-stone-500" />
+    <section className="mt-2 flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/70 px-4 text-center border-border bg-card/40">
+      <div className="flex size-10 items-center justify-center rounded-full bg-card shadow-sm bg-muted">
+        <IconDownloadOff className="size-5 text-muted-foreground/80" />
       </div>
-      <p className="mt-3 text-sm font-medium text-stone-800 dark:text-stone-100">
+      <p className="mt-3 text-sm font-medium text-foreground/90 text-foreground">
         No downloads yet
       </p>
-      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+      <p className="mt-1 text-xs text-muted-foreground">
         Downloaded files will appear here.
       </p>
     </section>
@@ -61,10 +61,10 @@ function Section({
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
           {title}
         </h3>
-        <span className="flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-stone-100 px-1.5 text-[10px] font-semibold tabular-nums text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+        <span className="flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground bg-muted text-muted-foreground">
           {count}
         </span>
       </div>

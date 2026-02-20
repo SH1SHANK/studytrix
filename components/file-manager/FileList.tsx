@@ -1,9 +1,9 @@
 // Design tokens inherited from Dashboard — do not redefine
-// Section label: text-xs font-medium uppercase tracking-widest text-stone-400
+// Section label: text-xs font-medium uppercase tracking-widest text-muted-foreground/80
 // Count pill: bg-indigo-100 px-2 text-[11px] font-semibold text-indigo-600
 // Accent bar: w-1 h-4 rounded-full bg-indigo-500
 // Skeleton: @/components/ui/skeleton
-// Separator: bg-linear-to-r from-transparent via-stone-200 to-transparent
+// Separator: bg-linear-to-r from-transparent via-border to-transparent
 // Card entrance: card-entrance class defined in globals.css 280ms ease-out
 // Transition: transition-all duration-200, collapse duration-300
 
@@ -66,7 +66,7 @@ function SectionHeader({
   return (
     <button
       type="button"
-      className="flex w-full items-center gap-2.5 px-1 py-3 text-left transition-colors duration-200 hover:bg-stone-100/50 dark:hover:bg-stone-800/30 rounded-lg"
+      className="flex w-full items-center gap-2.5 rounded-lg px-1 py-3 text-left transition-colors duration-200 hover:bg-muted/50"
       onClick={onToggle}
       aria-expanded={isOpen}
       aria-controls={sectionId}
@@ -75,7 +75,7 @@ function SectionHeader({
       <span className="h-4 w-1 rounded-full bg-indigo-500 dark:bg-indigo-400" aria-hidden="true" />
 
       {/* Label */}
-      <span className="text-xs font-semibold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+      <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/80">
         {label}
       </span>
 
@@ -89,7 +89,7 @@ function SectionHeader({
 
       {/* Collapse chevron — rotates on toggle */}
       <IconChevronDown
-        className="size-4 text-stone-400 transition-transform duration-300 ease-out dark:text-stone-500"
+        className="size-4 text-muted-foreground/80 transition-transform duration-300 ease-out"
         style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
         aria-hidden="true"
       />
@@ -102,7 +102,7 @@ function SectionHeader({
 function SkeletonCard({ viewMode }: { viewMode: "grid" | "list" }) {
   if (viewMode === "grid") {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+      <div className="rounded-xl border border-border bg-card p-4">
         <div className="space-y-3">
           <Skeleton className="h-11 w-11 rounded-lg" />
           <div className="space-y-2">
@@ -115,7 +115,7 @@ function SkeletonCard({ viewMode }: { viewMode: "grid" | "list" }) {
   }
 
   return (
-    <div className="flex min-h-[64px] items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900">
+    <div className="flex min-h-[64px] items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
       <Skeleton className="h-11 w-11 shrink-0 rounded-lg" />
       <div className="min-w-0 flex-1 space-y-2">
         <Skeleton className="h-4 w-3/4 rounded" />
@@ -374,7 +374,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           </div>
 
           {/* Separator */}
-          <div className="h-px bg-linear-to-r from-transparent via-stone-200 to-transparent dark:via-stone-800" />
+          <div className="h-px bg-linear-to-r from-transparent via-border/80 to-transparent" />
 
           {/* Skeleton section header */}
           <div className="flex items-center gap-2.5 px-1 py-3">
@@ -399,7 +399,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
           {error}
         </p>
-        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+        <p className="mt-2 text-xs text-muted-foreground">
           Could not load files for {courseName}.
         </p>
       </div>
@@ -410,13 +410,13 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   if (allRows.length === 0) {
     return (
       <div className="mt-6 flex min-h-[50vh] flex-col items-center justify-center px-4 pb-32 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-stone-100 dark:bg-stone-800">
-          <IconFolderOff className="size-6 text-stone-500 dark:text-stone-400" />
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-muted">
+          <IconFolderOff className="size-6 text-muted-foreground" />
         </div>
-        <p className="text-sm font-medium text-stone-700 dark:text-stone-200">
+        <p className="text-sm font-medium text-foreground/90">
           This folder is empty.
         </p>
-        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+        <p className="mt-2 text-xs text-muted-foreground">
           No files found in Drive for this course.
         </p>
       </div>
@@ -483,7 +483,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
             )}
 
             {visibleRows.folders.length > 0 && visibleRows.files.length > 0 && (
-              <div className="h-px bg-linear-to-r from-transparent via-stone-200 to-transparent dark:via-stone-800" />
+              <div className="h-px bg-linear-to-r from-transparent via-border/80 to-transparent" />
             )}
 
             {/* Files section */}
@@ -573,7 +573,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
               type="button"
               variant="outline"
               size="sm"
-              className="h-9 rounded-lg border-stone-200 px-4 text-xs font-medium shadow-sm dark:border-stone-700"
+              className="h-9 rounded-lg border-border px-4 text-xs font-medium shadow-sm"
               onClick={() => {
                 setVisibleCount((current) => current + 120);
               }}

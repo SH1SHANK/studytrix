@@ -84,7 +84,7 @@ export function DownloadList({
 
   if (sorted.length === 0) {
     return (
-      <p className="py-4 text-center text-sm text-stone-400 dark:text-stone-500">
+      <p className="py-4 text-center text-sm text-muted-foreground/80">
         No downloads in this section.
       </p>
     );

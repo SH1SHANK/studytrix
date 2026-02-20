@@ -27,6 +27,8 @@ const rawSettingsSchema: SettingsSchema = {
         { label: "Forest", value: "forest" },
         { label: "Sunset", value: "sunset" },
         { label: "Minimal", value: "minimal" },
+        { label: "Eclipse", value: "eclipse" },
+        { label: "Graphite", value: "graphite" },
       ]
     },
     {

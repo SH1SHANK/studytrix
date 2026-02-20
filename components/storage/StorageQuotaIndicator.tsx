@@ -27,10 +27,10 @@ export function StorageQuotaIndicator({
 
   const strokeColor =
     quotaState === "alert"
-      ? "#DC2626"
+      ? "var(--destructive)"
       : quotaState === "warn"
-        ? "#D97706"
-        : "#4F46E5";
+        ? "var(--chart-3)"
+        : "var(--primary)";
 
   const message =
     quotaState === "alert"
@@ -42,9 +42,9 @@ export function StorageQuotaIndicator({
           : "Quota information is unavailable on this device.";
 
   return (
-    <Card className="rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/80">
+    <Card className="rounded-2xl border border-border/80 bg-card/80 shadow-sm">
       <CardHeader className="pb-0">
-        <CardTitle id="storage-quota-title" className="text-base font-semibold text-stone-900 dark:text-stone-100">
+        <CardTitle id="storage-quota-title" className="text-base font-semibold text-foreground">
           Quota
         </CardTitle>
       </CardHeader>
@@ -52,7 +52,7 @@ export function StorageQuotaIndicator({
         <div className="flex items-center gap-4">
           <div className="relative h-24 w-24 shrink-0">
             <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" aria-hidden="true">
-              <circle cx="50" cy="50" r={radius} strokeWidth="8" className="fill-none stroke-stone-200 dark:stroke-stone-700" />
+              <circle cx="50" cy="50" r={radius} strokeWidth="8" className="fill-none stroke-border/80" />
               <circle
                 cx="50"
                 cy="50"
@@ -66,20 +66,20 @@ export function StorageQuotaIndicator({
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center text-center">
-              <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+              <p className="text-sm font-semibold text-foreground">
                 {percent !== null ? `${percent.toFixed(0)}%` : "N/A"}
               </p>
             </div>
           </div>
 
-          <div className="space-y-1 text-sm text-stone-600 dark:text-stone-300">
+          <div className="space-y-1 text-sm text-muted-foreground">
             <p>
-              Usage: <span className="font-medium text-stone-900 dark:text-stone-100">{usageBytes !== null ? formatBytes(usageBytes) : "Unavailable"}</span>
+              Usage: <span className="font-medium text-foreground">{usageBytes !== null ? formatBytes(usageBytes) : "Unavailable"}</span>
             </p>
             <p>
-              Quota: <span className="font-medium text-stone-900 dark:text-stone-100">{quotaBytes !== null ? formatBytes(quotaBytes) : "Unavailable"}</span>
+              Quota: <span className="font-medium text-foreground">{quotaBytes !== null ? formatBytes(quotaBytes) : "Unavailable"}</span>
             </p>
-            <p className="text-xs text-stone-500 dark:text-stone-400">{message}</p>
+            <p className="text-xs text-muted-foreground">{message}</p>
           </div>
         </div>
 

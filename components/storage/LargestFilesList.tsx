@@ -114,15 +114,15 @@ export function LargestFilesList({ files, onDelete }: LargestFilesListProps) {
   const maxSize = files[0]?.size ?? 0;
 
   return (
-    <Card className="rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/80">
+    <Card className="rounded-2xl border border-border/80 bg-card/80 shadow-sm">
       <CardHeader className="pb-0">
-        <CardTitle id="largest-files-title" className="text-base font-semibold text-stone-900 dark:text-stone-100">
+        <CardTitle id="largest-files-title" className="text-base font-semibold text-foreground">
           Largest Offline Files
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 sm:p-5">
         {files.length === 0 ? (
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+          <p className="text-sm text-muted-foreground">
             No offline files to display.
           </p>
         ) : (
@@ -133,28 +133,31 @@ export function LargestFilesList({ files, onDelete }: LargestFilesListProps) {
               return (
                 <li
                   key={file.id}
-                  className="rounded-xl border border-stone-200/70 bg-stone-50/80 p-3 dark:border-stone-700/80 dark:bg-stone-800/70"
+                  className="rounded-xl border border-border/80 bg-muted/70 p-3"
                 >
                   <article className="space-y-2">
                     <header className="flex items-start justify-between gap-3">
-                      <h3 className="line-clamp-1 text-sm font-medium text-stone-900 dark:text-stone-100">
+                      <h3 className="line-clamp-1 text-sm font-medium text-foreground">
                         {resolvedNames[file.id] ?? file.entityId}
                       </h3>
-                      <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
+                      <span className="shrink-0 text-xs text-muted-foreground">
                         {formatBytes(file.size)}
                       </span>
                     </header>
 
-                    <div className="h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-700/80">
+                    <div className="h-2 overflow-hidden rounded-full bg-border/80">
                       <div
-                        className="h-full rounded-full bg-cyan-500"
-                        style={{ width: `${pct.toFixed(1)}%` }}
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${pct.toFixed(1)}%`,
+                          backgroundColor: "var(--chart-2)",
+                        }}
                         aria-hidden="true"
                       />
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs text-stone-500 dark:text-stone-400">
+                      <p className="text-xs text-muted-foreground">
                         Course: {file.courseCode}
                       </p>
                       <Button

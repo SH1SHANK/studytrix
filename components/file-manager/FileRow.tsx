@@ -1,17 +1,17 @@
 // Design tokens inherited from Dashboard — do not redefine
-// Cards: rounded-xl, border-stone-200 bg-white shadow-sm, dark:border-stone-800 dark:bg-stone-900
+// Cards: rounded-xl, border-border bg-card shadow-sm
 // Card hover: hover:-translate-y-0.5 hover:shadow-md, active:scale-[0.98]
-// Card focus: focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2
+// Card focus: focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2
 // Icon container: h-11 w-11 rounded-lg, shadow-inner on Dashboard FolderCard
-// Folder tint: bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400
-// File PDF tint: bg-rose-50 text-rose-500, Doc: bg-blue-50 text-blue-500, Image: bg-emerald-50 text-emerald-500
-// Typography: title text-sm font-medium, subtitle text-xs text-stone-500
+// Folder tint: bg-primary/10 text-primary
+// File icon tint: derived from semantic theme tokens via color-mix
+// Typography: title text-sm font-medium, subtitle text-xs text-muted-foreground
 // Transition: transition-all duration-200
 // Tag badges: rounded-full, text-[10px] font-semibold
 
 "use client";
 
-import { memo, useCallback, useMemo, useRef } from "react";
+import { memo, useCallback, useMemo, useRef, type CSSProperties } from "react";
 import {
   animate,
   AnimatePresence,
@@ -89,40 +89,37 @@ const FILE_ICON_MAP: Record<
   webp: IconFileTypePng,
 };
 
-/* Icon color classes — derived from existing Dashboard palette */
-function getFileIconColor(extension: string): string {
+/* Map file extensions to semantic theme tokens */
+function getFileToneVar(extension: string): string {
   switch (extension) {
     case "pdf":
-      return "text-rose-500 dark:text-rose-400";
+      return "--destructive";
     case "docx":
     case "doc":
-      return "text-blue-500 dark:text-blue-400";
+      return "--primary";
     case "png":
     case "jpg":
     case "jpeg":
     case "webp":
-      return "text-emerald-500 dark:text-emerald-400";
+      return "--chart-3";
     default:
-      return "text-stone-500 dark:text-stone-400";
+      return "--muted-foreground";
   }
 }
 
-/* Icon container background tint — derived from Dashboard palette */
-function getFileIconBgClass(extension: string): string {
-  switch (extension) {
-    case "pdf":
-      return "bg-rose-50 dark:bg-rose-950/30";
-    case "docx":
-    case "doc":
-      return "bg-blue-50 dark:bg-blue-950/30";
-    case "png":
-    case "jpg":
-    case "jpeg":
-    case "webp":
-      return "bg-emerald-50 dark:bg-emerald-950/30";
-    default:
-      return "bg-stone-100 dark:bg-stone-800";
+function getFileIconStyle(extension: string): CSSProperties {
+  const toneVar = getFileToneVar(extension);
+  if (toneVar === "--muted-foreground") {
+    return {
+      color: "var(--muted-foreground)",
+      backgroundColor: "var(--muted)",
+    };
   }
+
+  return {
+    color: `var(${toneVar})`,
+    backgroundColor: `color-mix(in oklab, var(${toneVar}) 16%, var(--card))`,
+  };
 }
 
 function renderIcon(isFolder: boolean, ext: string) {
@@ -167,12 +164,7 @@ function FileRowComponent({
   const isFolder = type === "folder";
   const ext = isFolder ? "" : getFileExtension(title);
   const icon = renderIcon(isFolder, ext);
-  const iconColor = isFolder
-    ? "text-indigo-600 dark:text-indigo-400"
-    : getFileIconColor(ext);
-  const iconBg = isFolder
-    ? "bg-indigo-50 dark:bg-indigo-950/30"
-    : getFileIconBgClass(ext);
+  const fileIconStyle = isFolder ? undefined : getFileIconStyle(ext);
   const { isStarred, toggleStar, tags, assignedTagIds } = useTagStore(
     useShallow((state) => ({
       isStarred: Boolean(state.assignments[id]?.starred),
@@ -299,7 +291,7 @@ function FileRowComponent({
         {visibleFileTags.map((tag) => (
           <span
             key={`${id}-tag-${tag.id}`}
-            className="inline-flex max-w-full items-center truncate rounded-full border border-black/10 px-1.5 py-0.5 text-[10px] font-semibold"
+            className="inline-flex max-w-full items-center truncate rounded-full border border-border/30 px-1.5 py-0.5 text-[10px] font-semibold"
             style={{
               backgroundColor: tag.color,
               color: getTagChipTextColor(tag.color),
@@ -309,7 +301,7 @@ function FileRowComponent({
           </span>
         ))}
         {hiddenTagCount > 0 ? (
-          <span className="inline-flex items-center rounded-full border border-stone-300 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:border-stone-600 dark:text-stone-300">
+          <span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
             +{hiddenTagCount}
           </span>
         ) : null}
@@ -322,7 +314,7 @@ function FileRowComponent({
 
     if (isOffline) {
       return (
-        <span className="inline-flex shrink-0 items-center rounded-full border border-emerald-300/80 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300">
+        <span className="inline-flex shrink-0 items-center rounded-full border border-primary/35 bg-primary/12 px-1.5 py-0.5 text-[10px] font-medium text-primary">
           Offline
         </span>
       );
@@ -330,7 +322,7 @@ function FileRowComponent({
 
     if (isDownloading) {
       return (
-        <span className="inline-flex shrink-0 items-center rounded-full border border-sky-300/80 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300">
+        <span className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           Syncing
         </span>
       );
@@ -355,11 +347,11 @@ function FileRowComponent({
         className={cn(
           "group card-entrance relative cursor-pointer rounded-xl border p-4 shadow-sm transition-all duration-200 data-[compact=true]:p-3",
           "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
-          "focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2",
-          isSelected && "ring-2 ring-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30",
-          !isSelected && isStarred && "border-amber-300 bg-gradient-to-br from-amber-50/80 to-amber-100/30 dark:border-amber-700/60 dark:from-amber-950/40 dark:to-stone-900 ring-1 ring-amber-400/50 shadow-[0_0_15px_-3px_rgba(251,191,36,0.3)]",
-          !isSelected && !isStarred && isFolder && "border-indigo-200/40 bg-indigo-50/40 dark:border-indigo-800/40 dark:bg-indigo-950/20",
-          !isSelected && !isStarred && (!isFolder) && "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
+          "focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+          isSelected && "ring-2 ring-ring bg-primary/10",
+          !isSelected && isStarred && "border-amber-300 bg-gradient-to-br from-amber-50/80 to-amber-100/30 dark:border-amber-700/60 dark:from-amber-950/40 dark:to-amber-950/15 ring-1 ring-amber-400/50 shadow-md shadow-amber-500/25",
+          !isSelected && !isStarred && isFolder && "border-primary/20 bg-primary/5",
+          !isSelected && !isStarred && (!isFolder) && "border-border bg-card",
         )}
         style={{ animationDelay: `${animationIndex * 40}ms` }}
       >
@@ -375,10 +367,10 @@ function FileRowComponent({
                   triggerHaptic(5);
                   toggleSelection(id);
                 }}
-                className="flex size-6 items-center justify-center rounded-full bg-white/80 text-stone-400 shadow-sm backdrop-blur-md transition-colors hover:bg-white hover:text-stone-600 dark:bg-stone-900/80 dark:hover:bg-stone-800"
+                className="flex size-6 items-center justify-center rounded-full bg-card/80 text-muted-foreground/80 shadow-sm backdrop-blur-md transition-colors hover:bg-card hover:text-muted-foreground"
               >
                 {isSelected ? (
-                  <IconCircleCheckFilled className="size-6 text-indigo-500 dark:text-indigo-400" />
+                  <IconCircleCheckFilled className="size-6 text-primary" />
                 ) : (
                   <IconCircle className="size-6" />
                 )}
@@ -396,16 +388,16 @@ function FileRowComponent({
           <div
             className={cn(
               "flex h-11 w-11 items-center justify-center rounded-lg transition-colors duration-200",
-              iconBg,
-              iconColor,
+              isFolder && "bg-primary/10 text-primary",
             )}
+            style={fileIconStyle}
           >
             {icon}
           </div>
           <div className="space-y-1 pr-8">
             <div
               className={cn(
-                "flex items-center gap-1.5 text-stone-900 dark:text-stone-100",
+                "flex items-center gap-1.5 text-foreground",
                 isFolder
                   ? "text-base font-medium tracking-tight"
                   : "text-sm font-medium",
@@ -417,7 +409,7 @@ function FileRowComponent({
                 <IconStarFilled className="size-4 shrink-0 text-amber-500 dark:text-amber-400" />
               ) : null}
             </div>
-            <p className="text-xs text-stone-500 dark:text-stone-400">
+            <p className="text-xs text-muted-foreground">
               {subtitle}
             </p>
             {renderTagBadges()}
@@ -484,7 +476,7 @@ function FileRowComponent({
 
   const handleRowClick = () => {
     if (suppressClickRef.current) return;
-    
+
     if (isSelectionMode) {
       triggerHaptic(5);
       toggleSelection(id);
@@ -505,7 +497,7 @@ function FileRowComponent({
     >
       {/* ── Swipe Action Panel ─────────────────────────────── */}
       <motion.div
-        className="absolute inset-y-0 right-0 z-0 flex w-[210px] items-center justify-around rounded-r-xl bg-gradient-to-l from-stone-900 via-stone-850 to-stone-800 px-1 dark:from-stone-800 dark:via-stone-750 dark:to-stone-700"
+        className="absolute inset-y-0 right-0 z-0 flex w-[210px] items-center justify-around rounded-r-xl bg-gradient-to-l from-muted/95 via-muted/85 to-muted/70 px-1"
         style={{ opacity: progress }}
       >
         {/* Star */}
@@ -539,7 +531,7 @@ function FileRowComponent({
             className={cn(
               "flex h-14 w-[64px] flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors duration-150",
               isFolder || isOffline || isDownloading
-                ? "cursor-not-allowed text-stone-500/50"
+                ? "cursor-not-allowed text-muted-foreground/50"
                 : "text-sky-400 hover:bg-sky-500/15 hover:text-sky-300",
             )}
             onClick={(event) => {
@@ -561,7 +553,7 @@ function FileRowComponent({
             type="button"
             variant="ghost"
             aria-label="Manage Tags"
-            className="flex h-14 w-[64px] flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium text-indigo-400 transition-colors duration-150 hover:bg-indigo-500/15 hover:text-indigo-300"
+            className="flex h-14 w-[64px] flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium text-primary transition-colors duration-150 hover:bg-primary/15 hover:text-primary"
             onClick={(event) => {
               event.stopPropagation();
               handleManageTagsAction();
@@ -578,14 +570,14 @@ function FileRowComponent({
         className={cn(
           "relative z-10 cursor-pointer rounded-xl border shadow-sm transition-shadow duration-200",
           "hover:shadow-md active:scale-[0.99]",
-          "focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2",
-          isOpen && !isSelected && "ring-1 ring-indigo-400/30",
-          isSelected && "ring-2 ring-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30",
-          !isSelected && isStarred && "border-amber-300 bg-gradient-to-r from-amber-50/80 to-amber-50/10 dark:border-amber-700/60 dark:from-amber-950/40 dark:to-stone-900 ring-1 ring-amber-400/50 shadow-[0_0_15px_-3px_rgba(251,191,36,0.2)]",
-          !isSelected && !isStarred && isFolder && "border-indigo-200/70 bg-indigo-50 dark:border-indigo-800/50 dark:bg-stone-900",
-          !isSelected && !isStarred && (!isFolder) && "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
+          "focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+          isOpen && !isSelected && "ring-1 ring-ring/35",
+          isSelected && "ring-2 ring-ring bg-primary/10",
+          !isSelected && isStarred && "border-amber-300 bg-gradient-to-r from-amber-50/80 to-amber-50/10 dark:border-amber-700/60 dark:from-amber-950/40 dark:to-amber-950/15 ring-1 ring-amber-400/50 shadow-md shadow-amber-500/20",
+          !isSelected && !isStarred && isFolder && "border-primary/25 bg-primary/8",
+          !isSelected && !isStarred && (!isFolder) && "border-border bg-card",
         )}
-        style={{ x }}
+        style={{ x, touchAction: "pan-y" }}
         drag={swipeEnabled ? "x" : false}
         dragConstraints={{ left: -ACTION_PANEL_WIDTH, right: 0 }}
         dragDirectionLock
@@ -596,7 +588,7 @@ function FileRowComponent({
         onClick={handleRowClick}
       >
         <div className="flex min-h-[64px] items-center gap-3 px-4 py-3 data-[compact=true]:min-h-[52px] data-[compact=true]:px-3 data-[compact=true]:py-2">
-          
+
           {/* Checkbox Overlay for List View */}
           <AnimatePresence>
             {(isSelectionMode || isSelected) && (
@@ -609,10 +601,10 @@ function FileRowComponent({
                   triggerHaptic(5);
                   toggleSelection(id);
                 }}
-                className="flex items-center justify-center text-stone-400 transition-colors hover:text-stone-600 dark:hover:text-stone-300"
+                className="flex items-center justify-center text-muted-foreground/80 transition-colors hover:text-muted-foreground"
               >
                 {isSelected ? (
-                  <IconCircleCheckFilled className="size-6 text-indigo-500 dark:text-indigo-400" />
+                  <IconCircleCheckFilled className="size-6 text-primary" />
                 ) : (
                   <IconCircle className="size-6" />
                 )}
@@ -624,9 +616,9 @@ function FileRowComponent({
           <div
             className={cn(
               "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors duration-200 data-[compact=true]:h-9 data-[compact=true]:w-9",
-              iconBg,
-              iconColor,
+              isFolder && "bg-primary/10 text-primary",
             )}
+            style={fileIconStyle}
           >
             {icon}
           </div>
@@ -634,7 +626,7 @@ function FileRowComponent({
           <div className="min-w-0 flex-1">
             <div
               className={cn(
-                "flex items-center gap-1.5 truncate text-stone-900 dark:text-stone-100",
+                "flex items-center gap-1.5 truncate text-foreground",
                 isFolder
                   ? "text-sm font-medium tracking-tight"
                   : "text-sm font-medium",
@@ -646,7 +638,7 @@ function FileRowComponent({
                 <IconStarFilled className="size-4 shrink-0 text-amber-500 dark:text-amber-400" />
               ) : null}
             </div>
-            <p className="truncate text-xs text-stone-500 dark:text-stone-400">
+            <p className="truncate text-xs text-muted-foreground">
               {subtitle}
             </p>
             {renderTagBadges()}

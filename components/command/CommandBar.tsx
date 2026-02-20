@@ -115,32 +115,32 @@ const GROUP_META: Record<
   navigation: {
     label: "Navigation",
     icon: IconArrowLeft,
-    tone: "bg-sky-50/80 dark:bg-sky-500/12",
-    iconTone: "text-sky-600 dark:text-sky-300",
+    tone: "bg-primary/12",
+    iconTone: "text-primary",
   },
   folders: {
     label: "Folders",
     icon: IconFolder,
-    tone: "bg-indigo-50/80 dark:bg-indigo-500/12",
-    iconTone: "text-indigo-600 dark:text-indigo-300",
+    tone: "bg-accent/25",
+    iconTone: "text-foreground",
   },
   files: {
     label: "Files",
     icon: IconFile,
-    tone: "bg-emerald-50/80 dark:bg-emerald-500/12",
-    iconTone: "text-emerald-600 dark:text-emerald-300",
+    tone: "bg-secondary/70",
+    iconTone: "text-foreground",
   },
   actions: {
     label: "Actions",
     icon: IconBolt,
-    tone: "bg-amber-50/80 dark:bg-amber-500/12",
-    iconTone: "text-amber-600 dark:text-amber-300",
+    tone: "bg-muted",
+    iconTone: "text-muted-foreground",
   },
   system: {
     label: "System",
     icon: IconSparkles,
-    tone: "bg-violet-50/80 dark:bg-violet-500/12",
-    iconTone: "text-violet-600 dark:text-violet-300",
+    tone: "bg-primary/18",
+    iconTone: "text-primary",
   },
 };
 
@@ -303,34 +303,34 @@ function getCommandIcon(item: EngineCommandItem): ComponentType<{ className?: st
 
 function getCommandIconTone(item: EngineCommandItem): string {
   if (item.group === "folders") {
-    return "text-indigo-600 dark:text-indigo-300";
+    return "text-primary";
   }
 
   if (item.group === "files") {
-    return "text-emerald-600 dark:text-emerald-300";
+    return "text-foreground";
   }
 
   if (item.id === "open-settings") {
-    return "text-sky-600 dark:text-sky-300";
+    return "text-primary";
   }
 
   if (item.id === "open-storage") {
-    return "text-amber-600 dark:text-amber-300";
+    return "text-primary";
   }
 
   if (item.id.startsWith("tag:")) {
-    return "text-fuchsia-600 dark:text-fuchsia-300";
+    return "text-primary";
   }
 
   if (item.group === "navigation") {
-    return "text-sky-600 dark:text-sky-300";
+    return "text-primary";
   }
 
   if (item.group === "actions") {
-    return "text-amber-600 dark:text-amber-300";
+    return "text-muted-foreground";
   }
 
-  return "text-violet-600 dark:text-violet-300";
+  return "text-primary";
 }
 
 function vibrate(duration = 8): void {
@@ -1279,7 +1279,7 @@ export function CommandBar({
         )}
       >
         <motion.div 
-          className="flex h-16 items-center gap-1.5 rounded-full border border-stone-200/50 bg-white/70 px-3 shadow-[0_8px_32px_rgb(0,0,0,0.1)] backdrop-blur-2xl transition-colors hover:bg-white/95 dark:border-stone-700/50 dark:bg-stone-900/60 dark:hover:bg-stone-900/80"
+          className="flex h-16 items-center gap-1.5 rounded-full border border-border/60 bg-card/75 px-3 shadow-lg backdrop-blur-2xl transition-colors hover:bg-card/95"
           whileHover={{ y: -2 }}
           transition={{ type: "spring", stiffness: 400, damping: 25 }}
         >
@@ -1291,8 +1291,8 @@ export function CommandBar({
             className={cn(
               "h-11 w-11 shrink-0 rounded-full transition-all",
               !["/tags", "/downloads", "/storage", "/settings"].includes(pathname)
-                ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400"
-                : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                ? "bg-primary/15 text-primary ring-1 ring-ring/35"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             title="Home"
           >
@@ -1307,31 +1307,31 @@ export function CommandBar({
             className={cn(
               "h-11 w-11 shrink-0 rounded-full transition-all",
               pathname.startsWith("/downloads")
-                ? "bg-sky-50 text-sky-600 dark:bg-sky-500/20 dark:text-sky-400"
-                : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                ? "bg-primary/15 text-primary ring-1 ring-ring/35"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             title="Downloads"
           >
             <IconDownload className="size-5" />
           </Button>
 
-          <div className="mx-1.5 h-8 w-px bg-stone-200/80 dark:bg-stone-700/80" />
+          <div className="mx-1.5 h-8 w-px bg-border/80" />
 
           <Button
             type="button"
             variant="ghost"
             onClick={handleOpenPalette}
-            className="group flex h-12 w-48 items-center justify-between gap-2 rounded-full border border-blue-200/60 bg-blue-50/80 px-4 font-normal text-blue-600 shadow-sm transition-all hover:scale-[1.03] hover:bg-blue-100/80 hover:text-blue-700 hover:shadow max-sm:w-14 max-sm:justify-center max-sm:px-0 dark:border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30 dark:hover:text-blue-200"
+            className="group flex h-12 w-48 items-center justify-between gap-2 rounded-full border border-input bg-card/90 px-4 font-normal text-foreground shadow-sm transition-all hover:scale-[1.03] hover:bg-accent hover:text-foreground hover:shadow max-sm:w-14 max-sm:justify-center max-sm:px-0"
             title="Search command palette"
           >
             <div className="flex items-center gap-2">
-              <IconSearch className="size-5 group-hover:text-blue-700 dark:group-hover:text-blue-200" />
+              <IconSearch className="size-5 text-primary transition-colors group-hover:text-primary" />
               <span className="max-sm:hidden">{placeholder.split(" ")[0]}...</span>
             </div>
-            <CommandShortcut className="hidden bg-blue-100/50 text-blue-600 dark:border-blue-500/40 dark:bg-blue-500/30 dark:text-blue-300 sm:inline">⌘K</CommandShortcut>
+            <CommandShortcut className="hidden border-border/80 bg-muted/70 text-muted-foreground sm:inline">⌘K</CommandShortcut>
           </Button>
 
-          <div className="mx-1.5 h-8 w-px bg-stone-200/80 dark:bg-stone-700/80" />
+          <div className="mx-1.5 h-8 w-px bg-border/80" />
 
           <Button
             type="button"
@@ -1341,8 +1341,8 @@ export function CommandBar({
             className={cn(
               "h-11 w-11 shrink-0 rounded-full transition-all",
               pathname.startsWith("/storage")
-                ? "bg-amber-50 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
-                : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                ? "bg-primary/15 text-primary ring-1 ring-ring/35"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             title="Storage"
           >
@@ -1357,8 +1357,8 @@ export function CommandBar({
             className={cn(
               "h-11 w-11 shrink-0 rounded-full transition-all",
               pathname.startsWith("/settings")
-                ? "bg-stone-100 text-stone-900 dark:bg-stone-800/80 dark:text-stone-100"
-                : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+                ? "bg-primary/15 text-primary ring-1 ring-ring/35"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             title="Settings"
           >
@@ -1374,7 +1374,7 @@ export function CommandBar({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: motionTokens.durations.normal }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-stone-50/90 backdrop-blur-md dark:bg-stone-950/90"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/88 backdrop-blur-md"
             style={{
               paddingTop: overlayTopInset,
               paddingBottom: overlayBottomInset,
@@ -1387,11 +1387,11 @@ export function CommandBar({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.99 }}
               transition={{ type: "spring", ...motionTokens.spring }}
-              className="mx-auto flex w-full max-w-3xl min-h-0 flex-col rounded-2xl border border-stone-200/70 bg-white/95 p-2 shadow-2xl dark:border-stone-700/80 dark:bg-stone-900/95"
+              className="mx-auto flex w-full max-w-3xl min-h-0 flex-col rounded-2xl border border-border/70 bg-card/95 p-2 shadow-2xl border-border/80 bg-card/95"
               style={{ height: panelHeight }}
             >
               <div className="mb-2 flex items-center justify-between px-1">
-                <div className="flex items-center gap-2 text-[11px] text-stone-500 dark:text-stone-400">
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                   <IconSparkles className="size-3.5" />
                   <span>
                     {showLoadingSkeleton
@@ -1412,7 +1412,7 @@ export function CommandBar({
 
               <Command
                 shouldFilter={false}
-                className="flex min-h-0 flex-1 rounded-xl border border-stone-200/60 bg-white p-1 shadow-inner dark:border-stone-700/80 dark:bg-stone-900"
+                className="flex min-h-0 flex-1 rounded-xl border border-border/60 bg-card p-1 shadow-inner border-border/80 bg-card"
                 onKeyDown={(e) => {
                   const flatItems = results;
                   const totalItems = flatItems.length;
@@ -1530,7 +1530,7 @@ export function CommandBar({
                     </div>
                     {recentQueries.length > 0 ? (
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 text-[11px] text-stone-500 dark:text-stone-400">
+                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                           <IconClockHour4 className="size-3.5" />
                           Recent
                         </span>
@@ -1545,7 +1545,7 @@ export function CommandBar({
                               setQuery(recentQuery);
                               pushRecentQuery(recentQuery);
                             }}
-                            className="h-7 rounded-full border border-stone-200/70 px-2.5 dark:border-stone-700/70"
+                            className="h-7 rounded-full border border-border/70 px-2.5 border-border/70"
                           >
                             {recentQuery}
                           </Button>
@@ -1563,7 +1563,7 @@ export function CommandBar({
                   {showLoadingSkeleton ? (
                     <div className="space-y-2 px-1 py-2">
                       {Array.from({ length: 6 }).map((_, index) => (
-                        <div key={`command-skeleton-${index}`} className="space-y-1.5 rounded-lg border border-stone-200/60 p-2 dark:border-stone-700/70">
+                        <div key={`command-skeleton-${index}`} className="space-y-1.5 rounded-lg border border-border/60 p-2 border-border/70">
                           <Skeleton className="h-3 w-1/2" />
                           <Skeleton className="h-2.5 w-2/3" />
                         </div>
@@ -1572,17 +1572,17 @@ export function CommandBar({
                   ) : (
                     <>
                       {showingFallbackResults ? (
-                        <div className="mx-1 mb-2 rounded-lg border border-amber-300/60 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-600/50 dark:bg-amber-900/20 dark:text-amber-300">
+                        <div className="mx-1 mb-2 rounded-lg border border-border/70 bg-muted/70 px-3 py-2 text-[11px] text-muted-foreground">
                           No exact matches. Showing top commands instead.
                         </div>
                       ) : null}
                       <CommandEmpty>
                         <div className="flex flex-col items-center gap-2 py-6 text-center">
-                          <IconSearch className="size-4 text-stone-400" />
-                          <p className="text-xs font-medium text-stone-700 dark:text-stone-300">
+                          <IconSearch className="size-4 text-muted-foreground/80" />
+                          <p className="text-xs font-medium text-foreground/80 text-muted-foreground">
                             No results for &quot;{trimmedDeferredQuery || "..."}&quot;
                           </p>
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                          <p className="text-[11px] text-muted-foreground">
                             Try: <span className="font-medium">settings</span>, <span className="font-medium">storage</span>, <span className="font-medium">tag</span>
                           </p>
                         </div>
@@ -1594,7 +1594,7 @@ export function CommandBar({
 
                         return (
                           <CommandGroup key={group.group}>
-                            <div className="mb-1 flex items-center justify-between px-2.5 pt-1 text-[11px] font-medium text-stone-500 dark:text-stone-400">
+                            <div className="mb-1 flex items-center justify-between px-2.5 pt-1 text-[11px] font-medium text-muted-foreground">
                               <div className="inline-flex items-center gap-1.5">
                                 <span
                                   className={cn(
@@ -1635,14 +1635,14 @@ export function CommandBar({
                                   className={cn(
                                     "min-h-12 rounded-lg transition-all duration-150",
                                     isActive
-                                      ? "bg-indigo-50/80 ring-1 ring-indigo-400/30 dark:bg-indigo-500/15 dark:ring-indigo-400/20"
+                                      ? "bg-primary/10 ring-1 ring-ring/40"
                                       : "data-[selected=true]:translate-x-0.5",
                                   )}
                                   onSelect={() => executeCommand(item)}
                                   onMouseEnter={() => setActiveIndex(flatIndex)}
                                   data-active={isActive}
                                 >
-                                  <div className="flex size-8 items-center justify-center rounded-md border border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800">
+                                  <div className="flex size-8 items-center justify-center rounded-md border border-border bg-muted border-border bg-muted">
                                     <ItemIcon className={cn("size-4", itemIconTone)} />
                                   </div>
 
@@ -1651,7 +1651,7 @@ export function CommandBar({
                                       <HighlightedText text={item.title} query={trimmedDeferredQuery} />
                                     </div>
                                     {item.subtitle ? (
-                                      <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                                      <div className="truncate text-[11px] text-muted-foreground">
                                         <HighlightedText
                                           text={item.subtitle}
                                           query={trimmedDeferredQuery}
@@ -1661,13 +1661,13 @@ export function CommandBar({
                                   </div>
 
                                   {isOfflineFile ? (
-                                    <span className="rounded-full border border-emerald-300/80 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300">
+                                    <span className="rounded-full border border-primary/35 bg-primary/12 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                                       Offline
                                     </span>
                                   ) : null}
 
                                   {contentBadge ? (
-                                    <span className="shrink-0 rounded-full border border-stone-200/80 bg-stone-50 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 dark:border-stone-700/80 dark:bg-stone-800 dark:text-stone-400">
+                                    <span className="shrink-0 rounded-full border border-border/80 bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground border-border/80 bg-muted text-muted-foreground">
                                       {contentBadge}
                                     </span>
                                   ) : null}
@@ -1682,9 +1682,9 @@ export function CommandBar({
                     </>
                   )}
                 </CommandList>
-                <div className="mt-1 flex items-center justify-between rounded-md border border-stone-200/70 px-2 py-1 text-[10px] text-stone-500 dark:border-stone-700/70 dark:text-stone-400">
+                <div className="mt-1 flex items-center justify-between rounded-md border border-border/70 px-2 py-1 text-[10px] text-muted-foreground border-border/70 text-muted-foreground">
                   <span className="flex items-center gap-1.5">
-                    <span className="rounded border border-stone-300/80 px-1 py-px text-[9px] dark:border-stone-600">
+                    <span className="rounded border border-border/80 px-1 py-px text-[9px] border-border">
                       {isFolderScope ? activeFolderTitle : "Global"}
                     </span>
                     {showLoadingSkeleton

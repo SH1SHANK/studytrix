@@ -25,19 +25,19 @@ export function SelectionToolbar() {
     // Collect specific URLs if needed. For now, we will just share a generic link or rely on the Native File Share.
     // In a real bulk share, we might zip it or share a folder link.
     // We'll leave it as a placeholder to map over selected IDs.
-    const url = window.location.href; 
-    await shareNativeFile(url, "Shared from Attendrix", "Check out these files on Attendrix");
+    const url = window.location.href;
+    await shareNativeFile(url, "Shared from Studytrix", "Check out these files on Studytrix");
     clearSelection();
   };
 
   const handleTags = () => {
     const targetEntities = Array.from(selectedIds).map((id) => {
       // For a real implementation, we might need to know if the ID is a folder or file.
-      // But since tag rules apply the same to both on the generic API side, 
+      // But since tag rules apply the same to both on the generic API side,
       // we default to "file" since that is overwhelmingly more common, and backend validation handles it.
       return { id, type: "file" as const };
     });
-    
+
     useTagAssignmentStore.getState().openDrawer(targetEntities);
   };
 
@@ -49,21 +49,21 @@ export function SelectionToolbar() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={{ type: "spring", stiffness: 350, damping: 25, mass: 0.8 }}
-          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-stone-200/50 bg-white/90 p-2 shadow-xl shadow-stone-900/10 backdrop-blur-xl dark:border-stone-800/80 dark:bg-stone-900/90 dark:shadow-black/40"
+          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-border/80 bg-card/90 p-2 shadow-xl backdrop-blur-xl"
         >
           <div className="flex h-10 items-center gap-2 rounded-xl bg-indigo-50 px-3 text-sm font-semibold text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
-            <span className="flex size-5 items-center justify-center rounded-sm bg-indigo-600 text-xs text-white dark:bg-indigo-500">
+            <span className="flex size-5 items-center justify-center rounded-sm bg-indigo-600 text-xs text-primary-foreground dark:bg-indigo-500">
               {count}
             </span>
             Selected
           </div>
 
-          <div className="h-6 w-px bg-stone-200 dark:bg-stone-800" />
+          <div className="h-6 w-px bg-muted" />
 
           <Button
             type="button"
             variant="ghost"
-            className="flex items-center gap-2 rounded-xl text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+            className="flex items-center gap-2 rounded-xl text-muted-foreground hover:bg-muted"
             onClick={handleShare}
             disabled={count === 0}
           >
@@ -74,7 +74,7 @@ export function SelectionToolbar() {
           <Button
             type="button"
             variant="ghost"
-            className="flex items-center gap-2 rounded-xl text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+            className="flex items-center gap-2 rounded-xl text-muted-foreground hover:bg-muted"
             onClick={handleTags}
             disabled={count === 0}
           >
@@ -82,14 +82,14 @@ export function SelectionToolbar() {
             <span className="hidden sm:inline">Tags</span>
           </Button>
 
-          <div className="h-6 w-px bg-stone-200 dark:bg-stone-800" />
+          <div className="h-6 w-px bg-muted" />
 
           <Button
             type="button"
             variant="ghost"
             size="icon"
             onClick={clearSelection}
-            className="rounded-xl text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+            className="rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label="Clear selection"
           >
             <IconX className="size-5" />

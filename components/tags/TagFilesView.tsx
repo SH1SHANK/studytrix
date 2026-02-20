@@ -135,12 +135,12 @@ export function TagFilesView({ tagId }: TagFilesViewProps) {
     };
   }, [isHydrated, matchedEntities]);
 
-  const chipTextColor = tag ? getTagChipTextColor(tag.color) : "#fff";
+  const chipTextColor = tag ? getTagChipTextColor(tag.color) : "var(--primary-foreground)";
 
   if (!isHydrated) {
     return (
       <div className="flex items-center justify-center py-20">
-        <IconLoader2 className="size-6 animate-spin text-stone-400" />
+        <IconLoader2 className="size-6 animate-spin text-muted-foreground/80" />
       </div>
     );
   }
@@ -157,12 +157,12 @@ export function TagFilesView({ tagId }: TagFilesViewProps) {
           <IconArrowLeft className="size-3.5" />
           Back to Tags
         </Button>
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-stone-300 p-8 text-center dark:border-stone-700">
-          <IconTagOff className="size-8 text-stone-400" />
-          <p className="text-sm font-medium text-stone-600 dark:text-stone-300">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border p-8 text-center border-border">
+          <IconTagOff className="size-8 text-muted-foreground/80" />
+          <p className="text-sm font-medium text-muted-foreground">
             Tag not found
           </p>
-          <p className="text-xs text-stone-500 dark:text-stone-400">
+          <p className="text-xs text-muted-foreground">
             This tag may have been deleted.
           </p>
         </div>
@@ -173,7 +173,7 @@ export function TagFilesView({ tagId }: TagFilesViewProps) {
   return (
     <div className="space-y-5">
       {/* ── Tag Banner ───────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl border border-stone-200/80 shadow-sm dark:border-stone-700/80">
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 shadow-sm border-border/80">
         {/* Color banner */}
         <div
           className="h-16 sm:h-20"
@@ -181,11 +181,11 @@ export function TagFilesView({ tagId }: TagFilesViewProps) {
             background: `linear-gradient(135deg, ${tag.color}, ${tag.color}88)`,
           }}
         />
-        <div className="relative bg-white/90 p-4 dark:bg-stone-900/90">
+        <div className="relative bg-card/90 p-4 bg-card/90">
           {/* Floating tag chip */}
           <div className="absolute -top-4 left-4">
             <span
-              className="inline-flex items-center gap-1.5 rounded-full border-2 border-white px-3 py-1 text-sm font-semibold shadow-sm dark:border-stone-900"
+              className="inline-flex items-center gap-1.5 rounded-full border-2 border-background px-3 py-1 text-sm font-semibold shadow-sm"
               style={{ backgroundColor: tag.color, color: chipTextColor }}
             >
               <IconTag className="size-3.5" />
@@ -194,7 +194,7 @@ export function TagFilesView({ tagId }: TagFilesViewProps) {
           </div>
 
           <div className="mt-3 flex items-center justify-between">
-            <p className="text-sm text-stone-500 dark:text-stone-400">
+            <p className="text-sm text-muted-foreground">
               {matchedEntities.length} item{matchedEntities.length === 1 ? "" : "s"} tagged
             </p>
             <Button
@@ -212,23 +212,23 @@ export function TagFilesView({ tagId }: TagFilesViewProps) {
 
       {/* ── Entity List ──────────────────────────────────────── */}
       {matchedEntities.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-stone-300 p-10 text-center dark:border-stone-700">
-          <div className="flex size-12 items-center justify-center rounded-full bg-stone-100 dark:bg-stone-800">
-            <IconTagOff className="size-6 text-stone-400 dark:text-stone-500" />
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border p-10 text-center border-border">
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+            <IconTagOff className="size-6 text-muted-foreground/80" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-medium text-stone-600 dark:text-stone-300">
+            <p className="text-sm font-medium text-muted-foreground">
               No files tagged yet
             </p>
-            <p className="text-xs text-stone-500 dark:text-stone-400">
+            <p className="text-xs text-muted-foreground">
               Assign the &ldquo;{tag.name}&rdquo; tag to files or folders to see them here.
             </p>
           </div>
         </div>
       ) : loadingNames ? (
         <div className="flex items-center justify-center py-10">
-          <IconLoader2 className="size-5 animate-spin text-stone-400" />
-          <span className="ml-2 text-sm text-stone-500">Loading files…</span>
+          <IconLoader2 className="size-5 animate-spin text-muted-foreground/80" />
+          <span className="ml-2 text-sm text-muted-foreground">Loading files…</span>
         </div>
       ) : (
         <ul className="space-y-2">
@@ -240,7 +240,7 @@ export function TagFilesView({ tagId }: TagFilesViewProps) {
             return (
               <li
                 key={entity.entityId}
-                className="group flex items-center gap-3 rounded-xl border border-stone-200/70 bg-white/80 p-3.5 transition-shadow hover:shadow-sm dark:border-stone-700/80 dark:bg-stone-900/70"
+                className="group flex items-center gap-3 rounded-xl border border-border/70 bg-card/80 p-3.5 transition-shadow hover:shadow-sm border-border/80 bg-card/70"
               >
                 <div
                   className="flex size-9 items-center justify-center rounded-lg"
@@ -255,10 +255,10 @@ export function TagFilesView({ tagId }: TagFilesViewProps) {
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-stone-900 dark:text-stone-100">
+                  <p className="truncate text-sm font-medium text-foreground">
                     {displayName}
                   </p>
-                  <p className="text-xs capitalize text-stone-500 dark:text-stone-400">
+                  <p className="text-xs capitalize text-muted-foreground">
                     {entity.entityType}
                   </p>
                 </div>

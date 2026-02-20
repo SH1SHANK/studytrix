@@ -54,7 +54,7 @@ function SettingSliderComponent({ setting }: SettingSliderProps) {
               className="h-2.5"
             />
           </div>
-          <output className="w-8 text-right font-mono text-sm text-stone-500">
+          <output className="w-8 text-right font-mono text-sm text-muted-foreground">
             {numericValue}
           </output>
         </div>

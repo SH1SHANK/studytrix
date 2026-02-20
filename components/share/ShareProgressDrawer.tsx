@@ -33,10 +33,10 @@ export function ShareProgressDrawer() {
       */}
       <DialogContent
         showCloseButton={false}
-        className="w-full max-w-sm rounded-[24px] border border-stone-200 p-6 shadow-2xl dark:border-stone-800"
+        className="w-full max-w-sm rounded-[24px] border border-border p-6 shadow-2xl border-border"
       >
         <DialogHeader className="mb-4">
-          <DialogTitle className="text-center text-lg font-semibold tracking-tight text-stone-900 dark:text-stone-100">
+          <DialogTitle className="text-center text-lg font-semibold tracking-tight text-foreground">
             Preparing to Share
           </DialogTitle>
         </DialogHeader>
@@ -49,10 +49,10 @@ export function ShareProgressDrawer() {
           </div>
 
           <div className="w-full space-y-2 text-center">
-            <p className="line-clamp-1 truncate text-sm font-medium text-stone-700 dark:text-stone-300">
+            <p className="line-clamp-1 truncate text-sm font-medium text-foreground/80 text-muted-foreground">
               {fileName}
             </p>
-            <div className="flex items-center justify-between text-xs font-medium text-stone-500 dark:text-stone-400">
+            <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
               <span className="tabular-nums">{formatBytes(loadedBytes)}</span>
               {totalBytes ? (
                 <span>of {formatBytes(totalBytes)}</span>

@@ -18,7 +18,7 @@ import { useStorageDashboard } from "@/ui/hooks/useStorageDashboard";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+    <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
       {children}
     </h2>
   );
@@ -70,7 +70,7 @@ export default function StoragePage() {
             void handleExportSummary();
           }}
         >
-          {loading && records.length === 0 ? <p className="text-sm text-stone-500">Loading storage data...</p> : null}
+          {loading && records.length === 0 ? <p className="text-sm text-muted-foreground">Loading storage data...</p> : null}
 
           {/* ── Overview ──────────────────────────────────────── */}
           <section className="space-y-2">

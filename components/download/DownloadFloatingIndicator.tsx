@@ -25,7 +25,7 @@ export function DownloadFloatingIndicator() {
             variant="outline"
             onClick={openDrawer}
             aria-label={`Open downloads (${activeCount} active)`}
-            className="gap-1.5 rounded-full border-sky-200 bg-white px-3 shadow-md dark:border-sky-800 dark:bg-stone-900"
+            className="gap-1.5 rounded-full border-sky-200 bg-card px-3 shadow-md dark:border-sky-800 bg-card"
           >
             <IconDownload className="size-4 text-sky-500" />
             <span className="text-xs font-semibold tabular-nums text-sky-600 dark:text-sky-400">

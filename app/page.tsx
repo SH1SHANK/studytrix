@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/AppShell";
 export default function Page() {
   return (
     <AppShell showHeader={false}>
-      <Suspense fallback={<div className="p-8 text-center text-sm text-stone-500">Loading dashboard...</div>}>
+      <Suspense fallback={<div className="p-8 text-center text-sm text-muted-foreground">Loading dashboard...</div>}>
         <DashboardGrid />
       </Suspense>
     </AppShell>

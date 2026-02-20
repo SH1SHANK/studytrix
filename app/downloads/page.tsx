@@ -104,21 +104,21 @@ export default function DownloadsPage() {
         <header className="mb-6 space-y-4">
           {/* Stats */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">Active</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-stone-900 dark:text-stone-100">
+            <div className="rounded-xl border border-border bg-card p-3 border-border bg-card">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Active</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
                 {downloadingCount + queuedCount}
               </p>
             </div>
-            <div className="rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">Completed</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-stone-900 dark:text-stone-100">
+            <div className="rounded-xl border border-border bg-card p-3 border-border bg-card">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Completed</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
                 {completedCount}
               </p>
             </div>
-            <div className="rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">Offline</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-stone-900 dark:text-stone-100">
+            <div className="rounded-xl border border-border bg-card p-3 border-border bg-card">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Offline</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
                 {formatBytes(stats?.totalBytes ?? 0)}
               </p>
             </div>

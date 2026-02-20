@@ -1,9 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 
 import { CommandBar } from "@/components/command/CommandBar";
-import { DownloadDrawer } from "@/components/download/DownloadDrawer";
 import { ShareProgressDrawer } from "@/components/share/ShareProgressDrawer";
-import { DownloadFloatingIndicator } from "@/components/download/DownloadFloatingIndicator";
 import { AcademicProvider } from "@/components/layout/AcademicContext";
 import { Header } from "@/components/layout/Header";
 import { Toaster } from "@/components/ui/sonner";
@@ -18,7 +16,7 @@ type AppShellProps = {
 
 function GlobalFooter() {
   return (
-    <footer className="mt-8 border-t border-stone-200/60 pb-28 pt-8 text-center text-[10px] leading-relaxed text-stone-400 dark:border-stone-800/60 dark:text-stone-500">
+    <footer className="mt-8 border-t border-border/60 pb-28 pt-8 text-center text-[10px] leading-relaxed text-muted-foreground/80 border-border/60 text-muted-foreground/80">
       <p>Studytrix is built and maintained by the Attendrix Team.</p>
       <p className="mt-1">Study materials sourced from the LaunchPad Community Drive.</p>
     </footer>
@@ -45,9 +43,7 @@ export function AppShell({
         <Suspense fallback={null}>
           <CommandBar placeholder={commandPlaceholder} />
         </Suspense>
-        <DownloadDrawer />
         <ShareProgressDrawer />
-        <DownloadFloatingIndicator />
         <Toaster />
       </div>
     </AcademicProvider>

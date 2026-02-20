@@ -80,26 +80,26 @@ export function StorageInfographics({ records }: StorageInfographicsProps) {
           id: "error",
           label: "Error",
           count: errorCount,
-          colorClass: "bg-stone-500",
-          textClass: "text-stone-700 dark:text-stone-300",
+          colorClass: "bg-muted-foreground",
+          textClass: "text-muted-foreground",
         },
       ]),
     };
   }, [records]);
 
   return (
-    <Card className="rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/80">
+    <Card className="rounded-2xl border border-border/80 bg-card/80 shadow-sm">
       <CardHeader className="pb-0">
-        <CardTitle id="storage-infographics-title" className="text-base font-semibold text-stone-900 dark:text-stone-100">
+        <CardTitle id="storage-infographics-title" className="text-base font-semibold text-foreground">
           Storage Infographics
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 p-4 sm:p-5">
         <section className="space-y-2" aria-label="Storage source split">
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Source Split
           </p>
-          <div className="flex h-3 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-700/80">
+          <div className="flex h-3 overflow-hidden rounded-full bg-border/80">
             {sourceSegments.map((segment) => (
               <span
                 key={segment.id}
@@ -113,10 +113,10 @@ export function StorageInfographics({ records }: StorageInfographicsProps) {
             {sourceSegments.map((segment) => (
               <li
                 key={`source-${segment.id}`}
-                className="rounded-lg border border-stone-200/70 bg-stone-50/80 px-2.5 py-2 text-xs dark:border-stone-700/70 dark:bg-stone-800/70"
+                className="rounded-lg border border-border/70 bg-muted/70 px-2.5 py-2 text-xs"
               >
                 <p className={segment.textClass}>{segment.label}</p>
-                <p className="mt-0.5 font-medium text-stone-700 dark:text-stone-200">
+                <p className="mt-0.5 font-medium text-foreground/90">
                   {segment.count} ({segment.percentage.toFixed(1)}%)
                 </p>
               </li>
@@ -125,10 +125,10 @@ export function StorageInfographics({ records }: StorageInfographicsProps) {
         </section>
 
         <section className="space-y-2" aria-label="Storage health breakdown">
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Health Breakdown
           </p>
-          <div className="flex h-3 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-700/80">
+          <div className="flex h-3 overflow-hidden rounded-full bg-border/80">
             {healthSegments.map((segment) => (
               <span
                 key={segment.id}
@@ -142,10 +142,10 @@ export function StorageInfographics({ records }: StorageInfographicsProps) {
             {healthSegments.map((segment) => (
               <li
                 key={`health-${segment.id}`}
-                className="rounded-lg border border-stone-200/70 bg-stone-50/80 px-2.5 py-2 text-xs dark:border-stone-700/70 dark:bg-stone-800/70"
+                className="rounded-lg border border-border/70 bg-muted/70 px-2.5 py-2 text-xs"
               >
                 <p className={segment.textClass}>{segment.label}</p>
-                <p className="mt-0.5 font-medium text-stone-700 dark:text-stone-200">
+                <p className="mt-0.5 font-medium text-foreground/90">
                   {segment.count} ({segment.percentage.toFixed(1)}%)
                 </p>
               </li>

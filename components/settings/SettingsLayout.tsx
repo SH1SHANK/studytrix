@@ -265,7 +265,7 @@ export function SettingsLayout() {
         {/* Search */}
         <div className="relative">
           <IconSearch
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80"
             aria-hidden="true"
           />
           <Input
@@ -274,7 +274,7 @@ export function SettingsLayout() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search settings..."
-            className="h-10 rounded-lg border-stone-200 bg-stone-50 pl-10 text-sm dark:border-stone-800 dark:bg-stone-900"
+            className="h-10 rounded-lg border-border bg-muted pl-10 text-sm border-border bg-card"
           />
         </div>
 
@@ -282,7 +282,7 @@ export function SettingsLayout() {
         <div className="md:hidden">
           <button
             onClick={() => setShowMobileNav((v) => !v)}
-            className="flex w-full items-center justify-between rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm font-medium text-stone-700 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+            className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium text-foreground/80 border-border bg-card text-muted-foreground"
           >
             <span>
               {activeCategory ? formatCategoryName(activeCategory) : "Jump to section"}
@@ -290,7 +290,7 @@ export function SettingsLayout() {
             <IconChevronDown className={cn("size-4 transition-transform", showMobileNav && "rotate-180")} />
           </button>
           {showMobileNav && (
-            <div className="mt-1 rounded-lg border border-stone-200 bg-white shadow-md dark:border-stone-800 dark:bg-stone-900">
+            <div className="mt-1 rounded-lg border border-border bg-card shadow-md border-border bg-card">
               {categoryGroups.map((group) => {
                 if (group.items.length === 0) return null;
                 return (
@@ -299,14 +299,14 @@ export function SettingsLayout() {
                     onClick={() => scrollToCategory(group.category)}
                     className={cn(
                       "flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition-colors",
-                      "border-b border-stone-100 last:border-0 dark:border-stone-800",
+                      "border-b border-border/50 last:border-0 border-border",
                       activeCategory === group.category
-                        ? "bg-stone-50 font-medium text-stone-900 dark:bg-stone-800 dark:text-stone-100"
-                        : "text-stone-600 hover:bg-stone-50 dark:text-stone-400 dark:hover:bg-stone-800",
+                        ? "bg-muted font-medium text-foreground bg-muted text-foreground"
+                        : "text-muted-foreground hover:bg-muted text-muted-foreground hover:bg-muted",
                     )}
                   >
                     {formatCategoryName(group.category)}
-                    <span className="text-xs text-stone-400">{group.items.length}</span>
+                    <span className="text-xs text-muted-foreground/80">{group.items.length}</span>
                   </button>
                 );
               })}
@@ -326,8 +326,8 @@ export function SettingsLayout() {
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                     activeCategory === group.category
-                      ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700",
+                      ? "bg-card text-foreground dark:bg-muted dark:text-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted text-muted-foreground hover:bg-muted",
                   )}
                 >
                   {formatCategoryName(group.category)}
@@ -362,10 +362,10 @@ export function SettingsLayout() {
           if (!isLoaded) {
             return (
               <div key={group.category} id={`category-${group.category}`} data-category={group.category} className="scroll-mt-28">
-                <Card className="rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
+                <Card className="rounded-xl border border-border bg-card shadow-sm border-border bg-card">
                   <CardContent className="flex flex-col items-center justify-center space-y-3 p-6 text-center">
-                    <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">{displayCategory}</h2>
-                    <p className="text-sm text-stone-500 dark:text-stone-400">
+                    <h2 className="text-base font-semibold text-foreground">{displayCategory}</h2>
+                    <p className="text-sm text-muted-foreground">
                       Loaded on demand for better performance.
                     </p>
                     <Button type="button" size="sm" variant="secondary" onClick={() => loadCategory(group.category)}>
@@ -382,8 +382,8 @@ export function SettingsLayout() {
               <div key={group.category} id={`category-${group.category}`} data-category={group.category} className="scroll-mt-28">
                 <Suspense
                   fallback={(
-                    <Card className="rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
-                      <CardContent className="flex justify-center p-5 text-sm text-stone-500">
+                    <Card className="rounded-xl border border-border bg-card shadow-sm border-border bg-card">
+                      <CardContent className="flex justify-center p-5 text-sm text-muted-foreground">
                         Loading {displayCategory}...
                       </CardContent>
                     </Card>
@@ -414,8 +414,8 @@ export function SettingsLayout() {
       </main>
 
       {/* ── Data Management Footer ─────────────────────────── */}
-      <footer className="mt-10 space-y-3 border-t border-stone-200 pt-6 dark:border-stone-800">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+      <footer className="mt-10 space-y-3 border-t border-border pt-6 border-border">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
           Data Management
         </h3>
         <div className="flex flex-wrap gap-2">

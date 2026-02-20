@@ -82,15 +82,15 @@ export function ControlsBar() {
   );
 
   return (
-    <div className="sticky top-0 z-20 bg-[#F7F7F5] dark:bg-stone-950">
-      {/* Gradient separator — matches Dashboard */}
-      <div className="h-px bg-linear-to-r from-transparent via-stone-200 to-transparent dark:via-stone-800" />
+    <div className="sticky top-0 z-20 bg-background">
+      {/* Subtle separator */}
+      <div className="h-px bg-linear-to-r from-transparent via-border to-transparent" />
 
       <div className="flex items-center justify-between gap-2 px-4 py-3">
         {/* Left group — Downloads + Sort */}
         <div className="flex items-center gap-2">
           <DownloadButton
-            className="h-9 gap-1.5 rounded-lg border-stone-200 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition-all duration-200 hover:bg-stone-50 active:scale-[0.97] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
+            className="h-9 gap-1.5 rounded-lg border-border bg-card px-3 text-xs font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-muted active:scale-[0.97]"
             compact
           />
 
@@ -100,7 +100,7 @@ export function ControlsBar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 gap-1.5 rounded-lg border-stone-200 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition-all duration-200 hover:bg-stone-50 active:scale-[0.97] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
+                  className="h-9 gap-1.5 rounded-lg border-border bg-card px-3 text-xs font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-muted active:scale-[0.97]"
                 />
               }
             >
@@ -109,7 +109,7 @@ export function ControlsBar() {
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="w-36 border-stone-200 dark:border-stone-800"
+              className="w-36 border-border"
             >
               <DropdownMenuItem onClick={() => setSortLabel("Recent")}>
                 Recent
@@ -156,14 +156,14 @@ export function ControlsBar() {
           <ToggleGroupItem
             value="grid"
             aria-label="Grid view"
-            className="h-9 min-w-9 rounded-lg border-stone-200 shadow-sm transition-all duration-200 data-pressed:bg-indigo-600 data-pressed:text-white data-pressed:shadow-sm dark:border-stone-700 dark:data-pressed:bg-indigo-500"
+            className="h-9 min-w-9 rounded-lg border-border shadow-sm transition-all duration-200 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm"
           >
             <IconLayoutGrid className="size-4" />
           </ToggleGroupItem>
           <ToggleGroupItem
             value="list"
             aria-label="List view"
-            className="h-9 min-w-9 rounded-lg border-stone-200 shadow-sm transition-all duration-200 data-pressed:bg-indigo-600 data-pressed:text-white data-pressed:shadow-sm dark:border-stone-700 dark:data-pressed:bg-indigo-500"
+            className="h-9 min-w-9 rounded-lg border-border shadow-sm transition-all duration-200 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm"
           >
             <IconList className="size-4" />
           </ToggleGroupItem>

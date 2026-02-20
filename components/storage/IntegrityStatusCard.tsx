@@ -23,9 +23,9 @@ export function IntegrityStatusCard({
   const partialPercent = issueTotal > 0 ? (partialCount / issueTotal) * 100 : 0;
 
   return (
-    <Card className="rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/80">
+    <Card className="rounded-2xl border border-border/80 bg-card/80 shadow-sm">
       <CardHeader className="pb-0">
-        <CardTitle id="integrity-status-title" className="text-base font-semibold text-stone-900 dark:text-stone-100">
+        <CardTitle id="integrity-status-title" className="text-base font-semibold text-foreground">
           Integrity Status
         </CardTitle>
       </CardHeader>
@@ -42,14 +42,14 @@ export function IntegrityStatusCard({
         </div>
 
         <div className="space-y-1.5 text-xs">
-          <p className="text-stone-600 dark:text-stone-300">Issue distribution</p>
-          <div className="h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-700/80">
+          <p className="text-muted-foreground">Issue distribution</p>
+          <div className="h-2 overflow-hidden rounded-full bg-border/80">
             <span
               className="block h-full bg-rose-500"
               style={{ width: `${corruptedPercent.toFixed(1)}%` }}
             />
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-stone-200/80 dark:bg-stone-700/80">
+          <div className="h-2 overflow-hidden rounded-full bg-border/80">
             <span
               className="block h-full bg-amber-500"
               style={{ width: `${partialPercent.toFixed(1)}%` }}

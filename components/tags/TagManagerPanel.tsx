@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import {
   IconCheck,
   IconChevronRight,
@@ -27,19 +28,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { useTagStore } from "@/features/tags/tag.store";
 import { getTagChipTextColor } from "@/features/tags/tag.filter";
+import { getTagColorPalette } from "@/features/theme/theme.constants";
 
 const TAG_NAME_MIN_LENGTH = 2;
 const TAG_NAME_MAX_LENGTH = 50;
-const TAG_COLOR_PALETTE = [
-  "#2563EB",
-  "#16A34A",
-  "#EA580C",
-  "#DC2626",
-  "#7C3AED",
-  "#0891B2",
-  "#D97706",
-  "#0F766E",
-] as const;
 
 function normalizeTagName(name: string): string {
   return name.trim().replace(/\s+/g, " ");
@@ -47,6 +39,7 @@ function normalizeTagName(name: string): string {
 
 export function TagManagerPanel() {
   const router = useRouter();
+  const { theme } = useTheme();
   const createNameId = useId();
   const statusId = useId();
   const hydrationRequestedRef = useRef(false);
@@ -72,12 +65,14 @@ export function TagManagerPanel() {
     })),
   );
 
+  const tagColorPalette = useMemo(() => getTagColorPalette(theme), [theme]);
+
   const [createName, setCreateName] = useState("");
-  const [createColor, setCreateColor] = useState<string>(TAG_COLOR_PALETTE[0]);
+  const [createColor, setCreateColor] = useState<string>(tagColorPalette[0]);
   const [isCreating, setIsCreating] = useState(false);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
-  const [editColor, setEditColor] = useState<string>(TAG_COLOR_PALETTE[0]);
+  const [editColor, setEditColor] = useState<string>(tagColorPalette[0]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingTagId, setIsDeletingTagId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -131,6 +126,18 @@ export function TagManagerPanel() {
     return sortedTags.filter((tag) => tag.name.toLowerCase().includes(q));
   }, [sortedTags, searchQuery]);
 
+  useEffect(() => {
+    if (!tagColorPalette.includes(createColor)) {
+      setCreateColor(tagColorPalette[0]);
+    }
+  }, [createColor, tagColorPalette]);
+
+  useEffect(() => {
+    if (!tagColorPalette.includes(editColor)) {
+      setEditColor(tagColorPalette[0]);
+    }
+  }, [editColor, tagColorPalette]);
+
   const resetMessages = useCallback(() => {
     if (errorMessage) {
       setErrorMessage(null);
@@ -175,8 +182,8 @@ export function TagManagerPanel() {
   const cancelEdit = useCallback(() => {
     setEditingTagId(null);
     setEditName("");
-    setEditColor(TAG_COLOR_PALETTE[0]);
-  }, []);
+    setEditColor(tagColorPalette[0]);
+  }, [tagColorPalette]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingTagId) {
@@ -241,17 +248,17 @@ export function TagManagerPanel() {
   return (
     <section className="space-y-5" aria-labelledby="tags-manager-title">
       {/* ── Hero Header ──────────────────────────────────────── */}
-      <header className="relative overflow-hidden rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/85">
+      <header className="relative overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-sm border-border/80 bg-card/85">
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500" />
         <div className="flex items-center gap-3 p-5 pt-6">
           <div className="flex size-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-500/15">
             <IconTags className="size-5 text-violet-600 dark:text-violet-400" />
           </div>
           <div className="space-y-0.5">
-            <h1 id="tags-manager-title" className="text-xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
+            <h1 id="tags-manager-title" className="text-xl font-semibold tracking-tight text-foreground">
               Manage Tags
             </h1>
-            <p className="text-sm text-stone-500 dark:text-stone-400">
+            <p className="text-sm text-muted-foreground">
               Create, edit, and organise tags used across files and folders.
             </p>
           </div>
@@ -261,15 +268,15 @@ export function TagManagerPanel() {
       {/* ── Create Tag Card ──────────────────────────────────── */}
       <section
         aria-label="Create tag"
-        className="relative overflow-hidden rounded-2xl border border-stone-200/70 bg-white/80 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/70"
+        className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-sm border-border/80 bg-card/70"
       >
         <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-indigo-400 to-violet-500" />
         <div className="space-y-3 p-4 pl-5">
-          <p className="text-xs font-semibold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/80">
             New Tag
           </p>
           <div className="space-y-1.5">
-            <label htmlFor={createNameId} className="text-xs font-medium text-stone-700 dark:text-stone-300">
+            <label htmlFor={createNameId} className="text-xs font-medium text-foreground/80 text-muted-foreground">
               Tag name
             </label>
             <Input
@@ -293,9 +300,9 @@ export function TagManagerPanel() {
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-xs font-medium text-stone-700 dark:text-stone-300">Color</p>
+            <p className="text-xs font-medium text-foreground/80 text-muted-foreground">Color</p>
             <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Choose tag color">
-              {TAG_COLOR_PALETTE.map((color) => (
+                  {tagColorPalette.map((color) => (
                 <button
                   key={color}
                   type="button"
@@ -307,7 +314,7 @@ export function TagManagerPanel() {
                   }}
                   className={`size-7 rounded-full border-2 transition-all duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 ${
                     createColor === color
-                      ? "border-stone-900 shadow-sm dark:border-stone-100"
+                        ? "border-foreground shadow-sm"
                       : "border-transparent"
                   }`}
                   style={{ backgroundColor: color }}
@@ -345,7 +352,7 @@ export function TagManagerPanel() {
       {/* ── Search Bar ───────────────────────────────────────── */}
       {sortedTags.length > 3 && (
         <div className="relative">
-          <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
+          <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -358,15 +365,15 @@ export function TagManagerPanel() {
       {/* ── Tag List ─────────────────────────────────────────── */}
       <section aria-label="Tag list" className="space-y-2">
         {filteredTags.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-stone-300 p-8 text-center dark:border-stone-700">
-            <div className="flex size-12 items-center justify-center rounded-full bg-stone-100 dark:bg-stone-800">
-              <IconTags className="size-6 text-stone-400 dark:text-stone-500" />
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border p-8 text-center border-border">
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+              <IconTags className="size-6 text-muted-foreground/80" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium text-stone-600 dark:text-stone-300">
+              <p className="text-sm font-medium text-muted-foreground">
                 {searchQuery.trim() ? "No matching tags" : "No tags yet"}
               </p>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
+              <p className="text-xs text-muted-foreground">
                 {searchQuery.trim()
                   ? "Try a different search term."
                   : "Create your first tag above to start organising."}
@@ -383,14 +390,14 @@ export function TagManagerPanel() {
             return (
               <article
                 key={tag.id}
-                className="group rounded-2xl border border-stone-200/70 bg-white/80 transition-shadow hover:shadow-sm dark:border-stone-700/80 dark:bg-stone-900/70"
+                className="group rounded-2xl border border-border/70 bg-card/80 transition-shadow hover:shadow-sm border-border/80 bg-card/70"
                 aria-label={`${tag.name} tag`}
               >
                 {!isEditing ? (
                   <div className="flex items-center gap-3 p-3.5">
                     {/* Color dot */}
                     <span
-                      className="size-3 shrink-0 rounded-full ring-2 ring-white dark:ring-stone-900"
+                      className="size-3 shrink-0 rounded-full ring-2 ring-background ring-background"
                       style={{ backgroundColor: tag.color }}
                     />
 
@@ -409,7 +416,7 @@ export function TagManagerPanel() {
                           </Badge>
                         ) : null}
                       </div>
-                      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {assignmentCount} file{assignmentCount === 1 ? "" : "s"} · Used {tag.uses} times
                       </p>
                     </div>
@@ -468,7 +475,7 @@ export function TagManagerPanel() {
                   /* ── Inline Edit Mode ─────────────────────────── */
                   <div className="space-y-3 p-4">
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-stone-700 dark:text-stone-300" htmlFor={`edit-tag-${tag.id}`}>
+                      <label className="text-xs font-medium text-foreground/80 text-muted-foreground" htmlFor={`edit-tag-${tag.id}`}>
                         Edit name
                       </label>
                       <Input
@@ -491,7 +498,7 @@ export function TagManagerPanel() {
                     </div>
 
                     <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={`Select color for ${tag.name}`}>
-                      {TAG_COLOR_PALETTE.map((color) => (
+                      {tagColorPalette.map((color) => (
                         <button
                           key={`edit-${tag.id}-${color}`}
                           type="button"
@@ -503,7 +510,7 @@ export function TagManagerPanel() {
                           }}
                           className={`size-7 rounded-full border-2 transition-all duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 ${
                             editColor === color
-                              ? "border-stone-900 shadow-sm dark:border-stone-100"
+                              ? "border-foreground shadow-sm"
                               : "border-transparent"
                           }`}
                           style={{ backgroundColor: color }}

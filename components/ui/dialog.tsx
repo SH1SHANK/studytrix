@@ -45,19 +45,6 @@ function Dialog({
     onOpenChange?.(nextOpen)
   }, [isControlled, onOpenChange])
 
-  React.useEffect(() => {
-    if (!resolvedOpen) {
-      return
-    }
-
-    const originalOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-
-    return () => {
-      document.body.style.overflow = originalOverflow
-    }
-  }, [resolvedOpen])
-
   return (
     <DialogContext.Provider value={{ open: resolvedOpen, setOpen }}>
       {children}
@@ -139,7 +126,7 @@ function DialogOverlay({
   return (
     <div
       data-slot="dialog-overlay"
-      className={cn("data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/80 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50", className)}
+      className={cn("data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-foreground/80 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50", className)}
       onClick={(event) => {
         onClick?.(event)
         if (!event.defaultPrevented && event.target === event.currentTarget) {

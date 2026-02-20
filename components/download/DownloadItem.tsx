@@ -75,7 +75,7 @@ const STATUS_CONFIG: Record<
   },
   queued: {
     label: "Queued",
-    className: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
+    className: "bg-muted text-muted-foreground bg-muted text-muted-foreground",
   },
   paused: {
     label: "Paused",
@@ -87,7 +87,7 @@ const STATUS_CONFIG: Record<
   },
   canceled: {
     label: "Canceled",
-    className: "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
+    className: "bg-muted text-muted-foreground bg-muted text-muted-foreground",
   },
   failed: {
     label: "Failed",
@@ -135,14 +135,14 @@ function DownloadItemComponent({
   const metaParts = [byteLabel, speedLabel, etaLabel].filter(Boolean);
 
   return (
-    <article className="rounded-xl border border-stone-200 bg-white p-3.5 shadow-sm transition-all duration-200 dark:border-stone-800 dark:bg-stone-900">
+    <article className="rounded-xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 border-border bg-card">
       {/* Top row: filename + status badge */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-medium text-stone-900 dark:text-stone-100">
+          <h3 className="truncate text-sm font-medium text-foreground">
             {task.fileName}
           </h3>
-          <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {task.courseCode ?? "General"}
           </p>
         </div>
@@ -165,11 +165,11 @@ function DownloadItemComponent({
         <div className="mt-2.5">
           <Progress value={task.progress} className="h-1.5" />
           <div className="mt-1 flex items-center justify-between">
-            <span className="text-[11px] font-medium tabular-nums text-stone-500 dark:text-stone-400">
+            <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
               {Math.round(task.progress)}%
             </span>
             {metaParts.length > 0 && (
-              <span className="text-[11px] text-stone-400 dark:text-stone-500">
+              <span className="text-[11px] text-muted-foreground/80">
                 {metaParts.join(" · ")}
               </span>
             )}
@@ -179,7 +179,7 @@ function DownloadItemComponent({
 
       {/* Completed meta */}
       {task.state === "completed" && hasKnownTotal && (
-        <p className="mt-1.5 text-[11px] text-stone-400 dark:text-stone-500">
+        <p className="mt-1.5 text-[11px] text-muted-foreground/80">
           {formatBytes(task.totalBytes ?? 0)}
         </p>
       )}
@@ -199,7 +199,7 @@ function DownloadItemComponent({
               <IconPlayerPause className="size-3" />
               Pause
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => onCancel(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px] text-stone-500">
+            <Button type="button" variant="outline" size="sm" onClick={() => onCancel(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px] text-muted-foreground">
               <IconX className="size-3" />
               Cancel
             </Button>
@@ -207,7 +207,7 @@ function DownloadItemComponent({
         )}
 
         {task.state === "queued" && (
-          <Button type="button" variant="outline" size="sm" onClick={() => onCancel(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px] text-stone-500">
+          <Button type="button" variant="outline" size="sm" onClick={() => onCancel(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px] text-muted-foreground">
             <IconX className="size-3" />
             Cancel
           </Button>
@@ -235,7 +235,7 @@ function DownloadItemComponent({
         )}
 
         {(task.state === "canceled" || task.state === "completed" || task.state === "failed") && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => onRemove(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px] text-stone-400 hover:text-rose-500">
+          <Button type="button" variant="ghost" size="sm" onClick={() => onRemove(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px] text-muted-foreground/80 hover:text-rose-500">
             <IconTrash className="size-3" />
             Remove
           </Button>

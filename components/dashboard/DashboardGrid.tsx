@@ -369,7 +369,7 @@ export function DashboardGrid() {
               render={
                 <Button
                   variant="ghost"
-                  className="h-10 min-w-0 shrink gap-1 rounded-lg px-2 text-base font-semibold tracking-tight text-stone-900 transition-all hover:bg-stone-200/60 active:scale-[0.98] dark:text-stone-100 dark:hover:bg-stone-800 sm:text-lg"
+                  className="h-10 min-w-0 shrink gap-1 rounded-lg px-2 text-base font-semibold tracking-tight text-foreground transition-all hover:bg-muted/60 active:scale-[0.98] sm:text-lg"
                 />
               }
             >
@@ -389,7 +389,7 @@ export function DashboardGrid() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <span className="text-stone-300 dark:text-stone-600">·</span>
+          <span className="text-muted-foreground/80">·</span>
 
           {/* Semester Dropdown */}
           <DropdownMenu>
@@ -397,7 +397,7 @@ export function DashboardGrid() {
               render={
                 <Button
                   variant="ghost"
-                  className="h-10 min-w-0 shrink gap-1 rounded-lg px-2 text-base font-semibold tracking-tight text-stone-900 transition-all hover:bg-stone-200/60 active:scale-[0.98] dark:text-stone-100 dark:hover:bg-stone-800 sm:text-lg"
+                  className="h-10 min-w-0 shrink gap-1 rounded-lg px-2 text-base font-semibold tracking-tight text-foreground transition-all hover:bg-muted/60 active:scale-[0.98] sm:text-lg"
                 />
               }
             >
@@ -424,13 +424,13 @@ export function DashboardGrid() {
             id={DOWNLOAD_BUTTON_ELEMENT_ID}
             variant="ghost"
             size="icon"
-            className="relative size-10 rounded-lg transition-all hover:bg-stone-200/60 active:scale-[0.97] dark:hover:bg-stone-800"
+            className="relative size-10 rounded-lg transition-all hover:bg-muted/60 active:scale-[0.97]"
             aria-label="Downloads"
             onClick={openDrawer}
           >
-            <IconDownload className="size-[18px] text-stone-600 dark:text-stone-400" />
+            <IconDownload className="size-[18px] text-muted-foreground" />
             {activeCount > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
                 {activeCount}
               </span>
             ) : null}
@@ -438,18 +438,18 @@ export function DashboardGrid() {
           <Button
             variant="ghost"
             size="icon"
-            className="size-10 rounded-lg transition-all hover:bg-stone-200/60 active:scale-[0.97] dark:hover:bg-stone-800"
+            className="size-10 rounded-lg transition-all hover:bg-muted/60 active:scale-[0.97]"
             aria-label="Settings"
             onClick={() => router.push("/settings")}
           >
-            <IconSettings className="size-[18px] text-stone-600 dark:text-stone-400" />
+            <IconSettings className="size-[18px] text-muted-foreground" />
           </Button>
         </div>
       </div>
 
       {/* ── Greeting Strip ──────────────────────────────────── */}
       <div className="mt-4">
-        <h2 className="text-xl font-medium text-stone-900 dark:text-stone-100 sm:text-2xl">
+        <h2 className="text-xl font-medium text-foreground sm:text-2xl">
           {getGreeting()}, there
         </h2>
         {showQuoteValue !== false && (
@@ -458,11 +458,11 @@ export function DashboardGrid() {
               <Skeleton className="h-4 w-3/4 rounded" />
             ) : (
               <div>
-                <p className="text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   &ldquo;{quote ?? FALLBACK_QUOTE}&rdquo;
                 </p>
                 {quoteAuthor ? (
-                  <p className="mt-0.5 text-xs font-medium text-stone-400 dark:text-stone-500">
+                  <p className="mt-0.5 text-xs font-medium text-muted-foreground/80">
                     — {quoteAuthor}
                   </p>
                 ) : null}
@@ -482,7 +482,7 @@ export function DashboardGrid() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 gap-1.5 rounded-lg border-stone-200 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
+                  className="h-9 gap-1.5 rounded-lg border-border bg-card px-3 text-xs font-medium text-muted-foreground shadow-sm"
                 />
               }
             >
@@ -506,10 +506,10 @@ export function DashboardGrid() {
                   variant="outline"
                   size="sm"
                   className={cn(
-                    "h-9 gap-1.5 rounded-lg border-stone-200 bg-white px-3 text-xs font-medium shadow-sm dark:border-stone-700 dark:bg-stone-900",
+                    "h-9 gap-1.5 rounded-lg border-border bg-card px-3 text-xs font-medium shadow-sm",
                     hasActiveFilters
-                      ? "border-indigo-300 text-indigo-700 dark:border-indigo-600 dark:text-indigo-300"
-                      : "text-stone-700 dark:text-stone-300",
+                      ? "border-primary/50 text-primary"
+                      : "text-muted-foreground",
                   )}
                 />
               }
@@ -525,7 +525,7 @@ export function DashboardGrid() {
             <DropdownMenuContent align="start" className="w-56 p-2">
               {/* Any/All toggle */}
               <div className="mb-2 flex items-center justify-between px-1">
-                <span className="text-[11px] font-medium text-stone-500 dark:text-stone-400">Match mode</span>
+                <span className="text-[11px] font-medium text-muted-foreground">Match mode</span>
                 <ToggleGroup
                   type="single"
                   value={[filterMode]}
@@ -567,8 +567,8 @@ export function DashboardGrid() {
                         className={cn(
                           "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
                           isActive
-                            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300"
-                            : "text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800",
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-muted",
                         )}
                       >
                         <span
@@ -576,13 +576,13 @@ export function DashboardGrid() {
                           style={{ backgroundColor: option.color }}
                         />
                         <span className="flex-1 truncate">{option.label}</span>
-                        <span className="text-[10px] text-stone-400">{option.count}</span>
+                        <span className="text-[10px] text-muted-foreground/80">{option.count}</span>
                       </button>
                     );
                   })}
                 </div>
               ) : (
-                <p className="px-1 py-2 text-center text-xs text-stone-400">
+                <p className="px-1 py-2 text-center text-xs text-muted-foreground/80">
                   No tags available
                 </p>
               )}
@@ -591,7 +591,7 @@ export function DashboardGrid() {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="mt-1.5 w-full rounded-md py-1 text-center text-[11px] font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                  className="mt-1.5 w-full rounded-md py-1 text-center text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   Clear all filters
                 </button>
@@ -616,14 +616,14 @@ export function DashboardGrid() {
           <ToggleGroupItem
             value="grid"
             aria-label="Grid view"
-            className="h-9 min-w-9 rounded-lg border-stone-200 shadow-sm data-pressed:bg-indigo-600 data-pressed:text-white dark:border-stone-700 dark:data-pressed:bg-indigo-500"
+            className="h-9 min-w-9 rounded-lg border-border shadow-sm data-pressed:bg-primary data-pressed:text-primary-foreground"
           >
             <IconLayoutGrid className="size-4" />
           </ToggleGroupItem>
           <ToggleGroupItem
             value="list"
             aria-label="List view"
-            className="h-9 min-w-9 rounded-lg border-stone-200 shadow-sm data-pressed:bg-indigo-600 data-pressed:text-white dark:border-stone-700 dark:data-pressed:bg-indigo-500"
+            className="h-9 min-w-9 rounded-lg border-border shadow-sm data-pressed:bg-primary data-pressed:text-primary-foreground"
           >
             <IconList className="size-4" />
           </ToggleGroupItem>
@@ -634,13 +634,13 @@ export function DashboardGrid() {
       {showDashboardTags !== false && (
         <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/80">
               Browse by Tag
             </h3>
             <button
               type="button"
               onClick={() => router.push("/tags")}
-              className="flex items-center gap-0.5 text-[11px] font-medium text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+              className="flex items-center gap-0.5 text-[11px] font-medium text-primary transition-colors hover:text-primary/80"
             >
               Manage Tags
               <IconChevronRight className="size-3" />
@@ -653,18 +653,18 @@ export function DashboardGrid() {
                   key={option.id}
                   type="button"
                   onClick={() => router.push(`/tags/${option.id}`)}
-                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600 transition-all duration-150 hover:border-stone-300 hover:bg-stone-50 hover:shadow-sm active:scale-[0.97] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-stone-600 dark:hover:bg-stone-800"
+                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition-all duration-150 hover:bg-muted hover:shadow-sm active:scale-[0.97]"
                 >
                   <span
                     className="size-2.5 shrink-0 rounded-full"
                     style={{ backgroundColor: option.color }}
                   />
                   {option.label}
-                  <IconChevronRight className="size-3 text-stone-400 dark:text-stone-500" />
+                  <IconChevronRight className="size-3 text-muted-foreground/80" />
                 </button>
               ))
             ) : (
-              <p className="py-1 text-xs text-stone-400 dark:text-stone-500">
+              <p className="py-1 text-xs text-muted-foreground/80">
                 No tags yet
               </p>
             )}
@@ -693,11 +693,11 @@ export function DashboardGrid() {
             {error}
           </div>
         ) : folders.length === 0 ? (
-          <div className="rounded-xl border border-stone-200 bg-white p-6 text-center text-sm text-stone-500 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-400">
+          <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
             No courses found for {departmentLabel} Semester {semester}.
           </div>
         ) : filteredFolders.length === 0 ? (
-          <div className="rounded-xl border border-stone-200 bg-white p-6 text-center text-sm text-stone-500 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-400">
+          <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
             No folders match the current filters.
           </div>
         ) : (
@@ -706,10 +706,10 @@ export function DashboardGrid() {
             {coreFolders.length > 0 ? (
               <div>
                 <div className="mb-3 flex items-center gap-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/80">
                     Core Courses
                   </h3>
-                  <span className="flex h-5 items-center justify-center rounded-full bg-stone-200 px-2 text-[10px] font-semibold text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                  <span className="flex h-5 items-center justify-center rounded-full bg-muted px-2 text-[10px] font-semibold text-muted-foreground">
                     {coreFolders.length}
                   </span>
                 </div>
@@ -751,10 +751,10 @@ export function DashboardGrid() {
             {electiveFolders.length > 0 ? (
               <div>
                 <div className="mb-3 flex items-center gap-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/80">
                     Elective &amp; Lab
                   </h3>
-                  <span className="flex h-5 items-center justify-center rounded-full bg-indigo-100 px-2 text-[10px] font-semibold text-indigo-500 dark:bg-indigo-950/50 dark:text-indigo-400">
+                  <span className="flex h-5 items-center justify-center rounded-full bg-primary/15 px-2 text-[10px] font-semibold text-primary">
                     {electiveFolders.length}
                   </span>
                 </div>

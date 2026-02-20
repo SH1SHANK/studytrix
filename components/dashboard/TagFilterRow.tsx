@@ -46,7 +46,7 @@ export function TagFilterRow({
                 "flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-all duration-150 active:scale-[0.97]",
                 isActive
                   ? "border-transparent shadow-sm"
-                  : "border-stone-200 bg-white text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800",
+                  : "border-border bg-card text-muted-foreground hover:bg-muted",
               )}
               style={
                 isActive
@@ -61,7 +61,7 @@ export function TagFilterRow({
           );
         })
       ) : (
-        <p className="py-1 text-xs text-stone-400 dark:text-stone-500">
+        <p className="py-1 text-xs text-muted-foreground/80">
           No tags yet
         </p>
       )}

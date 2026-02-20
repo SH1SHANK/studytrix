@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Outfit } from "next/font/google";
-import { Toaster } from "sonner";
 
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { SettingsProvider } from "@/components/providers/SettingsProvider";
@@ -30,10 +29,6 @@ const switzer = localFont({
 });
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#090a0b" },
-  ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -64,7 +59,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${outfit.variable} ${switzer.variable}`}
     >
-      <body className="min-h-screen bg-linear-to-b from-stone-50 to-stone-100 text-stone-900 antialiased transition-colors dark:from-stone-950 dark:to-stone-900 dark:text-stone-100">
+      <body className="min-h-screen bg-background text-foreground antialiased transition-colors">
         <ThemeProvider>
           <SettingsProvider>
             {children}
@@ -72,7 +67,6 @@ export default function RootLayout({
             <AssignTagsDrawer />
             <DownloadDrawer />
             <DownloadFloatingIndicator />
-            <Toaster position="bottom-right" />
           </SettingsProvider>
         </ThemeProvider>
       </body>

@@ -192,7 +192,7 @@ function renderHighlightedText(
     nodes.push(
       <span
         key={`match-${start}`}
-        className="rounded-sm bg-indigo-500/20 px-0.5 font-semibold text-stone-900 dark:text-stone-100"
+        className="rounded-sm bg-primary/20 px-0.5 font-semibold text-foreground ring-1 ring-ring/35"
       >
         {text.slice(start, end + 1)}
       </span>,
@@ -336,7 +336,7 @@ export function CommandSearch({
       </label>
 
       <div className="relative">
-        <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-stone-500" />
+        <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           id={`${listboxId}-input`}
           value={query}
@@ -353,16 +353,16 @@ export function CommandSearch({
       </div>
 
       {isEmptyQuery ? (
-        <p className="text-xs text-stone-500 dark:text-stone-400">Recent folders</p>
+        <p className="text-xs text-muted-foreground">Recent folders</p>
       ) : null}
 
       <ul
         id={listboxId}
         role="listbox"
-        className="max-h-80 space-y-1 overflow-y-auto rounded-lg border border-stone-200/70 p-1 dark:border-stone-700/70"
+        className="max-h-80 space-y-1 overflow-y-auto rounded-lg border border-border/70 p-1"
       >
         {results.length === 0 ? (
-          <li className="px-3 py-4 text-center text-sm text-stone-500 dark:text-stone-400">
+          <li className="px-3 py-4 text-center text-sm text-muted-foreground">
             {isEmptyQuery ? "No recent folders" : "No matches found"}
           </li>
         ) : (
@@ -386,26 +386,26 @@ export function CommandSearch({
                   className={cn(
                     "flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors",
                     isActive
-                      ? "bg-indigo-50 text-stone-900 dark:bg-indigo-500/20 dark:text-stone-50"
-                      : "hover:bg-stone-100/80 dark:hover:bg-stone-800/80",
+                      ? "bg-primary/10 text-foreground"
+                      : "hover:bg-muted/80",
                   )}
                 >
-                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800">
-                    <IconFolder className="size-4 text-indigo-600 dark:text-indigo-300" />
+                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
+                    <IconFolder className="size-4 text-primary" />
                   </span>
 
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">
                       {renderHighlightedText(result.item.name, fallbackRanges)}
                     </span>
-                    <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                    <span className="block truncate text-xs text-muted-foreground">
                       {result.item.path}
                     </span>
                   </span>
 
                   <Badge
                     variant="outline"
-                    className="shrink-0 border-stone-300/80 text-[0.625rem] text-stone-600 dark:border-stone-600 dark:text-stone-300"
+                    className="shrink-0 border-border/80 text-[0.625rem] text-muted-foreground"
                   >
                     {rankLabel(result.rank)}
                   </Badge>
