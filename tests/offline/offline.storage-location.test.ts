@@ -50,6 +50,7 @@ function createLocalStorage() {
 
 /** In-memory mock of StorageProvider for testing migration. */
 class MockProvider implements StorageProvider {
+  kind: "filesystem" | "indexeddb" = "filesystem";
   files = new Map<string, Blob>();
 
   async writeFile(name: string, blob: Blob): Promise<void> {

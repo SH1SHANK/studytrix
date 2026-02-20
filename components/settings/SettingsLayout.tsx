@@ -34,6 +34,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 import { SettingsCategory } from "./SettingsCategory";
+import { OfflineDebugPanel } from "./OfflineDebugPanel";
 
 interface CategoryGroup {
   category: string;
@@ -390,6 +391,8 @@ export function SettingsLayout() {
         </div>
         <Input ref={fileInputRef} type="file" accept="application/json" onChange={(event) => void handleImportFile(event)} className="hidden" />
       </footer>
+
+      <OfflineDebugPanel />
     </div>
   );
 }

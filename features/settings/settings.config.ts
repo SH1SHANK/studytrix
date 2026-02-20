@@ -269,7 +269,7 @@ const rawSettingsSchema: SettingsSchema = {
       id: "clear_offline_storage",
       label: "Clear Offline Storage",
       description: "Remove all offline files and local offline search index.",
-      type: "action",
+      type: "danger",
       category: "Danger Zone",
     },
     {

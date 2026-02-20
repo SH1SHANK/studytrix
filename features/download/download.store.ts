@@ -97,6 +97,14 @@ function sanitizeTask(task: unknown): DownloadTask | null {
 
   const speedBytesPerSecond = normalizeFiniteNumber(task.speedBytesPerSecond, 0);
   const etaSeconds = normalizeFiniteNumber(task.etaSeconds, -1);
+  const errorCodeCandidate = typeof task.errorCode === "string" ? task.errorCode : undefined;
+  const errorCode =
+    errorCodeCandidate === "OFFLINE"
+    || errorCodeCandidate === "NETWORK"
+    || errorCodeCandidate === "QUOTA"
+    || errorCodeCandidate === "UNKNOWN"
+      ? errorCodeCandidate
+      : undefined;
 
   return {
     id,
@@ -110,11 +118,14 @@ function sanitizeTask(task: unknown): DownloadTask | null {
     totalBytes,
     speedBytesPerSecond: speedBytesPerSecond > 0 ? speedBytesPerSecond : undefined,
     etaSeconds: etaSeconds > 0 ? Math.floor(etaSeconds) : undefined,
+    networkHold: Boolean(task.networkHold),
+    retryCount: Math.max(0, Math.floor(normalizeFiniteNumber(task.retryCount, 0))),
     state: normalizedState,
     error:
       normalizedState === "paused" && (state === "queued" || state === "downloading")
         ? RESTORED_TASK_MESSAGE
         : (typeof task.error === "string" && task.error.trim()) || undefined,
+    errorCode,
     createdAt,
     updatedAt,
   };
@@ -235,8 +246,10 @@ export const useDownloadStore = create<DownloadStoreState>()(persist(
           totalBytes: normalizedTotal > 0 ? normalizedTotal : current.totalBytes,
           speedBytesPerSecond: speedBytesPerSecond > 0 ? speedBytesPerSecond : current.speedBytesPerSecond,
           etaSeconds,
+          networkHold: false,
           state: safeProgress >= 100 ? current.state : "downloading",
           error: undefined,
+          errorCode: undefined,
           updatedAt: timestamp,
         };
 
@@ -346,10 +359,12 @@ function ensureEventSubscriptions(): void {
       loadedBytes: finalizedTotalBytes,
       totalBytes: finalizedTotalBytes,
       size: current?.size ?? finalizedTotalBytes,
+      networkHold: false,
       state: "completed",
       speedBytesPerSecond: undefined,
       etaSeconds: undefined,
       error: undefined,
+      errorCode: undefined,
       updatedAt: Date.now(),
     });
   });
@@ -357,9 +372,11 @@ function ensureEventSubscriptions(): void {
   on("download:failed", ({ taskId, error }) => {
     useDownloadStore.getState().updateTask(taskId, {
       state: "failed",
+      networkHold: false,
       speedBytesPerSecond: undefined,
       etaSeconds: undefined,
       error,
+      errorCode: "NETWORK",
       updatedAt: Date.now(),
     });
   });
@@ -369,6 +386,7 @@ function ensureEventSubscriptions(): void {
       state: "paused",
       speedBytesPerSecond: undefined,
       etaSeconds: undefined,
+      networkHold: false,
       updatedAt: Date.now(),
     });
   });
@@ -378,6 +396,7 @@ function ensureEventSubscriptions(): void {
       state: "canceled",
       speedBytesPerSecond: undefined,
       etaSeconds: undefined,
+      networkHold: false,
       updatedAt: Date.now(),
     });
   });

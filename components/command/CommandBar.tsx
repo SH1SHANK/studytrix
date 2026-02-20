@@ -76,6 +76,7 @@ import {
 } from "@/features/drive/drive.types";
 import { openLocalFirst } from "@/features/offline/offline.access";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
+import { buildNestedRootSignature } from "@/features/offline/offline.query-cache.keys";
 
 type CommandBarProps = {
   placeholder?: string;
@@ -196,13 +197,6 @@ function getCourseSubtitle(course: Course): string {
   }
 
   return parts.slice(0, 2).join(" · ") || "Course folder";
-}
-
-function buildRootSignature(roots: readonly NestedRootPayload[]): string {
-  return [...roots]
-    .map((root) => `${root.courseCode}:${root.folderId}`)
-    .sort((left, right) => left.localeCompare(right))
-    .join("|");
 }
 
 function parseString(value: unknown): string | null {
@@ -534,7 +528,7 @@ export function CommandBar({
     [catalogCourses],
   );
   const nestedRootSignature = useMemo(
-    () => buildRootSignature(nestedRoots),
+    () => buildNestedRootSignature(nestedRoots),
     [nestedRoots],
   );
   const nestedScopeKey = useMemo(

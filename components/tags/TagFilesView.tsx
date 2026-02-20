@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useTagStore } from "@/features/tags/tag.store";
 import { getTagChipTextColor } from "@/features/tags/tag.filter";
 import type { EntityType } from "@/features/tags/tag.types";
+import { getFileMetadataWithCache } from "@/features/file/file-metadata.client";
 
 interface TagFilesViewProps {
   tagId: string;
@@ -90,26 +91,13 @@ export function TagFilesView({ tagId }: TagFilesViewProps) {
       const entries = await Promise.all(
         matchedEntities.map(async (entity) => {
           try {
-            const response = await fetch(
-              `/api/file/${encodeURIComponent(entity.entityId)}/metadata`,
-              { method: "GET", cache: "no-store", signal: controller.signal },
-            );
-
-            if (!response.ok) return null;
-
-            const payload = (await response.json()) as unknown;
-            if (
-              !payload ||
-              typeof payload !== "object" ||
-              !("metadata" in payload) ||
-              typeof payload.metadata !== "object" ||
-              payload.metadata === null
-            ) {
+            const resolved = await getFileMetadataWithCache(entity.entityId, {
+              signal: controller.signal,
+            });
+            const name = resolved.metadata?.name;
+            if (!name || !name.trim()) {
               return null;
             }
-
-            const name = (payload.metadata as Record<string, unknown>).name;
-            if (typeof name !== "string" || !name.trim()) return null;
 
             return [entity.entityId, name.trim()] as const;
           } catch {

@@ -2,19 +2,35 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { isOfflineV3Enabled } from "@/features/offline/offline.flags";
+import {
+  getFreshOrStale,
+  putWithPolicy,
+} from "@/features/offline/offline.query-cache.db";
+import { QUERY_CACHE_KEYS } from "@/features/offline/offline.query-cache.keys";
+
 import { type CatalogResponse, type Course } from "./catalog.types";
 
 type CatalogState = {
   courses: Course[];
   isLoading: boolean;
   error: string | null;
+  source: "memory" | "cache" | "network" | null;
+  isStale: boolean;
+  lastUpdatedAt: number | null;
+  isOfflineFallback: boolean;
 };
 
 type UseCatalogOptions = {
   enabled?: boolean;
 };
 
-const catalogResponseCache = new Map<string, CatalogResponse>();
+type CatalogMemoryEntry = {
+  data: CatalogResponse;
+  updatedAt: number;
+};
+
+const catalogResponseCache = new Map<string, CatalogMemoryEntry>();
 const catalogInFlight = new Map<string, Promise<CatalogResponse>>();
 
 function getCatalogCacheKey(department: string, semester: number): string {
@@ -26,11 +42,6 @@ async function requestCatalog(
   semester: number,
 ): Promise<CatalogResponse> {
   const key = getCatalogCacheKey(department, semester);
-
-  const cached = catalogResponseCache.get(key);
-  if (cached) {
-    return cached;
-  }
 
   const existingRequest = catalogInFlight.get(key);
   if (existingRequest) {
@@ -56,7 +67,18 @@ async function requestCatalog(
       courses: Array.isArray(data.courses) ? data.courses : [],
     };
 
-    catalogResponseCache.set(key, normalized);
+    catalogResponseCache.set(key, {
+      data: normalized,
+      updatedAt: Date.now(),
+    });
+
+    if (isOfflineV3Enabled()) {
+      await putWithPolicy(
+        QUERY_CACHE_KEYS.catalogSemester(department, semester),
+        normalized,
+      );
+    }
+
     return normalized;
   })().finally(() => {
     catalogInFlight.delete(key);
@@ -77,6 +99,10 @@ export function useCatalog(
     courses: [],
     isLoading: enabled,
     error: null,
+    source: null,
+    isStale: false,
+    lastUpdatedAt: null,
+    isOfflineFallback: false,
   });
 
   const requestSeqRef = useRef(0);
@@ -92,6 +118,10 @@ export function useCatalog(
             courses: [],
             isLoading: false,
             error: null,
+            source: null,
+            isStale: false,
+            lastUpdatedAt: null,
+            isOfflineFallback: false,
           });
         }
       });
@@ -105,6 +135,10 @@ export function useCatalog(
             courses: [],
             isLoading: false,
             error: "Invalid semester",
+            source: null,
+            isStale: false,
+            lastUpdatedAt: null,
+            isOfflineFallback: false,
           });
         }
       });
@@ -112,14 +146,78 @@ export function useCatalog(
     }
 
     let isActive = true;
-    queueMicrotask(() => {
+    const key = getCatalogCacheKey(department, semester);
+    const canUseOffline = isOfflineV3Enabled();
+    const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
+    const memoryEntry = catalogResponseCache.get(key);
+
+    void (async () => {
+      let cachedEntry: Awaited<ReturnType<typeof getFreshOrStale<CatalogResponse>>>["entry"] = null;
+      let cachedStatus: "fresh" | "stale" | "expired" | "miss" = "miss";
+
+      if (memoryEntry && isActive && requestSeq === requestSeqRef.current) {
+        setState({
+          courses: memoryEntry.data.courses,
+          isLoading: isOnline,
+          error: null,
+          source: "memory",
+          isStale: false,
+          lastUpdatedAt: memoryEntry.updatedAt,
+          isOfflineFallback: !isOnline,
+        });
+      }
+
+      if (canUseOffline) {
+        try {
+          const cached = await getFreshOrStale<CatalogResponse>(
+            QUERY_CACHE_KEYS.catalogSemester(department, semester),
+          );
+          cachedEntry = cached.entry;
+          cachedStatus = cached.status;
+        } catch {
+          cachedEntry = null;
+          cachedStatus = "miss";
+        }
+      }
+
+      if (!memoryEntry && cachedEntry && isActive && requestSeq === requestSeqRef.current) {
+        setState({
+          courses: cachedEntry.payload.courses,
+          isLoading: isOnline,
+          error: null,
+          source: "cache",
+          isStale: cachedStatus === "stale",
+          lastUpdatedAt: cachedEntry.updatedAt,
+          isOfflineFallback: !isOnline,
+        });
+      }
+
+      if (!isOnline) {
+        if (!memoryEntry && !cachedEntry && isActive && requestSeq === requestSeqRef.current) {
+          setState({
+            courses: [],
+            isLoading: false,
+            error: "You are offline.",
+            source: null,
+            isStale: false,
+            lastUpdatedAt: null,
+            isOfflineFallback: true,
+          });
+          return;
+        }
+
+        if (isActive && requestSeq === requestSeqRef.current) {
+          setState((prev) => ({ ...prev, isLoading: false }));
+        }
+        return;
+      }
+
       if (isActive && requestSeq === requestSeqRef.current) {
         setState((prev) => ({ ...prev, isLoading: true, error: null }));
       }
-    });
 
-    void requestCatalog(department, semester)
-      .then((data) => {
+      try {
+        const data = await requestCatalog(department, semester);
         if (!isActive || requestSeq !== requestSeqRef.current) {
           return;
         }
@@ -128,10 +226,39 @@ export function useCatalog(
           courses: data.courses,
           isLoading: false,
           error: null,
+          source: "network",
+          isStale: false,
+          lastUpdatedAt: Date.now(),
+          isOfflineFallback: false,
         });
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (!isActive || requestSeq !== requestSeqRef.current) {
+          return;
+        }
+
+        if (memoryEntry) {
+          setState({
+            courses: memoryEntry.data.courses,
+            isLoading: false,
+            error: null,
+            source: "memory",
+            isStale: true,
+            lastUpdatedAt: memoryEntry.updatedAt,
+            isOfflineFallback: true,
+          });
+          return;
+        }
+
+        if (cachedEntry) {
+          setState({
+            courses: cachedEntry.payload.courses,
+            isLoading: false,
+            error: null,
+            source: "cache",
+            isStale: true,
+            lastUpdatedAt: cachedEntry.updatedAt,
+            isOfflineFallback: true,
+          });
           return;
         }
 
@@ -139,8 +266,13 @@ export function useCatalog(
           courses: [],
           isLoading: false,
           error: err instanceof Error ? err.message : "Failed to load catalog",
+          source: null,
+          isStale: false,
+          lastUpdatedAt: null,
+          isOfflineFallback: false,
         });
-      });
+      }
+    })();
 
     return () => {
       isActive = false;

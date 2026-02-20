@@ -1,12 +1,16 @@
 "use client";
 
-import { getAllFiles, setMetadata } from "@/features/offline/offline.db";
+import { getAllFiles, getFile, setMetadata } from "@/features/offline/offline.db";
+import { isOfflineV3Enabled } from "@/features/offline/offline.flags";
 import { generateChecksum } from "@/features/offline/offline.integrity";
-import { has } from "@/features/offline/offline.access";
 import { markOfflineAvailability } from "@/features/offline/offline.index.store";
 import { useSettingsStore } from "@/features/settings/settings.store";
 import { storeOfflineFileVerified } from "@/features/storage/storage.service";
 import type { OfflineFileRecord } from "@/features/offline/offline.types";
+import {
+  getFileMetadataWithCache,
+  writeDownloadMeta,
+} from "@/features/file/file-metadata.client";
 
 import { emit } from "./download.events";
 import { useDownloadStore } from "./download.store";
@@ -24,6 +28,7 @@ const MIN_CONCURRENCY = 1;
 const MAX_CONCURRENCY = 4;
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_STORAGE_LIMIT_MB = 500;
+const MAX_NETWORK_HOLD_TASKS = 25;
 
 function clampConcurrency(value: number): number {
   if (!Number.isFinite(value)) {
@@ -94,14 +99,6 @@ function normalizeFileId(fileId: string): string {
   return normalized;
 }
 
-function parseNumber(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    return undefined;
-  }
-
-  return value;
-}
-
 function parseString(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -132,37 +129,29 @@ async function enforceStorageLimit(nextFileSizeBytes: number): Promise<void> {
 }
 
 async function fetchFileMetadata(fileId: string, signal: AbortSignal): Promise<FileMetadata | null> {
-  try {
-    const response = await fetch(`/api/file/${encodeURIComponent(fileId)}/metadata`, {
-      method: "GET",
-      signal,
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const json = (await response.json()) as unknown;
-    if (!isRecord(json) || !isRecord(json.metadata)) {
-      return null;
-    }
-
-    const metadata = json.metadata;
-
-    const name = parseString(metadata.name);
-    const mimeType = parseString(metadata.mimeType);
-
-    return {
-      id: parseString(metadata.id) ?? fileId,
-      name: name ?? fileId,
-      mimeType: mimeType ?? "application/octet-stream",
-      size: parseNumber(metadata.size) ?? 0,
-      modifiedTime: parseString(metadata.modifiedTime) ?? null,
-    };
-  } catch {
+  const resolved = await getFileMetadataWithCache(fileId, {
+    allowNetwork: true,
+    signal,
+  });
+  if (!resolved.metadata) {
     return null;
   }
+
+  return {
+    id: resolved.metadata.id,
+    name: resolved.metadata.name,
+    mimeType: resolved.metadata.mimeType,
+    size: resolved.metadata.size,
+    modifiedTime: resolved.metadata.modifiedTime,
+  };
+}
+
+function isOnline(): boolean {
+  if (typeof navigator === "undefined") {
+    return true;
+  }
+
+  return navigator.onLine;
 }
 
 function readContentLength(headers: Headers): number {
@@ -332,7 +321,9 @@ class DownloadController {
       const nextTask: DownloadTask = {
         ...task,
         state: "queued",
+        networkHold: false,
         error: undefined,
+        errorCode: undefined,
         updatedAt: timestamp,
       };
       this.tasks.set(payload.taskId, nextTask);
@@ -344,7 +335,9 @@ class DownloadController {
       const nextTask: DownloadTask = {
         ...task,
         state: "downloading",
+        networkHold: false,
         error: undefined,
+        errorCode: undefined,
         updatedAt: timestamp,
       };
       this.tasks.set(payload.taskId, nextTask);
@@ -356,6 +349,7 @@ class DownloadController {
       this.tasks.set(payload.taskId, {
         ...task,
         state: "paused",
+        networkHold: false,
         updatedAt: timestamp,
       });
       emit("download:paused", { taskId: payload.taskId });
@@ -366,9 +360,11 @@ class DownloadController {
       this.tasks.set(payload.taskId, {
         ...task,
         state: "completed",
+        networkHold: false,
         progress: 100,
         speedBytesPerSecond: undefined,
         etaSeconds: undefined,
+        errorCode: undefined,
         updatedAt: timestamp,
       });
       this.lastProgressAt.delete(payload.taskId);
@@ -380,8 +376,10 @@ class DownloadController {
       this.tasks.set(payload.taskId, {
         ...task,
         state: "canceled",
+        networkHold: false,
         speedBytesPerSecond: undefined,
         etaSeconds: undefined,
+        errorCode: undefined,
         updatedAt: timestamp,
       });
       this.lastProgressAt.delete(payload.taskId);
@@ -393,7 +391,9 @@ class DownloadController {
       this.tasks.set(payload.taskId, {
         ...task,
         state: "failed",
+        networkHold: false,
         error: payload.error,
+        errorCode: "NETWORK",
         speedBytesPerSecond: undefined,
         etaSeconds: undefined,
         updatedAt: timestamp,
@@ -415,6 +415,16 @@ class DownloadController {
     const metadata = initialMetadata ?? this.taskMetadata.get(taskId) ?? await fetchFileMetadata(fileId, context.signal);
     this.taskMetadata.set(taskId, metadata ?? null);
     const existingTask = this.tasks.get(taskId);
+
+    if (metadata) {
+      await writeDownloadMeta(fileId, {
+        id: metadata.id,
+        name: metadata.name,
+        mimeType: metadata.mimeType,
+        size: metadata.size,
+        modifiedTime: metadata.modifiedTime,
+      });
+    }
 
     if (existingTask && metadata) {
       const updatedTask: DownloadTask = {
@@ -531,11 +541,21 @@ class DownloadController {
         size: blob.size > 0 ? blob.size : currentTask.size,
         loadedBytes: blob.size,
         totalBytes: blob.size,
+        networkHold: false,
+        errorCode: undefined,
         updatedAt: now(),
       };
       this.tasks.set(taskId, finalizedTask);
       emit("download:added", { task: finalizedTask });
     }
+
+    await writeDownloadMeta(fileId, {
+      id: metadata?.id ?? fileId,
+      name: metadata?.name ?? (existingTask?.fileName ?? fileId),
+      mimeType,
+      size: blob.size,
+      modifiedTime: metadata?.modifiedTime ?? null,
+    });
 
     const checksum = await generateChecksum(blob);
     const timestamp = now();
@@ -613,23 +633,50 @@ class DownloadController {
       return activeTaskId;
     }
 
-    const [alreadyOffline, metadata] = await Promise.all([
-      has(normalizedFileId),
+    const [offlineRecord, metadata] = await Promise.all([
+      getFile(normalizedFileId),
       fetchFileMetadata(normalizedFileId, new AbortController().signal),
     ]);
+    const alreadyOffline = Boolean(offlineRecord);
+    const online = isOnline();
     const timestamp = now();
     const taskId = buildTaskId();
+
+    if (!alreadyOffline && !online && isOfflineV3Enabled()) {
+      const existingNetworkHold = Object.values(useDownloadStore.getState().tasks)
+        .filter((task) => task.networkHold && task.state === "queued")
+        .length;
+
+      if (existingNetworkHold >= MAX_NETWORK_HOLD_TASKS) {
+        throw new Error(`Offline queue full (${MAX_NETWORK_HOLD_TASKS}).`);
+      }
+    }
 
     const task: DownloadTask = {
       id: taskId,
       fileId: normalizedFileId,
       fileName: metadata?.name ?? normalizedFileId,
-      mimeType: metadata?.mimeType,
-      size: metadata?.size ? metadata.size : undefined,
+      mimeType: metadata?.mimeType ?? offlineRecord?.mimeType,
+      size:
+        metadata?.size && metadata.size > 0
+          ? metadata.size
+          : offlineRecord?.size,
       progress: alreadyOffline ? 100 : 0,
-      loadedBytes: alreadyOffline ? metadata?.size ?? 0 : 0,
-      totalBytes: metadata?.size && metadata.size > 0 ? metadata.size : undefined,
+      loadedBytes: alreadyOffline ? (offlineRecord?.size ?? metadata?.size ?? 0) : 0,
+      totalBytes:
+        metadata?.size && metadata.size > 0
+          ? metadata.size
+          : offlineRecord?.size,
       state: alreadyOffline ? "completed" : "queued",
+      networkHold: !alreadyOffline && !online && isOfflineV3Enabled(),
+      error:
+        !alreadyOffline && !online && isOfflineV3Enabled()
+          ? "Waiting for connection"
+          : undefined,
+      errorCode:
+        !alreadyOffline && !online && isOfflineV3Enabled()
+          ? "OFFLINE"
+          : undefined,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -639,8 +686,23 @@ class DownloadController {
     emit("download:added", { task });
 
     if (alreadyOffline) {
+      await writeDownloadMeta(normalizedFileId, {
+        id: metadata?.id ?? normalizedFileId,
+        name: metadata?.name ?? task.fileName,
+        mimeType: metadata?.mimeType ?? offlineRecord?.mimeType ?? "application/octet-stream",
+        size: offlineRecord?.size ?? metadata?.size ?? 0,
+        modifiedTime: metadata?.modifiedTime ?? offlineRecord?.modifiedTime ?? null,
+      });
       emit("download:completed", { taskId });
       return taskId;
+    }
+
+    if (!online && isOfflineV3Enabled()) {
+      return taskId;
+    }
+
+    if (!online) {
+      throw new Error("You are offline.");
     }
 
     const queued = this.enqueueTask(taskId, normalizedFileId, metadata);
@@ -669,7 +731,42 @@ class DownloadController {
     }
 
     const fallback = this.tasks.get(taskId) ?? useDownloadStore.getState().tasks[taskId];
-    if (!fallback || fallback.state !== "paused") {
+    if (!fallback) {
+      return;
+    }
+
+    if (fallback.networkHold) {
+      if (!isOnline()) {
+        return;
+      }
+
+      this.tasks.set(taskId, {
+        ...fallback,
+        networkHold: false,
+        error: undefined,
+        errorCode: undefined,
+        updatedAt: now(),
+      });
+      emit("download:added", {
+        task: {
+          ...fallback,
+          networkHold: false,
+          error: undefined,
+          errorCode: undefined,
+          updatedAt: now(),
+        },
+      });
+      const queued = this.enqueueTask(taskId, fallback.fileId, this.taskMetadata.get(taskId) ?? null);
+      if (!queued) {
+        emit("download:failed", {
+          taskId,
+          error: "Could not resume download",
+        });
+      }
+      return;
+    }
+
+    if (fallback.state !== "paused") {
       return;
     }
 
@@ -738,4 +835,11 @@ export function cancelDownload(taskId: string): void {
 
 export function removeDownloadTask(taskId: string): void {
   downloadController.removeTask(taskId);
+}
+
+export function listNetworkHoldTaskIds(): string[] {
+  return Object.values(useDownloadStore.getState().tasks)
+    .filter((task) => task.networkHold && task.state === "queued")
+    .sort((left, right) => left.createdAt - right.createdAt)
+    .map((task) => task.id);
 }

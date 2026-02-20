@@ -102,7 +102,7 @@ async function getDB(): Promise<IDBPDatabase<OfflineDBSchema> | null> {
 export async function getFile(fileId: string): Promise<OfflineFileRecord | undefined> {
   // Try the active storage provider first (single source of truth for blobs).
   const provider = getActiveProvider();
-  if (provider) {
+  if (provider?.kind === "filesystem") {
     try {
       const blob = await provider.readFile(fileId);
       if (blob) {
@@ -145,7 +145,7 @@ export async function putFile(record: OfflineFileRecord): Promise<void> {
 
   // Write blob to the active provider (single source of truth).
   const provider = getActiveProvider();
-  if (provider) {
+  if (provider?.kind === "filesystem") {
     try {
       await provider.writeFile(record.fileId, cloned.blob);
     } catch (error) {
@@ -181,7 +181,7 @@ export async function deleteFile(fileId: string): Promise<void> {
 
   // Delete from active provider.
   const provider = getActiveProvider();
-  if (provider) {
+  if (provider?.kind === "filesystem") {
     try {
       await provider.deleteFile(fileId);
     } catch {

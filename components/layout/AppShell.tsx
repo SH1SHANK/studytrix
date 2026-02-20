@@ -4,6 +4,7 @@ import { CommandBar } from "@/components/command/CommandBar";
 import { ShareProgressDrawer } from "@/components/share/ShareProgressDrawer";
 import { AcademicProvider } from "@/components/layout/AcademicContext";
 import { Header } from "@/components/layout/Header";
+import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
 import { Toaster } from "@/components/ui/sonner";
 
 type AppShellProps = {
@@ -36,6 +37,9 @@ export function AppShell({
         <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
           {showHeader ? <Header title={headerTitle} hideFilters={hideHeaderFilters} /> : null}
           <main className="flex-1 overflow-y-auto scroll-smooth">
+            <div className="px-4 pt-3 sm:px-5">
+              <ConnectivityBanner />
+            </div>
             {children}
             <GlobalFooter />
           </main>

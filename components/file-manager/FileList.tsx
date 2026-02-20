@@ -23,7 +23,6 @@ import type { DownloadTask as DownloadManagerTask } from "@/features/download/do
 import { openLocalFirst } from "@/features/offline/offline.access";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
 import { autoPrefetch } from "@/features/offline/offline.prefetch";
-import { type DownloadTask } from "@/features/offline/offline.types";
 import { useSettingsStore } from "@/features/settings/settings.store";
 import { useMotionTokens } from "@/features/motion/motion.tokens";
 import {
@@ -258,22 +257,6 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
     [removeOffline],
   );
 
-  const fileRowsById = useMemo(() => {
-    return new Map(fileRows.map((row) => [row.id, row]));
-  }, [fileRows]);
-
-  const enqueuePrefetch = useCallback(
-    (task: DownloadTask): void => {
-      const item = fileRowsById.get(task.fileId);
-      if (!item || item.type !== "file") {
-        return;
-      }
-
-      void startDownload(item.id).catch(() => undefined);
-    },
-    [fileRowsById, startDownload],
-  );
-
   const activeDownloadsByFileId = useMemo(() => {
     const index = new Map<string, DownloadManagerTask>();
 
@@ -338,7 +321,6 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           autoPrefetch(
             item.id,
             fileRows.map((row) => row.id),
-            enqueuePrefetch,
           );
         }
 
@@ -353,7 +335,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         window.open(item.webViewLink, "_blank", "noopener,noreferrer");
       }
     },
-    [autoPrefetchEnabled, departmentSegment, enqueuePrefetch, fileRows, offlineFiles, router, semesterSegment],
+    [autoPrefetchEnabled, departmentSegment, fileRows, offlineFiles, router, semesterSegment],
   );
 
   // Loading state — skeleton cards matching real card dimensions

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/features/storage/storage.quota";
 import type { OfflineRecord } from "@/features/storage/storage.types";
+import { getFileMetadataWithCache } from "@/features/file/file-metadata.client";
 
 interface LargestFilesListProps {
   files: OfflineRecord[];
@@ -55,28 +56,10 @@ export function LargestFilesList({ files, onDelete }: LargestFilesListProps) {
       const resolvedEntries = await Promise.all(
         fileIdsNeedingName.map(async (fileId) => {
           try {
-            const response = await fetch(`/api/file/${encodeURIComponent(fileId)}/metadata`, {
-              method: "GET",
-              cache: "no-store",
+            const resolved = await getFileMetadataWithCache(fileId, {
               signal: controller.signal,
             });
-
-            if (!response.ok) {
-              return null;
-            }
-
-            const payload = (await response.json()) as unknown;
-            if (
-              !payload
-              || typeof payload !== "object"
-              || !("metadata" in payload)
-              || typeof payload.metadata !== "object"
-              || payload.metadata === null
-            ) {
-              return null;
-            }
-
-            const name = parseDisplayName((payload.metadata as Record<string, unknown>).name);
+            const name = parseDisplayName(resolved.metadata?.name);
             if (!name) {
               return null;
             }

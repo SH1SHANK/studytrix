@@ -7,6 +7,7 @@ import { runOfflineV2Migration } from "@/features/offline/offline.migration";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
 import { getFile } from "@/features/offline/offline.db";
 import { useSettingsStore } from "@/features/settings/settings.store";
+import { getFileMetadataWithCache } from "@/features/file/file-metadata.client";
 import "@/features/download/download.diagnostics";
 import {
   cancelDownload,
@@ -74,13 +75,34 @@ async function repairCompletedTaskMetadata(): Promise<void> {
       continue;
     }
 
+    const online = typeof navigator === "undefined" ? true : navigator.onLine;
+    const resolved = await getFileMetadataWithCache(task.fileId, {
+      allowNetwork: online,
+    });
+
+    if (resolved.metadata) {
+      const nextSize =
+        resolved.metadata.size > 0
+          ? resolved.metadata.size
+          : knownSize;
+      useDownloadStore.getState().updateTask(task.id, {
+        fileName: resolved.metadata.name || task.fileName,
+        mimeType: resolved.metadata.mimeType || task.mimeType,
+        size: nextSize > 0 ? nextSize : task.size,
+        loadedBytes: nextSize > 0 ? nextSize : task.loadedBytes,
+        totalBytes: nextSize > 0 ? nextSize : task.totalBytes,
+        updatedAt: Date.now(),
+      });
+      continue;
+    }
+
     const record = await getFile(task.fileId);
     if (!record || record.size <= 0) {
       continue;
     }
 
     useDownloadStore.getState().updateTask(task.id, {
-      mimeType: record.mimeType,
+      mimeType: record.mimeType || record.blob.type || "application/octet-stream",
       size: record.size,
       loadedBytes: record.size,
       totalBytes: record.size,
@@ -158,7 +180,13 @@ export function useDownloadManager() {
 
   const start = useCallback(async (fileId: string) => {
     vibrate(8);
-    return await startDownload(fileId);
+    try {
+      return await startDownload(fileId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not start download";
+      toast.error(message);
+      return "";
+    }
   }, []);
 
   const pause = useCallback((taskId: string) => {

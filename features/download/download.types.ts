@@ -6,6 +6,8 @@ export type DownloadState =
   | "failed"
   | "canceled";
 
+export type DownloadErrorCode = "OFFLINE" | "NETWORK" | "QUOTA" | "UNKNOWN";
+
 export interface DownloadTask {
   id: string;
   fileId: string;
@@ -18,8 +20,11 @@ export interface DownloadTask {
   totalBytes?: number;
   speedBytesPerSecond?: number;
   etaSeconds?: number;
+  networkHold?: boolean;
+  retryCount?: number;
   state: DownloadState;
   error?: string;
+  errorCode?: DownloadErrorCode;
   createdAt: number;
   updatedAt: number;
 }

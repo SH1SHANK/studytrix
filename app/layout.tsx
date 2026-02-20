@@ -7,6 +7,7 @@ import { SettingsProvider } from "@/components/providers/SettingsProvider";
 import { DownloadDrawer } from "@/components/download/DownloadDrawer";
 import { DownloadFloatingIndicator } from "@/components/download/DownloadFloatingIndicator";
 import { SelectionToolbar } from "@/components/file-manager/SelectionToolbar";
+import { OfflineRuntime } from "@/components/offline/OfflineRuntime";
 import { AssignTagsDrawer } from "@/components/tags/AssignTagsDrawer";
 import "./globals.css";
 
@@ -62,6 +63,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-background text-foreground antialiased transition-colors">
         <ThemeProvider>
           <SettingsProvider>
+            <OfflineRuntime />
             {children}
             <SelectionToolbar />
             <AssignTagsDrawer />

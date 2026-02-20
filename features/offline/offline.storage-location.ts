@@ -5,6 +5,7 @@ import { openDB, type IDBPDatabase } from "idb";
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface StorageProvider {
+  kind: "filesystem" | "indexeddb";
   writeFile(name: string, blob: Blob): Promise<void>;
   readFile(name: string): Promise<Blob | null>;
   deleteFile(name: string): Promise<void>;
@@ -198,6 +199,8 @@ export function clearConfig(): void {
 // ─── FileSystemAccessProvider ───────────────────────────────────────────────
 
 export class FileSystemAccessProvider implements StorageProvider {
+  readonly kind = "filesystem" as const;
+
   constructor(private readonly dirHandle: FileSystemDirectoryHandle) {}
 
   get displayPath(): string {
@@ -273,6 +276,8 @@ export class FileSystemAccessProvider implements StorageProvider {
 // ─── IndexedDBProvider ──────────────────────────────────────────────────────
 
 export class IndexedDBProvider implements StorageProvider {
+  readonly kind = "indexeddb" as const;
+
   async writeFile(name: string, blob: Blob): Promise<void> {
     const { putFile } = await import("./offline.db");
     await putFile({
