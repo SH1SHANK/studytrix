@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  Suspense,
-  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -37,10 +35,6 @@ import { Input } from "@/components/ui/input";
 
 import { SettingsCategory } from "./SettingsCategory";
 
-const LazySettingsCategory = lazy(() => import("./SettingsCategory"));
-
-const HEAVY_CATEGORIES = new Set(["Performance", "Danger Zone"]);
-
 interface CategoryGroup {
   category: string;
   items: SettingItem[];
@@ -72,7 +66,6 @@ export function SettingsLayout() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loadedHeavyCategories, setLoadedHeavyCategories] = useState<Set<string>>(new Set());
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [disableGlass] = useSetting("disable_glass_effects");
@@ -131,36 +124,6 @@ export function SettingsLayout() {
 
     return () => observer.disconnect();
   }, [categoryGroups]);
-
-  useEffect(() => {
-    if (!query.trim()) {
-      return;
-    }
-
-    setLoadedHeavyCategories((current) => {
-      const next = new Set(current);
-
-      for (const group of categoryGroups) {
-        if (HEAVY_CATEGORIES.has(group.category)) {
-          next.add(group.category);
-        }
-      }
-
-      return next;
-    });
-  }, [categoryGroups, query]);
-
-  const loadCategory = useCallback((category: string) => {
-    setLoadedHeavyCategories((current) => {
-      if (current.has(category)) {
-        return current;
-      }
-
-      const next = new Set(current);
-      next.add(category);
-      return next;
-    });
-  }, []);
 
   // Auto dismiss feedback
   useEffect(() => {
@@ -261,7 +224,7 @@ export function SettingsLayout() {
   return (
     <div className="mx-auto w-full max-w-3xl pb-24">
       {/* ── Header ─────────────────────────────────────────── */}
-      <header className="space-y-4">
+      <header className="space-y-4 mb-8">
         {/* Search */}
         <div className="relative">
           <IconSearch
@@ -274,7 +237,7 @@ export function SettingsLayout() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search settings..."
-            className="h-10 rounded-lg border-border bg-muted pl-10 text-sm border-border bg-card"
+            className="h-11 rounded-xl border-border bg-muted/50 pl-10 text-[15px] border-none shadow-sm focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-muted"
           />
         </div>
 
@@ -282,15 +245,15 @@ export function SettingsLayout() {
         <div className="md:hidden">
           <button
             onClick={() => setShowMobileNav((v) => !v)}
-            className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium text-foreground/80 border-border bg-card text-muted-foreground"
+            className="flex w-full items-center justify-between rounded-xl border border-border/40 bg-card px-4 py-3 text-[15px] font-medium text-foreground/80"
           >
             <span>
               {activeCategory ? formatCategoryName(activeCategory) : "Jump to section"}
             </span>
-            <IconChevronDown className={cn("size-4 transition-transform", showMobileNav && "rotate-180")} />
+            <IconChevronDown className={cn("size-4 transition-transform text-muted-foreground", showMobileNav && "rotate-180")} />
           </button>
           {showMobileNav && (
-            <div className="mt-1 rounded-lg border border-border bg-card shadow-md border-border bg-card">
+            <div className="mt-1.5 rounded-xl border border-border/40 bg-card shadow-lg overflow-hidden">
               {categoryGroups.map((group) => {
                 if (group.items.length === 0) return null;
                 return (
@@ -298,15 +261,15 @@ export function SettingsLayout() {
                     key={group.category}
                     onClick={() => scrollToCategory(group.category)}
                     className={cn(
-                      "flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition-colors",
-                      "border-b border-border/50 last:border-0 border-border",
+                      "flex w-full items-center justify-between px-4 py-3 text-left text-[14px] transition-colors",
+                      "border-b border-border/40 last:border-0",
                       activeCategory === group.category
-                        ? "bg-muted font-medium text-foreground bg-muted text-foreground"
-                        : "text-muted-foreground hover:bg-muted text-muted-foreground hover:bg-muted",
+                        ? "bg-accent/50 font-medium text-foreground"
+                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground",
                     )}
                   >
                     {formatCategoryName(group.category)}
-                    <span className="text-xs text-muted-foreground/80">{group.items.length}</span>
+                    <span className="text-xs text-muted-foreground/70">{group.items.length}</span>
                   </button>
                 );
               })}
@@ -315,8 +278,8 @@ export function SettingsLayout() {
         </div>
 
         {/* ── Desktop Sidebar Nav (hidden on mobile) ──────── */}
-        <nav className="hidden items-start gap-6 md:flex">
-          <div className="flex flex-wrap gap-1.5">
+        <nav className="hidden items-start gap-6 md:flex pt-4">
+          <div className="flex flex-wrap gap-2">
             {categoryGroups.map((group) => {
               if (group.items.length === 0) return null;
               return (
@@ -324,10 +287,10 @@ export function SettingsLayout() {
                   key={group.category}
                   onClick={() => scrollToCategory(group.category)}
                   className={cn(
-                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                    "rounded-xl px-4 py-2 text-[14px] font-medium transition-colors border outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                     activeCategory === group.category
-                      ? "bg-card text-foreground dark:bg-muted dark:text-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted text-muted-foreground hover:bg-muted",
+                      ? "bg-foreground text-background border-transparent"
+                      : "bg-transparent text-muted-foreground hover:bg-muted/60 border-border/60",
                   )}
                 >
                   {formatCategoryName(group.category)}
@@ -339,69 +302,29 @@ export function SettingsLayout() {
 
         {/* Feedback banners */}
         {status && (
-          <Alert className="animate-in fade-in slide-in-from-top-1">
-            <AlertDescription>{status}</AlertDescription>
+          <Alert className="animate-in fade-in slide-in-from-top-1 border-primary/20 bg-primary/5">
+            <AlertDescription className="text-primary">{status}</AlertDescription>
           </Alert>
         )}
         {error && (
-          <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-1">
-            <AlertDescription>{error}</AlertDescription>
+          <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-1 border-rose-500/20 bg-rose-500/5">
+            <AlertDescription className="text-rose-600 dark:text-rose-400">{error}</AlertDescription>
           </Alert>
         )}
       </header>
 
       {/* ── Categories ─────────────────────────────────────── */}
-      <main className="mt-6 space-y-8">
+      <main className="space-y-8">
         {categoryGroups.map((group) => {
           if (group.items.length === 0) return null;
 
-          const displayCategory = formatCategoryName(group.category);
-          const isHeavy = HEAVY_CATEGORIES.has(group.category);
-          const isLoaded = !isHeavy || loadedHeavyCategories.has(group.category);
-
-          if (!isLoaded) {
-            return (
-              <div key={group.category} id={`category-${group.category}`} data-category={group.category} className="scroll-mt-28">
-                <Card className="rounded-xl border border-border bg-card shadow-sm border-border bg-card">
-                  <CardContent className="flex flex-col items-center justify-center space-y-3 p-6 text-center">
-                    <h2 className="text-base font-semibold text-foreground">{displayCategory}</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Loaded on demand for better performance.
-                    </p>
-                    <Button type="button" size="sm" variant="secondary" onClick={() => loadCategory(group.category)}>
-                      Load {displayCategory}
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            );
-          }
-
-          if (isHeavy) {
-            return (
-              <div key={group.category} id={`category-${group.category}`} data-category={group.category} className="scroll-mt-28">
-                <Suspense
-                  fallback={(
-                    <Card className="rounded-xl border border-border bg-card shadow-sm border-border bg-card">
-                      <CardContent className="flex justify-center p-5 text-sm text-muted-foreground">
-                        Loading {displayCategory}...
-                      </CardContent>
-                    </Card>
-                  )}
-                >
-                  <LazySettingsCategory
-                    category={group.category}
-                    items={group.items}
-                    onAction={handleAction}
-                    onDangerAction={handleDangerAction}
-                  />
-                </Suspense>
-              </div>
-            );
-          }
-
           return (
-            <div key={group.category} id={`category-${group.category}`} data-category={group.category} className="scroll-mt-28">
+            <div
+              key={group.category}
+              id={`category-${group.category}`}
+              data-category={group.category}
+              className="scroll-mt-28"
+            >
               <SettingsCategory
                 category={group.category}
                 items={group.items}
@@ -414,30 +337,30 @@ export function SettingsLayout() {
       </main>
 
       {/* ── Data Management Footer ─────────────────────────── */}
-      <footer className="mt-10 space-y-3 border-t border-border pt-6 border-border">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+      <footer className="mt-12 space-y-4 border-t border-border/40 pt-8">
+        <h3 className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground pl-1 sm:pl-4">
           Data Management
         </h3>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-3 sm:px-4">
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={() => void handleExport()}
-            className="h-9 gap-1.5 rounded-lg text-xs"
+            className="h-10 gap-2 rounded-xl text-sm"
           >
-            <IconDownload className="size-3.5" />
-            Export
+            <IconDownload className="size-4" />
+            Export Settings
           </Button>
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={handleImportClick}
-            className="h-9 gap-1.5 rounded-lg text-xs"
+            className="h-10 gap-2 rounded-xl text-sm"
           >
-            <IconUpload className="size-3.5" />
-            Import
+            <IconUpload className="size-4" />
+            Import Settings
           </Button>
           <AlertDialog>
             <AlertDialogTrigger
@@ -446,21 +369,21 @@ export function SettingsLayout() {
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-9 gap-1.5 rounded-lg text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                  className="h-10 gap-2 rounded-xl text-sm text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/30 ml-auto"
                 >
-                  <IconRotate className="size-3.5" />
+                  <IconRotate className="size-4" />
                   Reset Defaults
                 </Button>
               }
             />
-            <AlertDialogContent>
+            <AlertDialogContent className="rounded-2xl">
               <AlertDialogHeader>
                 <AlertDialogTitle>Reset all settings?</AlertDialogTitle>
-                <AlertDialogDescription>This will restore local settings to default values.</AlertDialogDescription>
+                <AlertDialogDescription>This will restore local settings to default values. Your data and files will not be affected.</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction variant="destructive" onClick={() => reset()}>Reset</AlertDialogAction>
+                <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                <AlertDialogAction variant="destructive" className="rounded-xl" onClick={() => reset()}>Reset Everything</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

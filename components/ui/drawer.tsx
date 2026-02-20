@@ -22,7 +22,7 @@ function DrawerOverlay({
 }: React.ComponentProps<typeof DrawerPrimitive.Overlay>) {
   return (
     <DrawerPrimitive.Overlay
-      className={cn("fixed inset-0 z-50 bg-foreground/", className)}
+      className={cn("fixed inset-0 z-50 bg-black/40 backdrop-blur-md", className)}
       {...props}
     />
   );

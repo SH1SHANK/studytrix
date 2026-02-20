@@ -53,6 +53,15 @@ function normalizeByteCount(value: unknown): number | undefined {
   return Math.floor(parsed);
 }
 
+function normalizeMimeType(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function sanitizeTask(task: unknown): DownloadTask | null {
   if (!isRecord(task)) {
     return null;
@@ -94,6 +103,7 @@ function sanitizeTask(task: unknown): DownloadTask | null {
     fileId,
     fileName,
     courseCode: typeof task.courseCode === "string" ? task.courseCode : undefined,
+    mimeType: normalizeMimeType(task.mimeType),
     size: normalizeByteCount(task.size),
     progress: normalizedState === "completed" ? 100 : safeProgress,
     loadedBytes,
@@ -330,9 +340,12 @@ function ensureEventSubscriptions(): void {
 
   on("download:completed", ({ taskId }) => {
     const current = useDownloadStore.getState().tasks[taskId];
+    const finalizedTotalBytes = current?.totalBytes ?? current?.loadedBytes ?? current?.size;
     useDownloadStore.getState().updateTask(taskId, {
       progress: 100,
-      loadedBytes: current?.totalBytes ?? current?.loadedBytes,
+      loadedBytes: finalizedTotalBytes,
+      totalBytes: finalizedTotalBytes,
+      size: current?.size ?? finalizedTotalBytes,
       state: "completed",
       speedBytesPerSecond: undefined,
       etaSeconds: undefined,

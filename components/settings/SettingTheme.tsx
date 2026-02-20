@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { SettingItem } from "@/features/settings/settings.types";
 import { getThemeLabel } from "@/features/theme/theme.constants";
 import { SettingRowShell } from "./SettingCardShell";
+import { getSettingIcon } from "./setting-icons";
 
 type SettingThemeProps = {
   setting: SettingItem;
@@ -23,6 +24,7 @@ function SettingThemeComponent({ setting }: SettingThemeProps) {
         label={setting.label}
         description={setting.description}
         requiresRestart={setting.requiresRestart}
+        icon={getSettingIcon(setting.id)}
         trailing={
           <Button
             type="button"

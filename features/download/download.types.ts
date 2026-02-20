@@ -11,6 +11,7 @@ export interface DownloadTask {
   fileId: string;
   fileName: string;
   courseCode?: string;
+  mimeType?: string;
   size?: number;
   progress: number;
   loadedBytes?: number;

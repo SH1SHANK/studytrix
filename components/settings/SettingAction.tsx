@@ -2,9 +2,9 @@
 
 import { memo, useCallback, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import type { SettingItem } from "@/features/settings/settings.types";
 import { SettingRowShell } from "./SettingCardShell";
+import { getSettingIcon } from "./setting-icons";
 
 interface SettingActionProps {
   setting: SettingItem;
@@ -29,20 +29,12 @@ function SettingActionComponent({ setting, onAction }: SettingActionProps) {
 
   return (
     <SettingRowShell
-      label={setting.label}
+      label={pending ? "Running..." : setting.label}
       description={setting.description}
       requiresRestart={setting.requiresRestart}
-      trailing={
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => void handleClick()}
-          disabled={pending}
-          className="w-fit min-w-32"
-        >
-          {pending ? "Running..." : setting.label}
-        </Button>
-      }
+      icon={getSettingIcon(setting.id)}
+      onClick={() => void handleClick()}
+      disabled={pending}
     />
   );
 }

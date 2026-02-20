@@ -3,13 +3,9 @@
 import {
   IconArrowLeft,
   IconChevronDown,
-  IconDatabase,
-  IconSettings,
-  IconTag,
 } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,23 +13,20 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   useAcademicContext,
 } from "@/components/layout/AcademicContext";
 import { DownloadButton } from "@/components/download/DownloadButton";
 import { DEPARTMENT_MAP, getDepartmentName } from "@/lib/academic";
-import { ThemeBottomSheet } from "@/components/theme/ThemeBottomSheet";
-import { getThemeLabel } from "@/features/theme/theme.constants";
+import { SettingsMenu } from "@/components/settings/SettingsMenu";
 
 const DEPARTMENT_OPTIONS = Object.keys(DEPARTMENT_MAP);
 
 export function Header({ title, hideFilters }: { title?: string; hideFilters?: boolean } = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const { theme } = useTheme();
-  const [themeSheetOpen, setThemeSheetOpen] = useState(false);
+
   const { department, setDepartment, semester, setSemester } =
     useAcademicContext();
   const semesters = useMemo(() => Array.from({ length: 8 }, (_, i) => i + 1), []);
@@ -132,79 +125,7 @@ export function Header({ title, hideFilters }: { title?: string; hideFilters?: b
 
           <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             <DownloadButton className="h-9 gap-1.5 rounded-md px-2.5 text-sm" compact />
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    aria-label="Open settings"
-                    variant="ghost"
-                    size="icon"
-                    className="size-10 rounded-md transition-all duration-200 active:scale-[0.98] hover:bg-muted"
-                  />
-                }
-              >
-                <IconSettings className="size-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[260px] p-2">
-                <div className="mb-2 px-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Appearance</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-1.5 h-9 w-full justify-start rounded-lg border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted"
-                    onClick={() => setThemeSheetOpen(true)}
-                  >
-                    Theme: {getThemeLabel(theme)}
-                  </Button>
-                </div>
-                
-                <DropdownMenuSeparator />
-
-                <div className="mt-1.5 flex flex-col gap-0.5">
-                  {pathname !== "/settings" && (
-                    <DropdownMenuItem
-                      onClick={() => router.push("/settings")}
-                      className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
-                    >
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                        <IconSettings className="size-4 text-foreground/80 text-muted-foreground" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium leading-none text-foreground">Settings</span>
-                      </div>
-                    </DropdownMenuItem>
-                  )}
-                  
-                  <DropdownMenuItem
-                    onClick={() => router.push("/storage")}
-                    className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
-                  >
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
-                      <IconDatabase className="size-4 text-primary" />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium leading-none text-foreground">Storage Manager</span>
-                      <span className="text-[10px] leading-none text-muted-foreground">Review offline data</span>
-                    </div>
-                  </DropdownMenuItem>
-                  
-                  <DropdownMenuItem
-                    onClick={() => router.push("/tags")}
-                    className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
-                  >
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                      <IconTag className="size-4 text-foreground/80 text-muted-foreground" />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium leading-none text-foreground">Manage Tags</span>
-                      <span className="text-[10px] leading-none text-muted-foreground">Organize your files</span>
-                    </div>
-                  </DropdownMenuItem>
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <SettingsMenu />
           </div>
         </div>
 
@@ -214,7 +135,7 @@ export function Header({ title, hideFilters }: { title?: string; hideFilters?: b
           </p>
         )}
       </div>
-      <ThemeBottomSheet open={themeSheetOpen} onOpenChange={setThemeSheetOpen} />
+
     </header>
   );
 }

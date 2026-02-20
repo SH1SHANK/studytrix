@@ -274,6 +274,8 @@ export class DownloadQueue {
 
     this.runningCount += 1;
     this.notifyLifecycle({ taskId: entry.taskId, state: "running" });
+    let lastLoadedBytes = 0;
+    let lastTotalBytes = 0;
 
     try {
       await entry.handler({
@@ -281,6 +283,8 @@ export class DownloadQueue {
         emitProgress: (loadedBytes: number, totalBytes: number) => {
           const total = Math.max(totalBytes, 0);
           const loaded = Math.max(loadedBytes, 0);
+          lastLoadedBytes = loaded;
+          lastTotalBytes = total;
           const progress = total > 0
             ? clampProgress((loaded / total) * 100)
             : 0;
@@ -308,11 +312,13 @@ export class DownloadQueue {
       }
 
       entry.state = "completed";
+      const completedTotalBytes =
+        lastTotalBytes > 0 ? lastTotalBytes : Math.max(lastLoadedBytes, 0);
       this.notifyProgress({
         taskId: entry.taskId,
         progress: 100,
-        loadedBytes: 1,
-        totalBytes: 1,
+        loadedBytes: lastLoadedBytes,
+        totalBytes: completedTotalBytes,
       });
       this.notifyLifecycle({ taskId: entry.taskId, state: "completed" });
       this.entries.delete(entry.taskId);

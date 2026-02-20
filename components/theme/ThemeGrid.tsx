@@ -1,6 +1,6 @@
 "use client";
 
-import { IconCheck } from "@tabler/icons-react";
+import { IconCheck, IconSun, IconMoon, IconTree, IconSunset, IconCircleDashed, IconMoonStars, IconHexagon } from "@tabler/icons-react";
 
 import {
   type ThemeId,
@@ -29,6 +29,28 @@ function getThemesByIds(ids: readonly ThemeId[]) {
     .filter((themeOption): themeOption is (typeof THEMES)[number] => Boolean(themeOption));
 }
 
+function getThemeIcon(id: ThemeId) {
+  const props = { className: "size-4 text-muted-foreground mr-2 shrink-0" };
+  switch (id) {
+    case "classic":
+      return <IconSun {...props} />;
+    case "midnight":
+      return <IconMoon {...props} />;
+    case "forest":
+      return <IconTree {...props} />;
+    case "sunset":
+      return <IconSunset {...props} />;
+    case "minimal":
+      return <IconCircleDashed {...props} />;
+    case "eclipse":
+      return <IconMoonStars {...props} />;
+    case "graphite":
+      return <IconHexagon {...props} />;
+    default:
+      return <IconSun {...props} />;
+  }
+}
+
 export function ThemeGrid({ currentTheme, onSelect }: ThemeGridProps) {
   const lightThemes = getThemesByIds(LIGHT_THEME_IDS);
   const darkThemes = getThemesByIds(DARK_THEME_IDS);
@@ -49,26 +71,29 @@ export function ThemeGrid({ currentTheme, onSelect }: ThemeGridProps) {
         )}
       >
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-medium text-card-foreground">
-            {theme.label}
-          </span>
+          <div className="flex items-center min-w-0">
+            {getThemeIcon(theme.id)}
+            <span className="text-sm font-medium text-card-foreground truncate">
+              {theme.label}
+            </span>
+          </div>
           {isSelected ? (
-            <span className="rounded-full bg-primary p-1 text-primary-foreground">
+            <span className="rounded-full bg-primary p-1 text-primary-foreground ml-2 shrink-0">
               <IconCheck className="size-3" stroke={3} />
             </span>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
           <span
-            className="size-4 rounded-full border border-border/60"
+            className="size-4 rounded-full border border-border/60 shrink-0"
             style={{ backgroundColor: theme.preview.primary }}
           />
           <span
-            className="size-4 rounded-full border border-border/60"
+            className="size-4 rounded-full border border-border/60 shrink-0"
             style={{ backgroundColor: theme.preview.background }}
           />
           <span
-            className="size-4 rounded-full border border-border/60"
+            className="size-4 rounded-full border border-border/60 shrink-0"
             style={{ backgroundColor: theme.preview.accent }}
           />
         </div>

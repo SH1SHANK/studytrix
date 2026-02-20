@@ -36,6 +36,7 @@ import type { FilterMode, TagAssignment } from "@/features/tags/tag.types";
 import { getDepartmentName } from "@/lib/academic";
 import { DOWNLOAD_BUTTON_ELEMENT_ID, useDownloadManager } from "@/ui/hooks/useDownloadManager";
 import { useSetting } from "@/ui/hooks/useSettings";
+import { SettingsMenu } from "@/components/settings/SettingsMenu";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -435,15 +436,7 @@ export function DashboardGrid() {
               </span>
             ) : null}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-10 rounded-lg transition-all hover:bg-muted/60 active:scale-[0.97]"
-            aria-label="Settings"
-            onClick={() => router.push("/settings")}
-          >
-            <IconSettings className="size-[18px] text-muted-foreground" />
-          </Button>
+          <SettingsMenu />
         </div>
       </div>
 

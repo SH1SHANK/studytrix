@@ -46,10 +46,44 @@ function openInNewTab(url: string): boolean {
   return popup !== null;
 }
 
+function openPendingTab(): Window | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const popup = window.open("about:blank", "_blank");
+  if (!popup) {
+    return null;
+  }
+
+  try {
+    popup.opener = null;
+  } catch {
+    // Best effort hardening.
+  }
+
+  return popup;
+}
+
+function navigatePendingTab(popup: Window | null, url: string): boolean {
+  if (!popup || popup.closed) {
+    return openInNewTab(url);
+  }
+
+  try {
+    popup.location.replace(url);
+    popup.focus();
+    return true;
+  } catch {
+    return openInNewTab(url);
+  }
+}
+
 export async function openLocalFirst(
   fileId: string,
   fallbackUrl?: string,
 ): Promise<boolean> {
+  const pendingTab = openPendingTab();
   const blob = await getBlob(fileId);
 
   if (blob) {
@@ -57,10 +91,10 @@ export async function openLocalFirst(
     const localUrl = URL.createObjectURL(blob);
     blobUrlByFileId.set(fileId, localUrl);
 
-    const opened = openInNewTab(localUrl);
+    const opened = navigatePendingTab(pendingTab, localUrl);
     if (!opened) {
       revoke(fileId);
-      return openInNewTab(getFallbackUrl(fileId, fallbackUrl));
+      return navigatePendingTab(pendingTab, getFallbackUrl(fileId, fallbackUrl));
     }
 
     const timer = window.setTimeout(() => {
@@ -73,5 +107,5 @@ export async function openLocalFirst(
     return true;
   }
 
-  return openInNewTab(getFallbackUrl(fileId, fallbackUrl));
+  return navigatePendingTab(pendingTab, getFallbackUrl(fileId, fallbackUrl));
 }

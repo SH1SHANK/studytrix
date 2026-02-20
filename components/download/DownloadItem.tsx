@@ -65,6 +65,43 @@ function formatEta(seconds: number): string {
   return `${hours}h ${minutes}m left`;
 }
 
+function formatMimeType(mimeType: string | undefined): string | null {
+  if (!mimeType) {
+    return null;
+  }
+
+  const normalized = mimeType.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const commonLabels: Record<string, string> = {
+    "application/pdf": "PDF",
+    "application/zip": "ZIP",
+    "application/json": "JSON",
+    "text/plain": "Text",
+    "text/csv": "CSV",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PPTX",
+  };
+
+  if (commonLabels[normalized]) {
+    return commonLabels[normalized];
+  }
+
+  const slashIndex = normalized.indexOf("/");
+  if (slashIndex > 0 && slashIndex < normalized.length - 1) {
+    const subtype = normalized.slice(slashIndex + 1);
+    if (subtype.startsWith("vnd.")) {
+      return normalized;
+    }
+    return subtype.toUpperCase();
+  }
+
+  return normalized;
+}
+
 const STATUS_CONFIG: Record<
   DownloadTask["state"],
   { label: string; className: string }
@@ -133,6 +170,13 @@ function DownloadItemComponent({
   const etaLabel = hasEta ? formatEta(task.etaSeconds ?? 0) : null;
 
   const metaParts = [byteLabel, speedLabel, etaLabel].filter(Boolean);
+  const completedSize =
+    task.totalBytes
+    ?? task.size
+    ?? task.loadedBytes
+    ?? 0;
+  const completedMime = formatMimeType(task.mimeType);
+  const secondaryMeta = [task.courseCode, completedMime].filter(Boolean).join(" · ");
 
   return (
     <article className="rounded-xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 border-border bg-card">
@@ -143,7 +187,7 @@ function DownloadItemComponent({
             {task.fileName}
           </h3>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {task.courseCode ?? "General"}
+            {secondaryMeta || "General"}
           </p>
         </div>
 
@@ -178,9 +222,9 @@ function DownloadItemComponent({
       )}
 
       {/* Completed meta */}
-      {task.state === "completed" && hasKnownTotal && (
+      {task.state === "completed" && completedSize > 0 && (
         <p className="mt-1.5 text-[11px] text-muted-foreground/80">
-          {formatBytes(task.totalBytes ?? 0)}
+          {formatBytes(completedSize)}
         </p>
       )}
 

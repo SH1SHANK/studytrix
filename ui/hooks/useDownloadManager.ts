@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { runOfflineV2Migration } from "@/features/offline/offline.migration";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
+import { getFile } from "@/features/offline/offline.db";
 import { useSettingsStore } from "@/features/settings/settings.store";
 import "@/features/download/download.diagnostics";
 import {
@@ -55,6 +56,36 @@ async function cleanupLegacyDownloadServiceWorker(): Promise<void> {
     );
   } catch {
     // Best effort cleanup: SW removal should never block download UI.
+  }
+}
+
+async function repairCompletedTaskMetadata(): Promise<void> {
+  const snapshot = useDownloadStore.getState().tasks;
+  const entries = Object.values(snapshot);
+
+  for (const task of entries) {
+    if (task.state !== "completed") {
+      continue;
+    }
+
+    const knownSize = task.totalBytes ?? task.size ?? task.loadedBytes ?? 0;
+    const requiresRepair = knownSize <= 1 || !task.mimeType;
+    if (!requiresRepair) {
+      continue;
+    }
+
+    const record = await getFile(task.fileId);
+    if (!record || record.size <= 0) {
+      continue;
+    }
+
+    useDownloadStore.getState().updateTask(task.id, {
+      mimeType: record.mimeType,
+      size: record.size,
+      loadedBytes: record.size,
+      totalBytes: record.size,
+      updatedAt: Date.now(),
+    });
   }
 }
 
@@ -116,6 +147,7 @@ export function useDownloadManager() {
     void cleanupLegacyDownloadServiceWorker();
     ensureFeedbackSubscriptions();
     void useSettingsStore.getState().initialize();
+    void repairCompletedTaskMetadata();
     void (async () => {
       const didMigrate = await runOfflineV2Migration();
       if (didMigrate) {

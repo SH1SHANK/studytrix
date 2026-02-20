@@ -12,6 +12,7 @@ import {
 import { useSetting } from "@/ui/hooks/useSettings";
 import type { SettingItem } from "@/features/settings/settings.types";
 import { SettingRowShell } from "./SettingCardShell";
+import { getSettingIcon } from "./setting-icons";
 
 interface SettingSelectProps {
   setting: SettingItem;
@@ -39,6 +40,7 @@ function SettingSelectComponent({ setting }: SettingSelectProps) {
       label={setting.label}
       description={setting.description}
       requiresRestart={setting.requiresRestart}
+      icon={getSettingIcon(setting.id)}
       trailing={
         <div className="w-full sm:w-48">
           <Select value={selectedValue} onValueChange={handleChange}>

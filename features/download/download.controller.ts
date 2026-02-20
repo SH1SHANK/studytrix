@@ -420,6 +420,7 @@ class DownloadController {
       const updatedTask: DownloadTask = {
         ...existingTask,
         fileName: metadata.name,
+        mimeType: metadata.mimeType,
         size: metadata.size > 0 ? metadata.size : undefined,
         updatedAt: now(),
       };
@@ -522,6 +523,19 @@ class DownloadController {
     const mimeType = response.headers.get("content-type") ?? metadata?.mimeType ?? "application/octet-stream";
     const blob = new Blob([mergedBuffer], { type: mimeType });
     await enforceStorageLimit(blob.size);
+    const currentTask = this.tasks.get(taskId);
+    if (currentTask) {
+      const finalizedTask: DownloadTask = {
+        ...currentTask,
+        mimeType,
+        size: blob.size > 0 ? blob.size : currentTask.size,
+        loadedBytes: blob.size,
+        totalBytes: blob.size,
+        updatedAt: now(),
+      };
+      this.tasks.set(taskId, finalizedTask);
+      emit("download:added", { task: finalizedTask });
+    }
 
     const checksum = await generateChecksum(blob);
     const timestamp = now();
@@ -610,6 +624,7 @@ class DownloadController {
       id: taskId,
       fileId: normalizedFileId,
       fileName: metadata?.name ?? normalizedFileId,
+      mimeType: metadata?.mimeType,
       size: metadata?.size ? metadata.size : undefined,
       progress: alreadyOffline ? 100 : 0,
       loadedBytes: alreadyOffline ? metadata?.size ?? 0 : 0,

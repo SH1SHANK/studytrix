@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { useSetting } from "@/ui/hooks/useSettings";
 import type { SettingItem } from "@/features/settings/settings.types";
 import { SettingRowShell } from "./SettingCardShell";
+import { getSettingIcon } from "./setting-icons";
 
 interface SettingToggleProps {
   setting: SettingItem;
@@ -31,6 +32,7 @@ function SettingToggleComponent({ setting }: SettingToggleProps) {
       label={setting.label}
       description={setting.description}
       requiresRestart={setting.requiresRestart}
+      icon={getSettingIcon(setting.id)}
       trailing={
         <Switch
           id={`setting-${setting.id}`}
