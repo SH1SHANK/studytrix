@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { IconDeviceFloppy, IconRobotFace } from "@tabler/icons-react";
+import { IconRobotFace } from "@tabler/icons-react";
 
 import {
   Dialog,

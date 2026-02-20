@@ -2,10 +2,10 @@ import { jest } from "@jest/globals";
 
 import { runOfflineV2Migration } from "@/features/offline/offline.migration";
 
-const deleteDBMock = jest.fn(async () => undefined);
+const deleteDBMock = jest.fn<any>();
 
 jest.mock("idb", () => ({
-  deleteDB: (...args: unknown[]) => deleteDBMock(...args),
+  deleteDB: (...args: any[]) => deleteDBMock(...args),
 }));
 
 function createLocalStorage() {

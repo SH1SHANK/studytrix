@@ -7,6 +7,8 @@ import {
   IconList,
 } from "@tabler/icons-react";
 
+import { useShallow } from "zustand/react/shallow";
+import { useSelectionStore } from "@/features/selection/selection.store";
 import { DownloadButton } from "@/components/download/DownloadButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -72,6 +74,12 @@ export function useFileManagerViewMode() {
 export function ControlsBar() {
   const { viewMode, setViewMode } = useFileManagerViewMode();
   const [sortLabel, setSortLabel] = useState("Recent");
+  const { isSelectionMode, setSelectionMode } = useSelectionStore(
+    useShallow((state) => ({
+      isSelectionMode: state.isSelectionMode,
+      setSelectionMode: state.setSelectionMode,
+    }))
+  );
 
   return (
     <div className="sticky top-0 z-20 bg-[#F7F7F5] dark:bg-stone-950">
@@ -123,7 +131,17 @@ export function ControlsBar() {
         </div>
 
         {/* Right group — View toggle */}
-        <ToggleGroup
+        <div className="flex items-center gap-2">
+          <Button
+            variant={isSelectionMode ? "secondary" : "outline"}
+            size="sm"
+            className="h-9 rounded-lg font-medium shadow-sm transition-all duration-200 active:scale-[0.97]"
+            onClick={() => setSelectionMode(!isSelectionMode)}
+          >
+            {isSelectionMode ? "Cancel" : "Select"}
+          </Button>
+
+          <ToggleGroup
           type="single"
           value={[viewMode]}
           onValueChange={(value: string[]) => {
@@ -150,6 +168,7 @@ export function ControlsBar() {
             <IconList className="size-4" />
           </ToggleGroupItem>
         </ToggleGroup>
+        </div>
       </div>
     </div>
   );

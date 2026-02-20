@@ -2,22 +2,22 @@ import { jest } from "@jest/globals";
 
 import { FileService } from "@/features/file/file.service";
 
-const driveGetMock = jest.fn();
-const getCachedMetadataMock = jest.fn();
-const setCachedMetadataMock = jest.fn(async () => undefined);
+const driveGetMock = jest.fn<any>();
+const getCachedMetadataMock = jest.fn<any>();
+const setCachedMetadataMock = jest.fn<any>(async () => undefined);
 
 jest.mock("@/lib/drive.client", () => ({
   getDriveClient: () => ({
     files: {
-      get: (...args: unknown[]) => driveGetMock(...args),
+      get: (...args: any[]) => driveGetMock(...args),
     },
   }),
 }));
 
 jest.mock("@/features/file/file.cache", () => ({
   DEFAULT_FILE_METADATA_CACHE_TTL: 86400,
-  getCachedMetadata: (...args: unknown[]) => getCachedMetadataMock(...args),
-  setCachedMetadata: (...args: unknown[]) => setCachedMetadataMock(...args),
+  getCachedMetadata: (...args: any[]) => getCachedMetadataMock(...args),
+  setCachedMetadata: (...args: any[]) => setCachedMetadataMock(...args),
 }));
 
 describe("FileService.getMetadata", () => {

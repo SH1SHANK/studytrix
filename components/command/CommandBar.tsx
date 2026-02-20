@@ -19,8 +19,10 @@ import {
   IconBolt,
   IconClockHour4,
   IconDatabase,
+  IconDownload,
   IconFile,
   IconFolder,
+  IconHome,
   IconSearch,
   IconSettings,
   IconSparkles,
@@ -1272,33 +1274,97 @@ export function CommandBar({
     <>
       <div
         className={cn(
-          "fixed bottom-4 left-4 right-4 z-40 mx-auto w-auto max-w-3xl transition-all duration-200",
-          open ? "pointer-events-none translate-y-2 opacity-0" : "opacity-100",
+          "fixed bottom-4 left-0 right-0 z-40 mx-auto flex w-full max-w-fit items-center justify-center transition-all duration-300",
+          open ? "pointer-events-none translate-y-8 opacity-0" : "translate-y-0 opacity-100",
         )}
       >
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleOpenPalette}
-          className="h-auto w-full rounded-full p-0 text-left shadow-lg"
-          aria-label="Open command bar"
+        <motion.div 
+          className="flex h-16 items-center gap-1.5 rounded-full border border-stone-200/50 bg-white/70 px-3 shadow-[0_8px_32px_rgb(0,0,0,0.1)] backdrop-blur-2xl transition-colors hover:bg-white/95 dark:border-stone-700/50 dark:bg-stone-900/60 dark:hover:bg-stone-900/80"
+          whileHover={{ y: -2 }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
         >
-          <Command
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/")}
             className={cn(
-              "rounded-full border border-stone-200/70 bg-white p-0 shadow-lg transition-all duration-200 hover:-translate-y-px hover:border-stone-300",
-              "dark:border-stone-700 dark:bg-stone-900 dark:hover:border-stone-600",
+              "h-11 w-11 shrink-0 rounded-full transition-all",
+              !["/tags", "/downloads", "/storage", "/settings"].includes(pathname)
+                ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400"
+                : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
             )}
+            title="Home"
           >
-            <div className="flex h-12 items-center gap-3 px-4 text-sm text-stone-500 dark:text-stone-400">
-              <IconSearch className="size-4" />
-              <span>{placeholder}</span>
-              <CommandShortcut className="hidden sm:inline">⌘K</CommandShortcut>
-              <span className="ml-auto rounded-md border border-stone-300 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-stone-500 dark:border-stone-700 dark:text-stone-400">
-                {isFolderScope ? activeFolderTitle : "Global"}
-              </span>
+            <IconHome className="size-5" />
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/downloads")}
+            className={cn(
+              "h-11 w-11 shrink-0 rounded-full transition-all",
+              pathname.startsWith("/downloads")
+                ? "bg-sky-50 text-sky-600 dark:bg-sky-500/20 dark:text-sky-400"
+                : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+            )}
+            title="Downloads"
+          >
+            <IconDownload className="size-5" />
+          </Button>
+
+          <div className="mx-1.5 h-8 w-px bg-stone-200/80 dark:bg-stone-700/80" />
+
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleOpenPalette}
+            className="group flex h-12 w-48 items-center justify-between gap-2 rounded-full border border-blue-200/60 bg-blue-50/80 px-4 font-normal text-blue-600 shadow-sm transition-all hover:scale-[1.03] hover:bg-blue-100/80 hover:text-blue-700 hover:shadow max-sm:w-14 max-sm:justify-center max-sm:px-0 dark:border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30 dark:hover:text-blue-200"
+            title="Search command palette"
+          >
+            <div className="flex items-center gap-2">
+              <IconSearch className="size-5 group-hover:text-blue-700 dark:group-hover:text-blue-200" />
+              <span className="max-sm:hidden">{placeholder.split(" ")[0]}...</span>
             </div>
-          </Command>
-        </Button>
+            <CommandShortcut className="hidden bg-blue-100/50 text-blue-600 dark:border-blue-500/40 dark:bg-blue-500/30 dark:text-blue-300 sm:inline">⌘K</CommandShortcut>
+          </Button>
+
+          <div className="mx-1.5 h-8 w-px bg-stone-200/80 dark:bg-stone-700/80" />
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/storage")}
+            className={cn(
+              "h-11 w-11 shrink-0 rounded-full transition-all",
+              pathname.startsWith("/storage")
+                ? "bg-amber-50 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
+                : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+            )}
+            title="Storage"
+          >
+            <IconDatabase className="size-5" />
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/settings")}
+            className={cn(
+              "h-11 w-11 shrink-0 rounded-full transition-all",
+              pathname.startsWith("/settings")
+                ? "bg-stone-100 text-stone-900 dark:bg-stone-800/80 dark:text-stone-100"
+                : "text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+            )}
+            title="Settings"
+          >
+            <IconSettings className="size-5" />
+          </Button>
+        </motion.div>
       </div>
 
       <AnimatePresence>

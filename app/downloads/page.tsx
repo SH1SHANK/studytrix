@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { IconDownload, IconRefresh, IconTrash } from "@tabler/icons-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -97,59 +98,72 @@ export default function DownloadsPage() {
   }, []);
 
   return (
-    <AppShell>
-      <main className="space-y-4 px-4 py-4">
-        <header>
-          <h1>Downloads</h1>
-          <p>Manage queue, progress, and completed files.</p>
+    <AppShell headerTitle="Downloads" hideHeaderFilters={true}>
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 pb-24 sm:px-5">
+        {/* ── Header ─────────────────────────────────────── */}
+        <header className="mb-6 space-y-4">
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">Active</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-stone-900 dark:text-stone-100">
+                {downloadingCount + queuedCount}
+              </p>
+            </div>
+            <div className="rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">Completed</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-stone-900 dark:text-stone-100">
+                {completedCount}
+              </p>
+            </div>
+            <div className="rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">Offline</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-stone-900 dark:text-stone-100">
+                {formatBytes(stats?.totalBytes ?? 0)}
+              </p>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={clearCompleted}
+              className="h-8 gap-1.5 rounded-lg text-xs"
+            >
+              <IconTrash className="size-3.5" />
+              Clear completed
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => { void refreshStats(); }}
+              className="h-8 gap-1.5 rounded-lg text-xs"
+            >
+              <IconRefresh className="size-3.5" />
+              Refresh
+            </Button>
+          </div>
         </header>
 
-        <section aria-label="Storage summary">
-          <p>Offline files: {stats?.totalFiles ?? 0}</p>
-          <p>Offline size: {formatBytes(stats?.totalBytes ?? 0)}</p>
-          <p>Quota used: {formatBytes(stats?.usage ?? 0)} / {formatBytes(stats?.quota ?? 0)}</p>
-        </section>
-
-        <section aria-label="Download summary">
-          <p>Downloading: {downloadingCount}</p>
-          <p>Queued: {queuedCount}</p>
-          <p>Completed: {completedCount}</p>
-        </section>
-
-        <section aria-label="Download actions">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              clearCompleted();
+        {/* ── Downloads List ──────────────────────────────── */}
+        <main className="mt-6">
+          <DownloadList
+            tasks={list}
+            onPause={pauseDownload}
+            onResume={resumeDownload}
+            onCancel={cancelDownload}
+            onRemove={removeTask}
+            onRetry={(task) => {
+              void startDownload(task.fileId);
             }}
-          >
-            Clear completed
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void refreshStats();
-            }}
-          >
-            Refresh stats
-          </Button>
-        </section>
-
-        <DownloadList
-          tasks={list}
-          onPause={pauseDownload}
-          onResume={resumeDownload}
-          onCancel={cancelDownload}
-          onRemove={removeTask}
-          onRetry={(task) => {
-            void startDownload(task.fileId);
-          }}
-          onOpenFile={handleOpenFile}
-        />
-      </main>
+            onOpenFile={handleOpenFile}
+          />
+        </main>
+      </div>
     </AppShell>
   );
 }

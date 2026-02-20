@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  animate,
   motion,
   useMotionValue,
   useTransform,
@@ -11,16 +12,22 @@ import {
   IconCloudDown,
   IconFolder,
   IconStar,
-  IconTrash,
+  IconStarFilled,
+  IconTag,
 } from "@tabler/icons-react";
+import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@/lib/utils";
 import { useTagStore } from "@/features/tags/tag.store";
+import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { Button } from "@/components/ui/button";
 import { FolderActionsMenu } from "@/components/folder/FolderActionsMenu";
 
-const ACTION_PANEL_WIDTH = 132;
-const SNAP_THRESHOLD = 60;
+const ACTION_PANEL_WIDTH = 180;
+const SNAP_THRESHOLD = 80;
+const VELOCITY_THRESHOLD = 250;
+
+const SPRING_CONFIG = { type: "spring" as const, stiffness: 320, damping: 30, mass: 0.8 };
 
 type ListRowProps = {
   id: string;
@@ -34,6 +41,12 @@ type ListRowProps = {
 
 const noop = () => {};
 
+function triggerHaptic(duration = 8) {
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    navigator.vibrate(duration);
+  }
+}
+
 export function ListRow({
   id,
   title,
@@ -45,28 +58,58 @@ export function ListRow({
 }: ListRowProps) {
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const suppressClickRef = useRef(false);
-  const isStarred = useTagStore((state) => Boolean(state.assignments[id]?.starred));
-  const toggleStar = useTagStore((state) => state.toggleStar);
+
+  const { isStarred, toggleStar } = useTagStore(
+    useShallow((state) => ({
+      isStarred: Boolean(state.assignments[id]?.starred),
+      toggleStar: state.toggleStar,
+    })),
+  );
+
+  const { openDrawer } = useTagAssignmentStore(
+    useShallow((state) => ({
+      openDrawer: state.openDrawer,
+    })),
+  );
 
   const x = useMotionValue(0);
-  const actionOpacity = useTransform(
+
+  // Progress 0 → 1 as swipe reveals actions
+  const progress = useTransform(
     x,
-    [-ACTION_PANEL_WIDTH, -30, 0],
-    [1, 0.5, 0],
+    [-ACTION_PANEL_WIDTH, -ACTION_PANEL_WIDTH * 0.3, 0],
+    [1, 0.3, 0],
   );
+
+  // Staggered opacity for each action button (left → right reveal)
+  const starOpacity = useTransform(progress, [0, 0.25, 0.6], [0, 0, 1]);
+  const offlineOpacity = useTransform(progress, [0, 0.35, 0.7], [0, 0, 1]);
+  const tagsOpacity = useTransform(progress, [0, 0.45, 0.8], [0, 0, 1]);
 
   // Detect touch device
   useEffect(() => {
     setIsTouchDevice(window.matchMedia("(pointer: coarse)").matches);
   }, []);
 
-  // Sync with parent controlled open state — close when another row opens
+  // Sync with parent controlled open state
   useEffect(() => {
-    if (!isOpen && x.get() !== 0) {
-      x.set(0);
+    const current = x.get();
+    if (isOpen && current > -ACTION_PANEL_WIDTH + 5) {
+      void animate(x, -ACTION_PANEL_WIDTH, SPRING_CONFIG);
+    } else if (!isOpen && current < -5) {
+      void animate(x, 0, SPRING_CONFIG);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, x]);
+
+  const snapOpen = useCallback(() => {
+    triggerHaptic(6);
+    void animate(x, -ACTION_PANEL_WIDTH, SPRING_CONFIG);
+    onSwipeOpen?.(id);
+  }, [id, onSwipeOpen, x]);
+
+  const snapClose = useCallback(() => {
+    void animate(x, 0, SPRING_CONFIG);
+  }, [x]);
 
   function handleDragStart() {
     suppressClickRef.current = true;
@@ -76,13 +119,14 @@ export function ListRow({
     _event: MouseEvent | TouchEvent | PointerEvent,
     info: PanInfo,
   ) {
-    if (info.offset.x < -SNAP_THRESHOLD) {
-      // Snap open
-      x.set(-ACTION_PANEL_WIDTH);
-      onSwipeOpen?.(id);
+    const shouldOpen =
+      info.offset.x < -SNAP_THRESHOLD ||
+      info.velocity.x < -VELOCITY_THRESHOLD;
+
+    if (shouldOpen) {
+      snapOpen();
     } else {
-      // Snap closed
-      x.set(0);
+      snapClose();
     }
 
     requestAnimationFrame(() => {
@@ -95,66 +139,89 @@ export function ListRow({
 
     // If swiped open, close on tap
     if (x.get() < -10) {
-      x.set(0);
+      snapClose();
       return;
     }
 
     onOpen();
   }
 
-  function handleToggleStar() {
-    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate(8);
-    }
+  const handleToggleStar = useCallback(() => {
+    triggerHaptic(6);
     void toggleStar(id).catch(() => undefined);
-  }
+  }, [id, toggleStar]);
+
+  const handleManageTags = useCallback(() => {
+    triggerHaptic();
+    openDrawer([{ id, type: "folder" }]);
+  }, [id, openDrawer]);
 
   return (
-    <div className="relative overflow-hidden rounded-lg">
-      {/* Action Layer — static, behind content, always mounted */}
+    <div className="relative overflow-hidden rounded-xl">
+      {/* ── Action Panel (behind content) ─────────────────── */}
       <motion.div
-        className="absolute inset-y-0 right-0 z-0 flex w-[132px] items-center justify-around bg-stone-800 dark:bg-stone-700"
-        style={{ opacity: actionOpacity }}
+        className="absolute inset-y-0 right-0 z-0 flex w-[180px] items-center justify-around rounded-r-xl bg-gradient-to-l from-stone-900 via-stone-850 to-stone-800 px-1 dark:from-stone-800 dark:via-stone-750 dark:to-stone-700"
+        style={{ opacity: progress }}
       >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={isStarred ? "Unstar folder" : "Star folder"}
-          className={cn(
-            "flex h-11 w-11 items-center justify-center rounded-md transition-colors duration-200 hover:bg-stone-700 dark:hover:bg-stone-600",
-            isStarred ? "text-amber-300" : "text-amber-500",
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleToggleStar();
-          }}
-        >
-          <IconStar className="size-4 opacity-90" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Make available offline"
-          className="flex h-11 w-11 items-center justify-center rounded-md text-stone-300 transition-colors duration-200 hover:bg-stone-700 hover:text-stone-100 dark:hover:bg-stone-600"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <IconCloudDown className="size-4 opacity-80" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Delete folder"
-          className="flex h-11 w-11 items-center justify-center rounded-md text-stone-300 transition-colors duration-200 hover:bg-stone-700 hover:text-rose-400 dark:hover:bg-stone-600"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <IconTrash className="size-4 opacity-80" />
-        </Button>
+        {/* Star Action */}
+        <motion.div style={{ opacity: starOpacity }}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={isStarred ? "Unstar folder" : "Star folder"}
+            className={cn(
+              "flex h-14 w-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors duration-150",
+              isStarred
+                ? "text-amber-300 hover:bg-amber-500/15 hover:text-amber-200"
+                : "text-amber-500 hover:bg-amber-500/15 hover:text-amber-300",
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleStar();
+            }}
+          >
+            {isStarred ? (
+              <IconStarFilled className="size-5" />
+            ) : (
+              <IconStar className="size-5" />
+            )}
+            <span>{isStarred ? "Unstar" : "Star"}</span>
+          </Button>
+        </motion.div>
+
+        {/* Offline Action */}
+        <motion.div style={{ opacity: offlineOpacity }}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Make available offline"
+            className="flex h-14 w-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium text-sky-400 transition-colors duration-150 hover:bg-sky-500/15 hover:text-sky-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <IconCloudDown className="size-5" />
+            <span>Offline</span>
+          </Button>
+        </motion.div>
+
+        {/* Tags Action */}
+        <motion.div style={{ opacity: tagsOpacity }}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Assign tags"
+            className="flex h-14 w-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium text-indigo-400 transition-colors duration-150 hover:bg-indigo-500/15 hover:text-indigo-300"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleManageTags();
+            }}
+          >
+            <IconTag className="size-5" />
+            <span>Tags</span>
+          </Button>
+        </motion.div>
       </motion.div>
 
-      {/* Draggable Content Layer — slides left to reveal actions */}
+      {/* ── Draggable Content ─────────────────────────────── */}
       <motion.div
         role="button"
         tabIndex={0}
@@ -166,21 +233,23 @@ export function ListRow({
           }
         }}
         className={cn(
-          "relative z-10 flex h-16 cursor-pointer items-center gap-3 rounded-lg border px-4",
+          "relative z-10 flex h-16 cursor-pointer items-center gap-3 rounded-xl border px-4 shadow-sm transition-shadow duration-200",
+          "hover:shadow-md active:scale-[0.99]",
           variant === "accent"
             ? "border-indigo-200/70 bg-indigo-50 dark:border-indigo-800/50 dark:bg-indigo-950/50"
             : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
+          isOpen && "ring-1 ring-indigo-400/30",
         )}
         style={{ x }}
         drag={isTouchDevice ? "x" : false}
         dragConstraints={{ left: -ACTION_PANEL_WIDTH, right: 0 }}
-        dragElastic={0.05}
+        dragDirectionLock
+        dragElastic={0.08}
         dragMomentum={false}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        transition={{ type: "spring", stiffness: 350, damping: 30 }}
       >
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-stone-100 text-indigo-600 dark:bg-stone-800 dark:text-indigo-400">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-indigo-600 dark:bg-stone-800 dark:text-indigo-400">
           <IconFolder className="size-5" />
         </div>
 
@@ -193,7 +262,7 @@ export function ListRow({
           </p>
         </div>
 
-        {/* Desktop: show actions menu; hidden on mobile where swipe is used */}
+        {/* Desktop: actions menu; hidden on mobile where swipe is used */}
         <div className="ml-auto pl-2">
           <FolderActionsMenu
             entityId={id}

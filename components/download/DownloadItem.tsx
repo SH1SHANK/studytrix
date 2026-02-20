@@ -9,8 +9,10 @@ import {
   IconX,
   IconCheck,
   IconAlertTriangle,
+  IconRefresh,
 } from "@tabler/icons-react";
 
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { DownloadTask } from "@/features/download/download.types";
@@ -63,6 +65,36 @@ function formatEta(seconds: number): string {
   return `${hours}h ${minutes}m left`;
 }
 
+const STATUS_CONFIG: Record<
+  DownloadTask["state"],
+  { label: string; className: string }
+> = {
+  downloading: {
+    label: "Downloading",
+    className: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+  },
+  queued: {
+    label: "Queued",
+    className: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400",
+  },
+  paused: {
+    label: "Paused",
+    className: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  },
+  completed: {
+    label: "Completed",
+    className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  },
+  canceled: {
+    label: "Canceled",
+    className: "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
+  },
+  failed: {
+    label: "Failed",
+    className: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+  },
+};
+
 function DownloadItemComponent({
   task,
   onPause,
@@ -72,18 +104,9 @@ function DownloadItemComponent({
   onRetry,
   onOpenFile,
 }: DownloadItemProps) {
-  const statusLabel =
-    task.state === "queued"
-      ? "Queued"
-      : task.state === "downloading"
-        ? "Downloading"
-        : task.state === "paused"
-          ? "Paused"
-          : task.state === "completed"
-            ? "Completed"
-            : task.state === "canceled"
-              ? "Canceled"
-              : "Failed";
+  const status = STATUS_CONFIG[task.state];
+  const isActive = task.state === "downloading" || task.state === "queued";
+
   const hasKnownTotal =
     typeof task.totalBytes === "number"
     && Number.isFinite(task.totalBytes)
@@ -100,6 +123,7 @@ function DownloadItemComponent({
     typeof task.etaSeconds === "number"
     && Number.isFinite(task.etaSeconds)
     && task.etaSeconds > 0;
+
   const byteLabel = hasKnownTotal
     ? `${formatBytes(task.loadedBytes ?? 0)} / ${formatBytes(task.totalBytes ?? 0)}`
     : hasLoadedBytes
@@ -108,89 +132,114 @@ function DownloadItemComponent({
   const speedLabel = hasSpeed ? `${formatBytes(task.speedBytesPerSecond ?? 0)}/s` : null;
   const etaLabel = hasEta ? formatEta(task.etaSeconds ?? 0) : null;
 
+  const metaParts = [byteLabel, speedLabel, etaLabel].filter(Boolean);
+
   return (
-    <article>
-      <div>
-        <h3>{task.fileName}</h3>
-        <p>{task.courseCode ?? "General"}</p>
+    <article className="rounded-xl border border-stone-200 bg-white p-3.5 shadow-sm transition-all duration-200 dark:border-stone-800 dark:bg-stone-900">
+      {/* Top row: filename + status badge */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-medium text-stone-900 dark:text-stone-100">
+            {task.fileName}
+          </h3>
+          <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
+            {task.courseCode ?? "General"}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {isActive && (
+            <IconLoader2 className="size-3.5 animate-spin text-sky-500" />
+          )}
+          {task.state === "failed" && (
+            <IconAlertTriangle className="size-3.5 text-rose-500" />
+          )}
+          <span className={cn("inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold", status.className)}>
+            {status.label}
+          </span>
+        </div>
       </div>
 
-      <div>
-        <span>{statusLabel}</span>
-        <span>{Math.round(task.progress)}%</span>
-      </div>
+      {/* Progress bar */}
+      {(task.state === "downloading" || task.state === "paused" || task.state === "queued") && (
+        <div className="mt-2.5">
+          <Progress value={task.progress} className="h-1.5" />
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-[11px] font-medium tabular-nums text-stone-500 dark:text-stone-400">
+              {Math.round(task.progress)}%
+            </span>
+            {metaParts.length > 0 && (
+              <span className="text-[11px] text-stone-400 dark:text-stone-500">
+                {metaParts.join(" · ")}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
-      <Progress value={task.progress} />
-
-      {byteLabel || speedLabel || etaLabel ? (
-        <p>
-          {[byteLabel, speedLabel, etaLabel].filter(Boolean).join(" • ")}
+      {/* Completed meta */}
+      {task.state === "completed" && hasKnownTotal && (
+        <p className="mt-1.5 text-[11px] text-stone-400 dark:text-stone-500">
+          {formatBytes(task.totalBytes ?? 0)}
         </p>
-      ) : null}
+      )}
 
-      {task.error ? <p>{task.error}</p> : null}
+      {/* Error message */}
+      {task.error && (
+        <p className="mt-1.5 rounded-md bg-rose-50 px-2 py-1 text-[11px] text-rose-600 dark:bg-rose-950/20 dark:text-rose-400">
+          {task.error}
+        </p>
+      )}
 
-      <div>
-        {task.state === "downloading" ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => onPause(task.id)}>
-            <IconPlayerPause />
-            Pause
-          </Button>
-        ) : null}
+      {/* Action buttons */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        {task.state === "downloading" && (
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => onPause(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px]">
+              <IconPlayerPause className="size-3" />
+              Pause
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => onCancel(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px] text-stone-500">
+              <IconX className="size-3" />
+              Cancel
+            </Button>
+          </>
+        )}
 
-        {task.state === "queued" ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => onCancel(task.id)}>
-            <IconX />
+        {task.state === "queued" && (
+          <Button type="button" variant="outline" size="sm" onClick={() => onCancel(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px] text-stone-500">
+            <IconX className="size-3" />
             Cancel
           </Button>
-        ) : null}
+        )}
 
-        {task.state === "paused" ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => onResume(task.id)}>
-            <IconPlayerPlay />
+        {task.state === "paused" && (
+          <Button type="button" variant="outline" size="sm" onClick={() => onResume(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px]">
+            <IconPlayerPlay className="size-3" />
             Resume
           </Button>
-        ) : null}
+        )}
 
-        {task.state === "failed" ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => onRetry(task)}>
-            <IconPlayerPlay />
+        {task.state === "failed" && (
+          <Button type="button" variant="outline" size="sm" onClick={() => onRetry(task)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px]">
+            <IconRefresh className="size-3" />
             Retry
           </Button>
-        ) : null}
+        )}
 
-        {task.state === "downloading" ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => onCancel(task.id)}>
-            <IconX />
-            Cancel
-          </Button>
-        ) : null}
-
-        {task.state === "completed" ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenFile(task)}>
-            <IconCheck />
+        {task.state === "completed" && (
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenFile(task)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px]">
+            <IconCheck className="size-3" />
             Open
           </Button>
-        ) : null}
+        )}
 
-        {task.state === "canceled" || task.state === "completed" || task.state === "failed" ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => onRemove(task.id)}>
-            <IconTrash />
+        {(task.state === "canceled" || task.state === "completed" || task.state === "failed") && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => onRemove(task.id)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px] text-stone-400 hover:text-rose-500">
+            <IconTrash className="size-3" />
             Remove
           </Button>
-        ) : null}
-
-        {task.state === "queued" || task.state === "downloading" ? (
-          <span aria-hidden="true">
-            <IconLoader2 className="animate-spin" />
-          </span>
-        ) : null}
-
-        {task.state === "failed" ? (
-          <span aria-hidden="true">
-            <IconAlertTriangle />
-          </span>
-        ) : null}
+        )}
       </div>
     </article>
   );

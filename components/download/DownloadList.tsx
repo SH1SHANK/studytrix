@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import type { DownloadTask } from "@/features/download/download.types";
@@ -42,7 +43,6 @@ export function DownloadList({
     const candidate = state.values.virtualized_lists;
     return typeof candidate === "boolean" ? candidate : true;
   });
-  const [visibleCount, setVisibleCount] = useState(120);
 
   const sorted = useMemo(() => {
     const ordered = [...tasks].sort((left, right) => {
@@ -73,42 +73,51 @@ export function DownloadList({
 
     return [...nonCompleted, ...completed];
   }, [limitCompleted, tasks]);
+
   const visibleTasks = useMemo(() => {
     if (!virtualizedListsEnabled) {
       return sorted;
     }
 
-    return sorted.slice(0, visibleCount);
-  }, [sorted, virtualizedListsEnabled, visibleCount]);
+    return sorted.slice(0, 120);
+  }, [sorted, virtualizedListsEnabled]);
+
   if (sorted.length === 0) {
-    return <p>No downloads yet.</p>;
+    return (
+      <p className="py-4 text-center text-sm text-stone-400 dark:text-stone-500">
+        No downloads in this section.
+      </p>
+    );
   }
 
   return (
-    <section aria-label="Downloads list">
-      {visibleTasks.map((task) => (
-        <DownloadItem
-          key={task.id}
-          task={task}
-          onPause={onPause}
-          onResume={onResume}
-          onCancel={onCancel}
-          onRemove={onRemove}
-          onRetry={onRetry}
-          onOpenFile={onOpenFile}
-        />
-      ))}
-      {virtualizedListsEnabled && sorted.length > visibleTasks.length ? (
-        <div className="mt-3 flex justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setVisibleCount((current) => current + 120);
-            }}
+    <section aria-label="Downloads list" className="space-y-2">
+      <AnimatePresence initial={false}>
+        {visibleTasks.map((task) => (
+          <motion.div
+            key={task.id}
+            layout
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, x: -20, transition: { duration: 0.15 } }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
           >
-            Load more
+            <DownloadItem
+              task={task}
+              onPause={onPause}
+              onResume={onResume}
+              onCancel={onCancel}
+              onRemove={onRemove}
+              onRetry={onRetry}
+              onOpenFile={onOpenFile}
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
+      {virtualizedListsEnabled && sorted.length > visibleTasks.length ? (
+        <div className="flex justify-center pt-2">
+          <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg text-xs">
+            Load more ({sorted.length - visibleTasks.length} remaining)
           </Button>
         </div>
       ) : null}

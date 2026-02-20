@@ -16,6 +16,14 @@ import { getIntegrityIssues } from "@/features/storage/storage.integrity";
 import { exportStorageSummary } from "@/features/storage/storage.service";
 import { useStorageDashboard } from "@/ui/hooks/useStorageDashboard";
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+      {children}
+    </h2>
+  );
+}
+
 export default function StoragePage() {
   const {
     records,
@@ -51,7 +59,7 @@ export default function StoragePage() {
   }, []);
 
   return (
-    <AppShell>
+    <AppShell headerTitle="Storage" hideHeaderFilters={true}>
       <div className="px-4 pt-4 pb-8 sm:px-5 sm:pt-5">
         <StorageLayout
           loading={loading}
@@ -62,38 +70,61 @@ export default function StoragePage() {
             void handleExportSummary();
           }}
         >
-          {loading && records.length === 0 ? <p>Loading storage dashboard...</p> : null}
+          {loading && records.length === 0 ? <p className="text-sm text-stone-500">Loading storage data...</p> : null}
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          {/* ── Overview ──────────────────────────────────────── */}
+          <section className="space-y-2">
+            <SectionLabel>Overview</SectionLabel>
             <StorageOverviewCard
               stats={stats}
               loading={loading}
               hasErrors={errors.length > 0}
             />
+          </section>
 
-            <StorageQuotaIndicator
-              quotaBytes={stats?.quotaBytes ?? null}
-              usageBytes={stats?.usageBytes ?? null}
-            />
-          </div>
+          {/* ── Quota & Breakdown ─────────────────────────────── */}
+          <section className="space-y-2">
+            <SectionLabel>Quota &amp; Breakdown</SectionLabel>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <StorageQuotaIndicator
+                quotaBytes={stats?.quotaBytes ?? null}
+                usageBytes={stats?.usageBytes ?? null}
+              />
+              <StorageBreakdownChart breakdown={mimeBreakdown} />
+            </div>
+          </section>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <StorageBreakdownChart breakdown={mimeBreakdown} />
-            <StorageInfographics records={records} />
-          </div>
+          {/* ── Files & Courses ────────────────────────────────── */}
+          <section className="space-y-2">
+            <SectionLabel>Files &amp; Courses</SectionLabel>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <LargestFilesList
+                files={largestFiles}
+                onDelete={async (id) => {
+                  await deleteRecords([id]);
+                }}
+              />
+              <CourseStorageTable courses={courseStorage} />
+            </div>
+          </section>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <LargestFilesList
-              files={largestFiles}
-              onDelete={async (id) => {
-                await deleteRecords([id]);
-              }}
-            />
+          {/* ── Health ─────────────────────────────────────────── */}
+          <section className="space-y-2">
+            <SectionLabel>Health &amp; Maintenance</SectionLabel>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <StorageInfographics records={records} />
+              <IntegrityStatusCard
+                corruptedCount={issues.corrupted.length}
+                partialCount={issues.partial.length}
+                loading={loading}
+                onRevalidateCorrupted={revalidateCorrupted}
+              />
+            </div>
+          </section>
 
-            <CourseStorageTable courses={courseStorage} />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
+          {/* ── Danger Zone ────────────────────────────────────── */}
+          <section className="space-y-2">
+            <SectionLabel>Danger Zone</SectionLabel>
             <BulkDeletePanel
               corruptedCount={issues.corrupted.length}
               onDeleteAll={async () => {
@@ -105,19 +136,13 @@ export default function StoragePage() {
                 await deleteRecords(issues.corrupted.map((record) => record.id));
               }}
             />
+          </section>
 
-            <IntegrityStatusCard
-              corruptedCount={issues.corrupted.length}
-              partialCount={issues.partial.length}
-              loading={loading}
-              onRevalidateCorrupted={revalidateCorrupted}
-            />
-          </div>
-
+          {/* ── Errors ─────────────────────────────────────────── */}
           {errors.length > 0 ? (
             <section
               aria-labelledby="storage-errors-title"
-              className="rounded-2xl border border-rose-200/80 bg-rose-50/50 p-4 dark:border-rose-900/70 dark:bg-rose-950/20"
+              className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 dark:border-rose-900/70 dark:bg-rose-950/20"
             >
               <h2
                 id="storage-errors-title"

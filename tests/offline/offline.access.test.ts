@@ -2,12 +2,12 @@ import { jest } from "@jest/globals";
 
 import { getBlob, has, openLocalFirst, revoke } from "@/features/offline/offline.access";
 
-const getFileMock = jest.fn();
-const updateLastAccessMock = jest.fn(async () => undefined);
+const getFileMock = jest.fn<any>();
+const updateLastAccessMock = jest.fn<any>(async () => undefined);
 
 jest.mock("@/features/offline/offline.db", () => ({
-  getFile: (...args: unknown[]) => getFileMock(...args),
-  updateLastAccess: (...args: unknown[]) => updateLastAccessMock(...args),
+  getFile: (...args: any[]) => getFileMock(...args),
+  updateLastAccess: (...args: any[]) => updateLastAccessMock(...args),
 }));
 
 describe("offline.access", () => {

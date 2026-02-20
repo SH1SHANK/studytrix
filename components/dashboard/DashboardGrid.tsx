@@ -5,12 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 import {
   IconChevronDown,
+  IconChevronRight,
   IconDownload,
   IconFilter,
   IconLayoutGrid,
   IconList,
   IconSettings,
-  IconTag,
 } from "@tabler/icons-react";
 
 import { cn } from "@/lib/utils";
@@ -32,7 +32,6 @@ import { useCatalogIndex } from "@/features/catalog/catalog.index";
 import { getDailyQuote } from "@/features/dashboard/quotes";
 import { type Course } from "@/features/catalog/catalog.types";
 import { useTagStore } from "@/features/tags/tag.store";
-import { getTagChipTextColor } from "@/features/tags/tag.filter";
 import type { FilterMode, TagAssignment } from "@/features/tags/tag.types";
 import { getDepartmentName } from "@/lib/academic";
 import { DOWNLOAD_BUTTON_ELEMENT_ID, useDownloadManager } from "@/ui/hooks/useDownloadManager";
@@ -127,9 +126,9 @@ function matchesFilters(
 
 function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return "Good morning ☀️";
+  if (hour < 17) return "Good afternoon 🌤️";
+  return "Good evening 🌙";
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -631,42 +630,45 @@ export function DashboardGrid() {
         </ToggleGroup>
       </div>
 
-      {/* ── Tags Row ────────────────────────────────────────── */}
+      {/* ── Browse by Tag Row ──────────────────────────────── */}
       {showDashboardTags !== false && (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
-          {tagOptions.length > 0 ? (
-            tagOptions.map((option) => {
-              const isActive = activeSet.has(option.id);
-              const textColor = getTagChipTextColor(option.color);
-
-              return (
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+              Browse by Tag
+            </h3>
+            <button
+              type="button"
+              onClick={() => router.push("/tags")}
+              className="flex items-center gap-0.5 text-[11px] font-medium text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+            >
+              Manage Tags
+              <IconChevronRight className="size-3" />
+            </button>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
+            {tagOptions.length > 0 ? (
+              tagOptions.map((option) => (
                 <button
                   key={option.id}
                   type="button"
-                  onClick={() => toggleFilter(option.id)}
-                  className={cn(
-                    "flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-all duration-150 active:scale-[0.97]",
-                    isActive
-                      ? "border-transparent shadow-sm"
-                      : "border-stone-200 bg-white text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800",
-                  )}
-                  style={
-                    isActive
-                      ? { backgroundColor: option.color, color: textColor }
-                      : undefined
-                  }
-                  aria-pressed={isActive}
+                  onClick={() => router.push(`/tags/${option.id}`)}
+                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600 transition-all duration-150 hover:border-stone-300 hover:bg-stone-50 hover:shadow-sm active:scale-[0.97] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-stone-600 dark:hover:bg-stone-800"
                 >
-                  <IconTag className="size-3" />
+                  <span
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: option.color }}
+                  />
                   {option.label}
+                  <IconChevronRight className="size-3 text-stone-400 dark:text-stone-500" />
                 </button>
-              );
-            })
-          ) : (
-            <p className="py-1 text-xs text-stone-400 dark:text-stone-500">
-              No tags yet
-            </p>
-          )}
+              ))
+            ) : (
+              <p className="py-1 text-xs text-stone-400 dark:text-stone-500">
+                No tags yet
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -713,9 +715,9 @@ export function DashboardGrid() {
                 </div>
                 {viewMode === "grid" ? (
                   <div className="grid grid-cols-2 gap-4">
-                    {coreFolders.map((folder) => (
+                    {coreFolders.map((folder, index) => (
+                      <div key={folder.id} className="card-entrance" style={{ animationDelay: `${index * 50}ms` }}>
                       <FolderCard
-                        key={folder.id}
                         entityId={folder.id}
                         title={folder.title}
                         meta={folder.meta}
@@ -723,6 +725,7 @@ export function DashboardGrid() {
                         color={folder.color}
                         onOpen={() => handleOpenFolder(folder.routeId, folder.title)}
                       />
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -757,9 +760,9 @@ export function DashboardGrid() {
                 </div>
                 {viewMode === "grid" ? (
                   <div className="grid grid-cols-2 gap-4">
-                    {electiveFolders.map((folder) => (
+                    {electiveFolders.map((folder, index) => (
+                      <div key={folder.id} className="card-entrance" style={{ animationDelay: `${(coreFolders.length + index) * 50}ms` }}>
                       <FolderCard
-                        key={folder.id}
                         entityId={folder.id}
                         title={folder.title}
                         meta={folder.meta}
@@ -767,6 +770,7 @@ export function DashboardGrid() {
                         color={folder.color}
                         onOpen={() => handleOpenFolder(folder.routeId, folder.title)}
                       />
+                      </div>
                     ))}
                   </div>
                 ) : (

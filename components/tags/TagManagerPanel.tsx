@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   IconCheck,
+  IconChevronRight,
+  IconDots,
   IconLoader2,
   IconPencil,
+  IconSearch,
   IconTag,
+  IconTags,
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
@@ -13,6 +18,12 @@ import { useShallow } from "zustand/react/shallow";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useTagStore } from "@/features/tags/tag.store";
 import { getTagChipTextColor } from "@/features/tags/tag.filter";
@@ -35,6 +46,7 @@ function normalizeTagName(name: string): string {
 }
 
 export function TagManagerPanel() {
+  const router = useRouter();
   const createNameId = useId();
   const statusId = useId();
   const hydrationRequestedRef = useRef(false);
@@ -70,6 +82,7 @@ export function TagManagerPanel() {
   const [isDeletingTagId, setIsDeletingTagId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (isHydrated || hydrationRequestedRef.current) {
@@ -111,6 +124,12 @@ export function TagManagerPanel() {
       return left.name.localeCompare(right.name);
     });
   }, [tags]);
+
+  const filteredTags = useMemo(() => {
+    if (!searchQuery.trim()) return sortedTags;
+    const q = searchQuery.trim().toLowerCase();
+    return sortedTags.filter((tag) => tag.name.toLowerCase().includes(q));
+  }, [sortedTags, searchQuery]);
 
   const resetMessages = useCallback(() => {
     if (errorMessage) {
@@ -220,18 +239,35 @@ export function TagManagerPanel() {
   const canSaveEdit = normalizeTagName(editName).length >= TAG_NAME_MIN_LENGTH && !isSaving;
 
   return (
-    <section className="space-y-4" aria-labelledby="tags-manager-title">
-      <header className="space-y-1">
-        <h1 id="tags-manager-title" className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          Manage Tags
-        </h1>
-        <p className="text-sm text-stone-600 dark:text-stone-400">
-          Create, edit, and remove tags used across files and folders.
-        </p>
+    <section className="space-y-5" aria-labelledby="tags-manager-title">
+      {/* ── Hero Header ──────────────────────────────────────── */}
+      <header className="relative overflow-hidden rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/85">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500" />
+        <div className="flex items-center gap-3 p-5 pt-6">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-500/15">
+            <IconTags className="size-5 text-violet-600 dark:text-violet-400" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 id="tags-manager-title" className="text-xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
+              Manage Tags
+            </h1>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              Create, edit, and organise tags used across files and folders.
+            </p>
+          </div>
+        </div>
       </header>
 
-      <section aria-label="Create tag" className="rounded-xl border border-stone-200/70 bg-white/80 p-4 dark:border-stone-700/80 dark:bg-stone-900/70">
-        <div className="space-y-3">
+      {/* ── Create Tag Card ──────────────────────────────────── */}
+      <section
+        aria-label="Create tag"
+        className="relative overflow-hidden rounded-2xl border border-stone-200/70 bg-white/80 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/70"
+      >
+        <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-indigo-400 to-violet-500" />
+        <div className="space-y-3 p-4 pl-5">
+          <p className="text-xs font-semibold uppercase tracking-widest text-stone-400 dark:text-stone-500">
+            New Tag
+          </p>
           <div className="space-y-1.5">
             <label htmlFor={createNameId} className="text-xs font-medium text-stone-700 dark:text-stone-300">
               Tag name
@@ -252,6 +288,7 @@ export function TagManagerPanel() {
               placeholder="e.g. Midterm"
               maxLength={TAG_NAME_MAX_LENGTH}
               disabled={isCreating}
+              className="h-9"
             />
           </div>
 
@@ -268,10 +305,10 @@ export function TagManagerPanel() {
                     setCreateColor(color);
                     resetMessages();
                   }}
-                  className={`size-6 rounded-full border transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 ${
+                  className={`size-7 rounded-full border-2 transition-all duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 ${
                     createColor === color
-                      ? "border-stone-900 ring-1 ring-stone-900 dark:border-stone-100 dark:ring-stone-100"
-                      : "border-stone-300 dark:border-stone-600"
+                      ? "border-stone-900 shadow-sm dark:border-stone-100"
+                      : "border-transparent"
                   }`}
                   style={{ backgroundColor: color }}
                   aria-label={`Select ${color}`}
@@ -282,8 +319,9 @@ export function TagManagerPanel() {
 
           <Button
             type="button"
-            variant="outline"
+            variant="default"
             size="sm"
+            className="h-8 gap-1.5 rounded-full px-4 text-xs"
             onClick={() => {
               void handleCreateTag();
             }}
@@ -304,13 +342,39 @@ export function TagManagerPanel() {
         </div>
       </section>
 
+      {/* ── Search Bar ───────────────────────────────────────── */}
+      {sortedTags.length > 3 && (
+        <div className="relative">
+          <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400 dark:text-stone-500" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search tags…"
+            className="h-9 rounded-xl pl-9"
+          />
+        </div>
+      )}
+
+      {/* ── Tag List ─────────────────────────────────────────── */}
       <section aria-label="Tag list" className="space-y-2">
-        {sortedTags.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-stone-300 p-3 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
-            No tags yet. Create your first tag above.
-          </p>
+        {filteredTags.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-stone-300 p-8 text-center dark:border-stone-700">
+            <div className="flex size-12 items-center justify-center rounded-full bg-stone-100 dark:bg-stone-800">
+              <IconTags className="size-6 text-stone-400 dark:text-stone-500" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-stone-600 dark:text-stone-300">
+                {searchQuery.trim() ? "No matching tags" : "No tags yet"}
+              </p>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                {searchQuery.trim()
+                  ? "Try a different search term."
+                  : "Create your first tag above to start organising."}
+              </p>
+            </div>
+          </div>
         ) : (
-          sortedTags.map((tag) => {
+          filteredTags.map((tag) => {
             const isEditing = editingTagId === tag.id;
             const isDeleting = isDeletingTagId === tag.id;
             const assignmentCount = assignmentCountByTag.get(tag.id) ?? 0;
@@ -319,12 +383,19 @@ export function TagManagerPanel() {
             return (
               <article
                 key={tag.id}
-                className="rounded-xl border border-stone-200/70 bg-white/80 p-3 dark:border-stone-700/80 dark:bg-stone-900/70"
+                className="group rounded-2xl border border-stone-200/70 bg-white/80 transition-shadow hover:shadow-sm dark:border-stone-700/80 dark:bg-stone-900/70"
                 aria-label={`${tag.name} tag`}
               >
                 {!isEditing ? (
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-3 p-3.5">
+                    {/* Color dot */}
+                    <span
+                      className="size-3 shrink-0 rounded-full ring-2 ring-white dark:ring-stone-900"
+                      style={{ backgroundColor: tag.color }}
+                    />
+
+                    {/* Tag info */}
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span
                           className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold"
@@ -338,45 +409,64 @@ export function TagManagerPanel() {
                           </Badge>
                         ) : null}
                       </div>
-                      <p className="text-xs text-stone-500 dark:text-stone-400">
-                        Used {tag.uses} times · Assigned to {assignmentCount} item{assignmentCount === 1 ? "" : "s"}
+                      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                        {assignmentCount} file{assignmentCount === 1 ? "" : "s"} · Used {tag.uses} times
                       </p>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          startEdit(tag.id, tag.name, tag.color);
-                        }}
-                        aria-label={`Edit ${tag.name}`}
+                    {/* View Files button */}
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/tags/${tag.id}`)}
+                      className="flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                    >
+                      View Files
+                      <IconChevronRight className="size-3.5" />
+                    </button>
+
+                    {/* Actions dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
+                            aria-label={`Actions for ${tag.name}`}
+                          />
+                        }
                       >
-                        <IconPencil className="size-3.5" />
-                        Edit
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          void handleDeleteTag(tag.id, tag.name);
-                        }}
-                        disabled={tag.isSystem || isDeleting}
-                        aria-label={`Delete ${tag.name}`}
-                      >
-                        {isDeleting ? (
-                          <IconLoader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <IconTrash className="size-3.5" />
-                        )}
-                        Delete
-                      </Button>
-                    </div>
+                        <IconDots className="size-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-36">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            startEdit(tag.id, tag.name, tag.color);
+                          }}
+                        >
+                          <IconPencil className="size-3.5" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            void handleDeleteTag(tag.id, tag.name);
+                          }}
+                          disabled={tag.isSystem || isDeleting}
+                          className="text-rose-600 focus:text-rose-600 dark:text-rose-400 dark:focus:text-rose-400"
+                        >
+                          {isDeleting ? (
+                            <IconLoader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <IconTrash className="size-3.5" />
+                          )}
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  /* ── Inline Edit Mode ─────────────────────────── */
+                  <div className="space-y-3 p-4">
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-stone-700 dark:text-stone-300" htmlFor={`edit-tag-${tag.id}`}>
                         Edit name
@@ -396,6 +486,7 @@ export function TagManagerPanel() {
                         }}
                         maxLength={TAG_NAME_MAX_LENGTH}
                         disabled={isSaving}
+                        className="h-9"
                       />
                     </div>
 
@@ -410,10 +501,10 @@ export function TagManagerPanel() {
                             setEditColor(color);
                             resetMessages();
                           }}
-                          className={`size-6 rounded-full border transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 ${
+                          className={`size-7 rounded-full border-2 transition-all duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 ${
                             editColor === color
-                              ? "border-stone-900 ring-1 ring-stone-900 dark:border-stone-100 dark:ring-stone-100"
-                              : "border-stone-300 dark:border-stone-600"
+                              ? "border-stone-900 shadow-sm dark:border-stone-100"
+                              : "border-transparent"
                           }`}
                           style={{ backgroundColor: color }}
                           aria-label={`Select ${color}`}
@@ -424,8 +515,9 @@ export function TagManagerPanel() {
                     <div className="flex items-center gap-2">
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="default"
                         size="sm"
+                        className="h-8 gap-1.5 rounded-full px-4 text-xs"
                         onClick={() => {
                           void handleSaveEdit();
                         }}
@@ -442,6 +534,7 @@ export function TagManagerPanel() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="h-8 gap-1 rounded-full px-3 text-xs"
                         onClick={cancelEdit}
                         disabled={isSaving}
                       >
@@ -457,6 +550,7 @@ export function TagManagerPanel() {
         )}
       </section>
 
+      {/* ── Status Messages ──────────────────────────────────── */}
       <section aria-live="polite" aria-atomic="true">
         <p id={statusId} className="sr-only">
           {errorMessage ?? statusMessage ?? ""}

@@ -4,8 +4,6 @@ import { useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   IconCheck,
-  IconCircle,
-  IconCircleCheckFilled,
   IconLoader2,
   IconPlus,
   IconTag,
@@ -129,7 +127,7 @@ export function AssignTagsDrawer() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeDrawer()}>
-      <DialogContent className="fixed bottom-0 left-0 right-0 top-auto mx-auto max-h-[85vh] w-full max-w-lg translate-y-0 rounded-t-3xl border-t border-stone-200/50 bg-white/95 p-0 shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-out dark:border-stone-800/80 dark:bg-stone-950/95 sm:bottom-auto sm:top-1/2 sm:max-h-[80vh] sm:-translate-y-1/2 sm:rounded-3xl sm:border">
+      <DialogContent className="fixed inset-x-0 bottom-0 top-auto mx-auto flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-stone-200/50 bg-white/95 p-0 shadow-2xl backdrop-blur-xl dark:border-stone-800/80 dark:bg-stone-950/95 translate-x-0 translate-y-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[80dvh] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border">
         <DialogHeader className="px-6 pb-2 pt-6">
           <DialogTitle className="flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
@@ -162,7 +160,7 @@ export function AssignTagsDrawer() {
           />
         </div>
 
-        <div className="flex h-64 flex-col gap-1 overflow-y-auto px-4 pb-6 pt-2">
+        <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 pb-6 pt-2">
           {filteredTags.length === 0 && searchQuery.trim() && (
             <button
               onClick={() => void createAndAssignTag()}

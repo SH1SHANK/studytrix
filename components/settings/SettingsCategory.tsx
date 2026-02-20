@@ -1,11 +1,13 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
+import { IconChevronDown } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SettingsItemRenderer } from "./SettingsItemRenderer";
 import type { SettingItem } from "@/features/settings/settings.types";
+import { cn } from "@/lib/utils";
 
 interface SettingsCategoryProps {
   category: string;
@@ -36,23 +38,19 @@ function SettingsCategoryComponent({
     [items],
   );
   const displayName = formatCategoryName(category);
-  const totalCount = basicItems.length + advancedItems.length;
 
   return (
-    <section aria-labelledby={`settings-category-${category}`} className="space-y-3">
+    <section aria-labelledby={`settings-category-${category}`} className="space-y-2">
       <header className="px-1">
         <h2
           id={`settings-category-${category}`}
-          className="text-xl font-semibold tracking-tight text-stone-900 dark:text-stone-100"
+          className="text-base font-semibold tracking-tight text-stone-900 dark:text-stone-100"
         >
           {displayName}
         </h2>
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          {totalCount} {totalCount === 1 ? "setting" : "settings"}
-        </p>
       </header>
 
-      <Card className="rounded-2xl border border-stone-200/80 bg-white/90 shadow-sm dark:border-stone-700/80 dark:bg-stone-900/80 overflow-hidden">
+      <Card className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
         <CardContent className="p-0 px-4 sm:px-5">
           <div className="flex flex-col">
             {basicItems.map((item) => (
@@ -66,27 +64,22 @@ function SettingsCategoryComponent({
           </div>
 
           {advancedItems.length > 0 ? (
-            <div className="flex flex-col border-t border-stone-200/80 dark:border-stone-700/80 bg-stone-50/50 dark:bg-stone-900/40">
-              <div className="flex items-center justify-between py-3 border-b border-stone-200/60 dark:border-stone-700/60">
-                <span className="text-sm font-medium text-stone-700 dark:text-stone-300">Advanced Options</span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowAdvanced((current) => !current)}
-                  aria-expanded={showAdvanced}
-                  aria-controls={`advanced-settings-${category}`}
-                  className="rounded-lg h-8 px-3 text-xs"
-                >
-                  {showAdvanced ? "Hide" : "Reveal"}
-                </Button>
-              </div>
+            <div className="flex flex-col border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((current) => !current)}
+                aria-expanded={showAdvanced}
+                aria-controls={`advanced-settings-${category}`}
+                className="flex w-full items-center justify-between py-3 text-left text-sm font-medium text-stone-500 transition-colors hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+              >
+                <span>Advanced ({advancedItems.length})</span>
+                <IconChevronDown className={cn("size-4 transition-transform duration-200", showAdvanced && "rotate-180")} />
+              </button>
 
               <div
                 id={`advanced-settings-${category}`}
                 hidden={!showAdvanced}
-                data-transition="smooth"
-                className="flex flex-col"
+                className="flex flex-col border-t border-stone-100 dark:border-stone-800"
               >
                 {advancedItems.map((item) => (
                   <SettingsItemRenderer

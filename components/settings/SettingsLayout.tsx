@@ -15,10 +15,9 @@ import { exportSettings, importSettings } from "@/features/settings/settings.ser
 import { useSettingsStore } from "@/features/settings/settings.store";
 import type { SettingItem } from "@/features/settings/settings.types";
 import { useSettingsSearch } from "@/ui/hooks/useSettings";
-import { IconSearch, IconArrowLeft } from "@tabler/icons-react";
+import { IconSearch, IconDownload, IconUpload, IconRotate, IconSettings, IconChevronDown } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useSetting } from "@/ui/hooks/useSettings";
-import Link from "next/link";
 
 import {
   AlertDialog,
@@ -35,7 +34,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 import { SettingsCategory } from "./SettingsCategory";
 
@@ -75,9 +73,12 @@ export function SettingsLayout() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadedHeavyCategories, setLoadedHeavyCategories] = useState<Set<string>>(new Set());
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const [disableGlass] = useSetting("disable_glass_effects");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const initialize = useSettingsStore((state) => state.initialize);
   const initialized = useSettingsStore((state) => state.initialized);
@@ -103,6 +104,33 @@ export function SettingsLayout() {
 
     return groupByCategory(searchedItems);
   }, [query, searchedItems]);
+
+  // Track active category via IntersectionObserver
+  useEffect(() => {
+    observerRef.current?.disconnect();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const id = entry.target.getAttribute("data-category");
+            if (id) setActiveCategory(id);
+          }
+        }
+      },
+      { rootMargin: "-20% 0px -60% 0px", threshold: 0 },
+    );
+
+    observerRef.current = observer;
+
+    // Observe after a tick to let DOM render
+    requestAnimationFrame(() => {
+      const sections = document.querySelectorAll("[data-category]");
+      sections.forEach((el) => observer.observe(el));
+    });
+
+    return () => observer.disconnect();
+  }, [categoryGroups]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -133,6 +161,16 @@ export function SettingsLayout() {
       return next;
     });
   }, []);
+
+  // Auto dismiss feedback
+  useEffect(() => {
+    if (!status && !error) return;
+    const timer = setTimeout(() => {
+      setStatus(null);
+      setError(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [status, error]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -211,113 +249,109 @@ export function SettingsLayout() {
     }
 
     reset();
-    reset();
     setStatus("Settings reset to defaults");
     setError(null);
   }, [reset]);
 
-  return (
-    <div className="flex flex-col md:flex-row gap-8 pb-36 max-w-[1000px] mx-auto w-full relative">
-      <aside className="w-full md:w-[260px] shrink-0 space-y-6 md:sticky md:top-24 md:h-[calc(100vh-8rem)] md:overflow-y-auto no-scrollbar">
-        <div className="space-y-4 px-1">
-          <Link
-            href="/dashboard"
-            className="group flex w-fit items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 shadow-sm transition-all hover:border-stone-300 hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-400 dark:hover:border-stone-700 dark:hover:bg-stone-900 dark:hover:text-stone-100"
-          >
-            <IconArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" />
-            <span>Dashboard</span>
-          </Link>
+  const scrollToCategory = useCallback((category: string) => {
+    document.getElementById(`category-${category}`)?.scrollIntoView({ behavior: "smooth" });
+    setShowMobileNav(false);
+  }, []);
 
-          <div className="space-y-1.5">
-            <h1 className="text-[2rem] leading-none font-semibold tracking-tight text-stone-900 dark:text-stone-100">
-              Settings
-            </h1>
-            <p className="text-sm leading-snug text-stone-500 dark:text-stone-400">
-              Configure behavior and aesthetics.
-            </p>
-          </div>
+  return (
+    <div className="mx-auto w-full max-w-3xl pb-24">
+      {/* ── Header ─────────────────────────────────────────── */}
+      <header className="space-y-4">
+        {/* Search */}
+        <div className="relative">
+          <IconSearch
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400"
+            aria-hidden="true"
+          />
+          <Input
+            id="settings-search"
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search settings..."
+            className="h-10 rounded-lg border-stone-200 bg-stone-50 pl-10 text-sm dark:border-stone-800 dark:bg-stone-900"
+          />
         </div>
 
-        <div className="space-y-3">
-          <div className="relative">
-            <IconSearch
-              className="pointer-events-none absolute left-3 top-1/2 size-[18px] -translate-y-1/2 text-stone-400"
-              aria-hidden="true"
-            />
-            <Input
-              id="settings-search"
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search..."
-              className={cn(
-                "h-11 rounded-xl pl-10 text-base md:text-sm border-transparent focus:border-stone-300 dark:focus:border-stone-700",
-                disableGlass ? "bg-stone-100 dark:bg-stone-900 border-stone-200 dark:border-stone-800" : "bg-stone-100/50 dark:bg-stone-900/50"
-              )}
-            />
-          </div>
+        {/* ── Mobile Quick Nav ─────────────────────────────── */}
+        <div className="md:hidden">
+          <button
+            onClick={() => setShowMobileNav((v) => !v)}
+            className="flex w-full items-center justify-between rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm font-medium text-stone-700 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+          >
+            <span>
+              {activeCategory ? formatCategoryName(activeCategory) : "Jump to section"}
+            </span>
+            <IconChevronDown className={cn("size-4 transition-transform", showMobileNav && "rotate-180")} />
+          </button>
+          {showMobileNav && (
+            <div className="mt-1 rounded-lg border border-stone-200 bg-white shadow-md dark:border-stone-800 dark:bg-stone-900">
+              {categoryGroups.map((group) => {
+                if (group.items.length === 0) return null;
+                return (
+                  <button
+                    key={group.category}
+                    onClick={() => scrollToCategory(group.category)}
+                    className={cn(
+                      "flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition-colors",
+                      "border-b border-stone-100 last:border-0 dark:border-stone-800",
+                      activeCategory === group.category
+                        ? "bg-stone-50 font-medium text-stone-900 dark:bg-stone-800 dark:text-stone-100"
+                        : "text-stone-600 hover:bg-stone-50 dark:text-stone-400 dark:hover:bg-stone-800",
+                    )}
+                  >
+                    {formatCategoryName(group.category)}
+                    <span className="text-xs text-stone-400">{group.items.length}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-          <nav className="hidden md:flex flex-col space-y-1 mt-6">
-            <h3 className="px-3 text-xs font-semibold uppercase tracking-wider text-stone-500 mb-2">Categories</h3>
+        {/* ── Desktop Sidebar Nav (hidden on mobile) ──────── */}
+        <nav className="hidden items-start gap-6 md:flex">
+          <div className="flex flex-wrap gap-1.5">
             {categoryGroups.map((group) => {
               if (group.items.length === 0) return null;
               return (
-                <a
+                <button
                   key={group.category}
-                  href={`#category-${group.category}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    document.getElementById(`category-${group.category}`)?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="px-3 py-2 text-sm font-medium rounded-lg text-stone-600 hover:text-stone-900 hover:bg-stone-100/50 dark:text-stone-400 dark:hover:text-stone-100 dark:hover:bg-stone-800/50 transition-colors"
+                  onClick={() => scrollToCategory(group.category)}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                    activeCategory === group.category
+                      ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+                      : "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700",
+                  )}
                 >
                   {formatCategoryName(group.category)}
-                </a>
+                </button>
               );
             })}
-          </nav>
-        </div>
-
-        <div className="pt-6 border-t border-stone-200/60 dark:border-stone-700/60 space-y-4">
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => void handleExport()} className="flex-1 h-9 bg-white/50 dark:bg-stone-900/50">
-                Export
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={handleImportClick} className="flex-1 h-9 bg-white/50 dark:bg-stone-900/50">
-                Import
-              </Button>
-            </div>
-            
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={
-                  <Button type="button" size="sm" variant="ghost" className="h-9 w-full text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30">
-                    Reset Defaults
-                  </Button>
-                }
-              />
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Reset all settings?</AlertDialogTitle>
-                  <AlertDialogDescription>This will restore local settings to default values.</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction variant="destructive" onClick={() => reset()}>Reset</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
-          
-          <Input ref={fileInputRef} type="file" accept="application/json" onChange={(event) => void handleImportFile(event)} className="hidden" />
-          
-          {status && <Alert><AlertDescription>{status}</AlertDescription></Alert>}
-          {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-        </div>
-      </aside>
+        </nav>
 
-      <main data-transition="smooth" className="flex-1 space-y-14 mt-4 md:mt-0 max-w-3xl">
+        {/* Feedback banners */}
+        {status && (
+          <Alert className="animate-in fade-in slide-in-from-top-1">
+            <AlertDescription>{status}</AlertDescription>
+          </Alert>
+        )}
+        {error && (
+          <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-1">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </header>
+
+      {/* ── Categories ─────────────────────────────────────── */}
+      <main className="mt-6 space-y-8">
         {categoryGroups.map((group) => {
           if (group.items.length === 0) return null;
 
@@ -327,14 +361,14 @@ export function SettingsLayout() {
 
           if (!isLoaded) {
             return (
-              <div key={group.category} id={`category-${group.category}`} className="scroll-mt-28">
-                <Card className="rounded-2xl border border-stone-200/80 bg-stone-50/50 dark:border-stone-700/80 dark:bg-stone-900/30">
-                  <CardContent className="space-y-3 p-5 flex flex-col items-center justify-center text-center py-10">
-                    <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">{displayCategory}</h2>
-                    <p className="text-sm text-stone-500 dark:text-stone-400 max-w-xs">
-                      This category is loaded on demand for better performance.
+              <div key={group.category} id={`category-${group.category}`} data-category={group.category} className="scroll-mt-28">
+                <Card className="rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
+                  <CardContent className="flex flex-col items-center justify-center space-y-3 p-6 text-center">
+                    <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">{displayCategory}</h2>
+                    <p className="text-sm text-stone-500 dark:text-stone-400">
+                      Loaded on demand for better performance.
                     </p>
-                    <Button type="button" size="sm" variant="secondary" onClick={() => loadCategory(group.category)} className="mt-2">
+                    <Button type="button" size="sm" variant="secondary" onClick={() => loadCategory(group.category)}>
                       Load {displayCategory}
                     </Button>
                   </CardContent>
@@ -345,11 +379,11 @@ export function SettingsLayout() {
 
           if (isHeavy) {
             return (
-              <div key={group.category} id={`category-${group.category}`} className="scroll-mt-28">
+              <div key={group.category} id={`category-${group.category}`} data-category={group.category} className="scroll-mt-28">
                 <Suspense
                   fallback={(
-                    <Card className="rounded-2xl border border-stone-200/80 bg-white/90 dark:border-stone-700/80 dark:bg-stone-900/80">
-                      <CardContent className="p-5 flex justify-center text-sm text-stone-500">
+                    <Card className="rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
+                      <CardContent className="flex justify-center p-5 text-sm text-stone-500">
                         Loading {displayCategory}...
                       </CardContent>
                     </Card>
@@ -367,7 +401,7 @@ export function SettingsLayout() {
           }
 
           return (
-            <div key={group.category} id={`category-${group.category}`} className="scroll-mt-28">
+            <div key={group.category} id={`category-${group.category}`} data-category={group.category} className="scroll-mt-28">
               <SettingsCategory
                 category={group.category}
                 items={group.items}
@@ -378,6 +412,61 @@ export function SettingsLayout() {
           );
         })}
       </main>
+
+      {/* ── Data Management Footer ─────────────────────────── */}
+      <footer className="mt-10 space-y-3 border-t border-stone-200 pt-6 dark:border-stone-800">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+          Data Management
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void handleExport()}
+            className="h-9 gap-1.5 rounded-lg text-xs"
+          >
+            <IconDownload className="size-3.5" />
+            Export
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleImportClick}
+            className="h-9 gap-1.5 rounded-lg text-xs"
+          >
+            <IconUpload className="size-3.5" />
+            Import
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-9 gap-1.5 rounded-lg text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                >
+                  <IconRotate className="size-3.5" />
+                  Reset Defaults
+                </Button>
+              }
+            />
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset all settings?</AlertDialogTitle>
+                <AlertDialogDescription>This will restore local settings to default values.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction variant="destructive" onClick={() => reset()}>Reset</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+        <Input ref={fileInputRef} type="file" accept="application/json" onChange={(event) => void handleImportFile(event)} className="hidden" />
+      </footer>
     </div>
   );
 }

@@ -73,7 +73,7 @@ export function StickyHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="w-44 border-stone-200 dark:border-stone-800"
+              className="w-44 border-stone-200 shadow-md dark:border-stone-800"
             >
               <DropdownMenuItem onClick={() => router.push("/downloads")}>
                 <IconDownload />
@@ -88,12 +88,12 @@ export function StickyHeader({
         </div>
 
         {/* Row 2 — Breadcrumb */}
-        <nav className="pl-1" aria-label="Breadcrumb">
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <nav className="pl-1 overflow-x-auto whitespace-nowrap scrollbar-hide pb-1" aria-label="Breadcrumb">
+          <div className="flex w-max items-center gap-x-1.5 gap-y-1">
             {breadcrumbSegments.map((segment, index) => {
               const isLast = index === breadcrumbSegments.length - 1;
               return (
-                <span key={`${segment.href}-${index}`} className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+                <span key={`${segment.href}-${index}`} className="inline-flex shrink-0 items-center gap-1.5">
                   {index > 0 ? (
                     <IconChevronRight
                       className="size-3 shrink-0 text-stone-300 dark:text-stone-600"
@@ -104,8 +104,8 @@ export function StickyHeader({
                     type="button"
                     className={
                       isLast
-                        ? "max-w-full break-words rounded-sm text-left text-[13px] font-semibold text-stone-900 dark:text-stone-100"
-                        : "max-w-full break-words rounded-sm text-left text-[13px] text-stone-500 transition-colors hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
+                        ? "max-w-[200px] truncate rounded-sm text-left text-[13px] font-semibold text-stone-900 dark:text-stone-100"
+                        : "max-w-[150px] truncate rounded-sm text-left text-[13px] text-stone-500 transition-colors hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
                     }
                     aria-current={isLast ? "page" : undefined}
                     onClick={() => {

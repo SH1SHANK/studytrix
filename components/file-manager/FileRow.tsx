@@ -12,7 +12,14 @@
 "use client";
 
 import { memo, useCallback, useMemo, useRef } from "react";
-import { AnimatePresence, motion, type PanInfo } from "framer-motion";
+import {
+  animate,
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useTransform,
+  type PanInfo,
+} from "framer-motion";
 import {
   IconCircle,
   IconCircleCheckFilled,
@@ -23,13 +30,15 @@ import {
   IconFileTypePng,
   IconFolderOpen,
   IconStar,
-  IconTrash,
+  IconStarFilled,
+  IconTag,
 } from "@tabler/icons-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@/lib/utils";
 import { getTagChipTextColor } from "@/features/tags/tag.filter";
 import { useTagStore } from "@/features/tags/tag.store";
+import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { useSelectionStore } from "@/features/selection/selection.store";
 import { Button } from "@/components/ui/button";
 import { EntityActionsMenu } from "@/components/file-manager/EntityActionsMenu";
@@ -121,9 +130,19 @@ function renderIcon(isFolder: boolean, ext: string) {
   return <Icon className="size-5" />;
 }
 
-const ACTION_PANEL_WIDTH = 120;
+const ACTION_PANEL_WIDTH = 210;
+const SNAP_THRESHOLD = 80;
+const VELOCITY_THRESHOLD = 250;
 const EMPTY_TAG_IDS: string[] = [];
 const FILE_TAG_PREVIEW_LIMIT = 3;
+
+const SPRING_CONFIG = { type: "spring" as const, stiffness: 320, damping: 30, mass: 0.8 };
+
+function triggerHaptic(duration = 8) {
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    navigator.vibrate(duration);
+  }
+}
 
 function FileRowComponent({
   id,
@@ -171,6 +190,12 @@ function FileRowComponent({
     })),
   );
 
+  const { openDrawer } = useTagAssignmentStore(
+    useShallow((state) => ({
+      openDrawer: state.openDrawer,
+    })),
+  );
+
   const isSelected = selectedIds.has(id);
   const menuStatus = isOffline
     ? "Saved for offline access"
@@ -205,12 +230,6 @@ function FileRowComponent({
   const visibleFileTags = fileTags.slice(0, FILE_TAG_PREVIEW_LIMIT);
   const hiddenTagCount = fileTags.length - visibleFileTags.length;
 
-  const triggerHaptic = (duration = 8) => {
-    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate(duration);
-    }
-  };
-
   const handleOpenAction = () => {
     triggerHaptic();
     onOpen?.();
@@ -238,6 +257,11 @@ function FileRowComponent({
     triggerHaptic(6);
     void toggleStar(id).catch(() => undefined);
   }, [id, toggleStar]);
+
+  const handleManageTagsAction = useCallback(() => {
+    triggerHaptic();
+    openDrawer([{ id, type: isFolder ? "folder" : "file" }]);
+  }, [id, isFolder, openDrawer]);
 
   const renderActionMenu = () => (
     <EntityActionsMenu
@@ -333,9 +357,9 @@ function FileRowComponent({
           "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
           "focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2",
           isSelected && "ring-2 ring-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30",
-          !isSelected && isFolder
-            ? "border-indigo-200/40 bg-indigo-50/40 dark:border-indigo-800/40 dark:bg-indigo-950/20"
-            : !isSelected && "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
+          !isSelected && isStarred && "border-amber-300 bg-gradient-to-br from-amber-50/80 to-amber-100/30 dark:border-amber-700/60 dark:from-amber-950/40 dark:to-stone-900 ring-1 ring-amber-400/50 shadow-[0_0_15px_-3px_rgba(251,191,36,0.3)]",
+          !isSelected && !isStarred && isFolder && "border-indigo-200/40 bg-indigo-50/40 dark:border-indigo-800/40 dark:bg-indigo-950/20",
+          !isSelected && !isStarred && (!isFolder) && "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
         )}
         style={{ animationDelay: `${animationIndex * 40}ms` }}
       >
@@ -390,7 +414,7 @@ function FileRowComponent({
               <span className="line-clamp-2">{title}</span>
               {renderStatusBadge()}
               {isStarred ? (
-                <IconStar className="size-3.5 shrink-0 text-amber-500 dark:text-amber-300" />
+                <IconStarFilled className="size-4 shrink-0 text-amber-500 dark:text-amber-400" />
               ) : null}
             </div>
             <p className="text-xs text-stone-500 dark:text-stone-400">
@@ -403,7 +427,38 @@ function FileRowComponent({
     );
   }
 
-  /* ─── List View ─── */
+  /* ─── List View (swipeable) ─── */
+
+  // Motion values for swipe
+  const x = useMotionValue(0);
+  const progress = useTransform(
+    x,
+    [-ACTION_PANEL_WIDTH, -ACTION_PANEL_WIDTH * 0.3, 0],
+    [1, 0.3, 0],
+  );
+  const starOpacity = useTransform(progress, [0, 0.25, 0.6], [0, 0, 1]);
+  const offlineOpacity = useTransform(progress, [0, 0.35, 0.7], [0, 0, 1]);
+  const tagsOpacity = useTransform(progress, [0, 0.45, 0.8], [0, 0, 1]);
+
+  const snapOpen = useCallback(() => {
+    triggerHaptic(6);
+    void animate(x, -ACTION_PANEL_WIDTH, SPRING_CONFIG);
+    onToggleOpen(id);
+  }, [id, onToggleOpen, x]);
+
+  const snapClose = useCallback(() => {
+    void animate(x, 0, SPRING_CONFIG);
+    onToggleOpen(null);
+  }, [onToggleOpen, x]);
+
+  // Sync with parent open state
+  const currentX = x.get();
+  if (isOpen && currentX > -ACTION_PANEL_WIDTH + 5) {
+    void animate(x, -ACTION_PANEL_WIDTH, SPRING_CONFIG);
+  } else if (!isOpen && currentX < -5) {
+    void animate(x, 0, SPRING_CONFIG);
+  }
+
   const handleDragStart = () => {
     suppressClickRef.current = true;
   };
@@ -412,10 +467,14 @@ function FileRowComponent({
     _event: MouseEvent | TouchEvent | PointerEvent,
     info: PanInfo,
   ) => {
-    if (info.offset.x < -60) {
-      onToggleOpen(id);
+    const shouldOpen =
+      info.offset.x < -SNAP_THRESHOLD ||
+      info.velocity.x < -VELOCITY_THRESHOLD;
+
+    if (shouldOpen) {
+      snapOpen();
     } else {
-      onToggleOpen(null);
+      snapClose();
     }
 
     requestAnimationFrame(() => {
@@ -432,8 +491,8 @@ function FileRowComponent({
       return;
     }
 
-    if (isOpen) {
-      onToggleOpen(null);
+    if (x.get() < -10) {
+      snapClose();
       return;
     }
     onOpen?.();
@@ -444,79 +503,96 @@ function FileRowComponent({
       className="card-entrance relative overflow-hidden rounded-xl"
       style={{ animationDelay: `${animationIndex * 40}ms` }}
     >
-      {/* Swipe action panel — static behind content */}
-      <div className="absolute inset-y-0 right-0 z-0 flex w-[120px] items-center justify-around bg-linear-to-l from-stone-900 to-stone-800 dark:from-stone-800 dark:to-stone-700">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={isStarred ? "Unstar item" : "Star item"}
-          className={cn(
-            "flex size-11 items-center justify-center rounded-md transition-colors duration-200 hover:bg-stone-700",
-            isStarred
-              ? "text-amber-300 hover:text-amber-200"
-              : "text-amber-500 hover:text-amber-300",
-          )}
-          onClick={(event) => {
-            event.stopPropagation();
-            handleToggleStarAction();
-          }}
-        >
-          <IconStar className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Make available offline"
-          className={cn(
-            "flex size-11 items-center justify-center rounded-md transition-colors duration-200 active:scale-[0.96]",
-            isFolder || isOffline || isDownloading
-              ? "cursor-not-allowed text-stone-500"
-              : "text-sky-400 hover:bg-stone-700 hover:text-sky-300",
-          )}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (!isFolder && !isOffline && !isDownloading) {
-              handleMakeOfflineAction(event.currentTarget);
-            }
-          }}
-          disabled={isFolder || isOffline || isDownloading}
-        >
-          <IconCloudDown className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Delete"
-          className="flex size-11 items-center justify-center rounded-md text-rose-400 transition-colors duration-200 hover:bg-stone-700 hover:text-rose-300"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <IconTrash className="size-4" />
-        </Button>
-      </div>
-
-      {/* Draggable content layer */}
+      {/* ── Swipe Action Panel ─────────────────────────────── */}
       <motion.div
-        drag={swipeEnabled ? "x" : false}
-        dragConstraints={{ left: -ACTION_PANEL_WIDTH, right: 0 }}
-        dragElastic={0.05}
-        dragMomentum={false}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        animate={{ x: isOpen ? -ACTION_PANEL_WIDTH : 0 }}
-        transition={{ type: "spring", stiffness: 230, damping: 28, mass: 0.6 }}
+        className="absolute inset-y-0 right-0 z-0 flex w-[210px] items-center justify-around rounded-r-xl bg-gradient-to-l from-stone-900 via-stone-850 to-stone-800 px-1 dark:from-stone-800 dark:via-stone-750 dark:to-stone-700"
+        style={{ opacity: progress }}
+      >
+        {/* Star */}
+        <motion.div style={{ opacity: starOpacity }}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={isStarred ? "Unstar item" : "Star item"}
+            className={cn(
+              "flex h-14 w-[64px] flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors duration-150",
+              isStarred
+                ? "text-amber-300 hover:bg-amber-500/15 hover:text-amber-200"
+                : "text-amber-500 hover:bg-amber-500/15 hover:text-amber-300",
+            )}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleToggleStarAction();
+            }}
+          >
+            {isStarred ? <IconStarFilled className="size-5" /> : <IconStar className="size-5" />}
+            <span>{isStarred ? "Unstar" : "Star"}</span>
+          </Button>
+        </motion.div>
+
+        {/* Offline */}
+        <motion.div style={{ opacity: offlineOpacity }}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Make available offline"
+            className={cn(
+              "flex h-14 w-[64px] flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition-colors duration-150",
+              isFolder || isOffline || isDownloading
+                ? "cursor-not-allowed text-stone-500/50"
+                : "text-sky-400 hover:bg-sky-500/15 hover:text-sky-300",
+            )}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (!isFolder && !isOffline && !isDownloading) {
+                handleMakeOfflineAction(event.currentTarget);
+              }
+            }}
+            disabled={isFolder || isOffline || isDownloading}
+          >
+            <IconCloudDown className="size-5" />
+            <span>Offline</span>
+          </Button>
+        </motion.div>
+
+        {/* Tags */}
+        <motion.div style={{ opacity: tagsOpacity }}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Manage Tags"
+            className="flex h-14 w-[64px] flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium text-indigo-400 transition-colors duration-150 hover:bg-indigo-500/15 hover:text-indigo-300"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleManageTagsAction();
+            }}
+          >
+            <IconTag className="size-5" />
+            <span>Tags</span>
+          </Button>
+        </motion.div>
+      </motion.div>
+
+      {/* ── Draggable Content ─────────────────────────────── */}
+      <motion.div
         className={cn(
-          "relative z-10 cursor-pointer rounded-xl border shadow-sm transition-all duration-200",
-          "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]",
+          "relative z-10 cursor-pointer rounded-xl border shadow-sm transition-shadow duration-200",
+          "hover:shadow-md active:scale-[0.99]",
           "focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:outline-offset-2",
           isOpen && !isSelected && "ring-1 ring-indigo-400/30",
           isSelected && "ring-2 ring-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30",
-          !isSelected && isFolder
-            ? "border-indigo-200/70 bg-indigo-50 dark:border-indigo-800/50 dark:bg-stone-900"
-            : !isSelected && "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
+          !isSelected && isStarred && "border-amber-300 bg-gradient-to-r from-amber-50/80 to-amber-50/10 dark:border-amber-700/60 dark:from-amber-950/40 dark:to-stone-900 ring-1 ring-amber-400/50 shadow-[0_0_15px_-3px_rgba(251,191,36,0.2)]",
+          !isSelected && !isStarred && isFolder && "border-indigo-200/70 bg-indigo-50 dark:border-indigo-800/50 dark:bg-stone-900",
+          !isSelected && !isStarred && (!isFolder) && "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900",
         )}
+        style={{ x }}
+        drag={swipeEnabled ? "x" : false}
+        dragConstraints={{ left: -ACTION_PANEL_WIDTH, right: 0 }}
+        dragDirectionLock
+        dragElastic={0.08}
+        dragMomentum={false}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
         onClick={handleRowClick}
       >
         <div className="flex min-h-[64px] items-center gap-3 px-4 py-3 data-[compact=true]:min-h-[52px] data-[compact=true]:px-3 data-[compact=true]:py-2">
@@ -567,7 +643,7 @@ function FileRowComponent({
               <span className="truncate">{title}</span>
               {renderStatusBadge()}
               {isStarred ? (
-                <IconStar className="size-3.5 shrink-0 text-amber-500 dark:text-amber-300" />
+                <IconStarFilled className="size-4 shrink-0 text-amber-500 dark:text-amber-400" />
               ) : null}
             </div>
             <p className="truncate text-xs text-stone-500 dark:text-stone-400">
