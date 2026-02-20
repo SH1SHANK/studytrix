@@ -112,7 +112,7 @@ export function OfflineDebugPanel() {
         </Button>
       </header>
 
-      <Card className="overflow-hidden rounded-xl border-none bg-accent/40 sm:bg-card shadow-none">
+      <Card className="overflow-hidden p-0 rounded-xl border border-border/40 bg-card shadow-sm">
         <CardContent className="p-0 flex flex-col">
           <SettingRowShell
             label="Offline v3 Core"

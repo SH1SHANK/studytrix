@@ -36,7 +36,7 @@ function SettingsCategoryComponent({
         </h2>
       </header>
 
-      <Card className="overflow-hidden rounded-xl border-none bg-accent/40 sm:bg-card shadow-none">
+      <Card className="overflow-hidden p-0 rounded-xl border border-border/40 bg-card shadow-sm">
         <CardContent className="p-0">
           <div className="flex flex-col">
             {items.map((item) => (

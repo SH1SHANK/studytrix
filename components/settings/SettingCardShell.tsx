@@ -48,10 +48,10 @@ export function SettingRowShell({
       {...interactiveProps}
       className={cn(
         "group flex w-full flex-row items-center justify-between gap-4 py-3 pl-3 pr-4 transition-colors relative",
-        "bg-card hover:bg-muted/50 sm:bg-transparent sm:hover:bg-muted/50",
-        "border-b border-border/50 last:border-0",
+        "bg-transparent hover:bg-muted/50",
+        "border-b border-border/60 last:border-0",
         isDanger && "bg-rose-50/30 hover:bg-rose-50/50 dark:bg-rose-950/20 dark:hover:bg-rose-950/30",
-        onClick && !disabled && "active:bg-muted/70 sm:active:bg-muted/70",
+        onClick && !disabled && "active:bg-muted/70",
         interactiveProps.className
       )}
     >
