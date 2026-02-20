@@ -9,6 +9,7 @@ import { DownloadDrawer } from "@/components/download/DownloadDrawer";
 import { DownloadFloatingIndicator } from "@/components/download/DownloadFloatingIndicator";
 import { SelectionToolbar } from "@/components/file-manager/SelectionToolbar";
 import { OfflineRuntime } from "@/components/offline/OfflineRuntime";
+import { StorageInit } from "@/components/offline/StorageInit";
 import { AssignTagsDrawer } from "@/components/tags/AssignTagsDrawer";
 import "./globals.css";
 
@@ -67,6 +68,7 @@ export default function RootLayout({
         </Script>
         <ThemeProvider>
           <SettingsProvider>
+            <StorageInit />
             <OfflineRuntime />
             {children}
             <SelectionToolbar />

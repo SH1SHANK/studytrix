@@ -12,6 +12,8 @@ import {
 import type { DriveFileRaw, FileMetadata } from "./file.types";
 
 const FILE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const SHORTCUT_MIME = "application/vnd.google-apps.shortcut";
+const MAX_SHORTCUT_DEPTH = 4;
 
 export class FileServiceError extends Error {
   readonly statusCode: number;
@@ -64,6 +66,23 @@ function isValidDriveMetadata(
     && typeof data.mimeType === "string"
     && data.mimeType.length > 0
   );
+}
+
+function parseShortcutTargetId(data: drive_v3.Schema$File): string | null {
+  const details =
+    data.shortcutDetails && typeof data.shortcutDetails === "object"
+      ? data.shortcutDetails
+      : null;
+  const targetId =
+    details && typeof details.targetId === "string"
+      ? details.targetId.trim()
+      : "";
+
+  if (!targetId || !FILE_ID_PATTERN.test(targetId) || targetId.length > 256) {
+    return null;
+  }
+
+  return targetId;
 }
 
 function mapDriveError(error: unknown): FileServiceError {
@@ -128,30 +147,56 @@ function mapDriveError(error: unknown): FileServiceError {
 const inFlightMetadata = new Map<string, Promise<FileMetadata>>();
 
 export class FileService {
+  private async fetchDriveMetadata(
+    fileId: string,
+  ): Promise<drive_v3.Schema$File> {
+    const drive = getDriveClient();
+    const response = await drive.files.get({
+      fileId,
+      fields: "id,name,mimeType,size,modifiedTime,shortcutDetails(targetId,targetMimeType)",
+      supportsAllDrives: true,
+    });
+
+    return response.data;
+  }
+
   async getRawMetadata(fileId: string): Promise<DriveFileRaw> {
     const normalizedFileId = normalizeFileId(fileId);
 
     try {
-      const drive = getDriveClient();
-      const response = await drive.files.get({
-        fileId: normalizedFileId,
-        fields: "id,name,mimeType,size,modifiedTime",
-        supportsAllDrives: true,
-      });
+      let depth = 0;
+      let currentFileId = normalizedFileId;
+      let data = await this.fetchDriveMetadata(currentFileId);
+      let resolvedFileId = normalizedFileId;
 
-      const data = response.data;
+      while (depth < MAX_SHORTCUT_DEPTH && data.mimeType === SHORTCUT_MIME) {
+        const targetId = parseShortcutTargetId(data);
+        if (!targetId) {
+          throw new FileServiceError("Shortcut target not found", 404);
+        }
+
+        currentFileId = targetId;
+        resolvedFileId = targetId;
+        data = await this.fetchDriveMetadata(currentFileId);
+        depth += 1;
+      }
+
+      if (depth >= MAX_SHORTCUT_DEPTH && data.mimeType === SHORTCUT_MIME) {
+        throw new FileServiceError("Shortcut resolution depth exceeded", 500);
+      }
 
       if (!isValidDriveMetadata(data)) {
         throw new FileServiceError("Invalid Drive metadata", 500);
       }
 
       return {
-        id: data.id,
+        id: normalizedFileId,
         name: data.name,
         mimeType: data.mimeType,
         size: parseDriveSize(data.size),
         modifiedTime:
           typeof data.modifiedTime === "string" ? data.modifiedTime : null,
+        resolvedFileId,
       };
     } catch (error) {
       if (error instanceof FileServiceError) {

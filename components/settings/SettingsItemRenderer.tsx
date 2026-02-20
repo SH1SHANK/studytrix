@@ -9,6 +9,7 @@ import { SettingSelect } from "./SettingSelect";
 import { SettingSlider } from "./SettingSlider";
 import { SettingTheme } from "./SettingTheme";
 import { SettingToggle } from "./SettingToggle";
+import { SettingStorageLocation } from "./SettingStorageLocation";
 import { getSettingIcon } from "./setting-icons";
 import type { SettingItem } from "@/features/settings/settings.types";
 
@@ -23,6 +24,10 @@ function SettingsItemRendererComponent({
   onAction,
   onDangerAction,
 }: SettingsItemRendererProps) {
+  if (setting.id === "storage_location") {
+    return <SettingStorageLocation setting={setting} />;
+  }
+
   if (setting.type === "toggle") {
     return <SettingToggle setting={setting} />;
   }

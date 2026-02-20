@@ -25,7 +25,8 @@ import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { expandFolders } from "@/features/bulk/bulk.service";
 import { makeFilesOffline } from "@/features/bulk/bulk.offline";
 import { toast } from "sonner";
-import { bulkShare } from "@/features/bulk/bulk.share";
+import { shareAsZip } from "@/features/bulk/bulk.share";
+import { useShareStore } from "@/features/share/share.store";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -83,6 +84,14 @@ function formatModifiedTimeLabel(modifiedTime: string | null | undefined): strin
     month: "short",
     day: "numeric",
   }).format(new Date(timestamp));
+}
+
+function sanitizeZipPrefix(value: string): string {
+  return value
+    .trim()
+    .replace(/[<>:\"/\\|?*\x00-\x1f]/g, "_")
+    .replace(/\s+/g, "-")
+    .toLowerCase() || "folder";
 }
 
 export function EntityActionsMenu({
@@ -271,19 +280,39 @@ export function EntityActionsMenu({
                 triggerHaptic();
                 
                 if (entityType === "folder") {
-                  const sharePromise = expandFolders([entityId])
-                    .then((files) => {
+                  void (async () => {
+                    const shareStore = useShareStore.getState();
+                    try {
+                      const files = await expandFolders([entityId]);
                       if (files.length === 0) {
                         throw new Error("Folder is empty");
                       }
-                      return bulkShare(files, "zip");
-                    });
-                  
-                  toast.promise(sharePromise, {
-                    loading: `Preparing to share "${title}"...`,
-                    success: `Shared "${title}"`,
-                    error: (err) => err instanceof Error ? err.message : `Failed to share "${title}"`,
-                  });
+
+                      shareStore.startShare(
+                        `${title}.zip`,
+                        files.length,
+                        {
+                          unit: "items",
+                          title: "Preparing Folder ZIP",
+                        },
+                      );
+
+                      await shareAsZip(
+                        files,
+                        (done, total) => {
+                          shareStore.updateProgress(done, total);
+                        },
+                        `${sanitizeZipPrefix(title)}-share.zip`,
+                      );
+
+                      shareStore.endShare();
+                    } catch (error) {
+                      shareStore.setError();
+                      toast.error(
+                        error instanceof Error ? error.message : `Failed to share "${title}"`,
+                      );
+                    }
+                  })();
                 } else {
                   void shareNativeFile(entityId, title, entityDetails?.mimeType ?? "application/octet-stream");
                 }
@@ -313,7 +342,12 @@ export function EntityActionsMenu({
                       if (files.length === 0) {
                         throw new Error("Folder is empty");
                       }
-                      return makeFilesOffline(files);
+                      return makeFilesOffline(files, {
+                        group: {
+                          id: `folder:${entityId}`,
+                          label: title,
+                        },
+                      });
                     });
 
                   toast.promise(downloadPromise, {

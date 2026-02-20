@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { IconCloudOff, IconFolder, IconRefresh } from "@tabler/icons-react";
 
@@ -34,7 +34,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
-export default function OfflineLibraryPage() {
+function OfflineLibraryContent() {
   const searchParams = useSearchParams();
   const selectedFolderId = searchParams.get("folder");
   const [snapshot, setSnapshot] = useState<OfflineLibrarySnapshot | null>(null);
@@ -226,5 +226,23 @@ export default function OfflineLibraryPage() {
         ) : null}
       </div>
     </AppShell>
+  );
+}
+
+export default function OfflineLibraryPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell headerTitle="Offline Library" hideHeaderFilters={true}>
+          <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-5">
+            <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
+              Loading offline library...
+            </div>
+          </div>
+        </AppShell>
+      }
+    >
+      <OfflineLibraryContent />
+    </Suspense>
   );
 }

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { runOfflineV2Migration } from "@/features/offline/offline.migration";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
-import { getFile } from "@/features/offline/offline.db";
+import { getFile, getMetadata } from "@/features/offline/offline.db";
 import { useSettingsStore } from "@/features/settings/settings.store";
 import { getFileMetadataWithCache } from "@/features/file/file-metadata.client";
 import "@/features/download/download.diagnostics";
@@ -14,6 +14,7 @@ import {
   pauseDownload,
   removeDownloadTask,
   resumeDownload,
+  type StartDownloadOptions,
   startDownload,
 } from "@/features/download/download.controller";
 import { animateToDownloadButton } from "@/features/download/download.animation";
@@ -75,12 +76,77 @@ async function repairCompletedTaskMetadata(): Promise<void> {
       continue;
     }
 
-    const online = typeof navigator === "undefined" ? true : navigator.onLine;
-    const resolved = await getFileMetadataWithCache(task.fileId, {
-      allowNetwork: online,
-    });
+    let repaired = false;
 
-    if (resolved.metadata) {
+    // 1) Canonical local download-meta first.
+    const downloadMeta = await getMetadata(`download-meta:${task.fileId}`);
+    if (downloadMeta?.value) {
+      try {
+        const parsed = JSON.parse(downloadMeta.value) as {
+          name?: unknown;
+          mimeType?: unknown;
+          size?: unknown;
+        };
+        const nextSize =
+          typeof parsed.size === "number" && Number.isFinite(parsed.size) && parsed.size > 0
+            ? Math.floor(parsed.size)
+            : knownSize > 1
+              ? knownSize
+              : 0;
+        const nextMimeType =
+          typeof parsed.mimeType === "string" && parsed.mimeType.trim().length > 0
+            ? parsed.mimeType
+            : task.mimeType;
+        const nextName =
+          typeof parsed.name === "string" && parsed.name.trim().length > 0
+            ? parsed.name
+            : task.fileName;
+
+        if (nextSize > 0 || nextMimeType) {
+          useDownloadStore.getState().updateTask(task.id, {
+            fileName: nextName,
+            mimeType: nextMimeType,
+            size: nextSize > 0 ? nextSize : task.size,
+            loadedBytes: nextSize > 0 ? nextSize : task.loadedBytes,
+            totalBytes: nextSize > 0 ? nextSize : task.totalBytes,
+            updatedAt: Date.now(),
+          });
+          repaired = true;
+        }
+      } catch {
+      }
+    }
+
+    // 2) Local offline blob metadata.
+    if (!repaired) {
+      const record = await getFile(task.fileId);
+      if (record && record.size > 0) {
+        useDownloadStore.getState().updateTask(task.id, {
+          mimeType: record.mimeType || record.blob.type || "application/octet-stream",
+          size: record.size,
+          loadedBytes: record.size,
+          totalBytes: record.size,
+          updatedAt: Date.now(),
+        });
+        repaired = true;
+      }
+    }
+
+    // 3) Network metadata as a final fallback (online only).
+    if (!repaired) {
+      const online = typeof navigator === "undefined" ? true : navigator.onLine;
+      if (!online) {
+        continue;
+      }
+
+      const resolved = await getFileMetadataWithCache(task.fileId, {
+        allowNetwork: true,
+      });
+
+      if (!resolved.metadata) {
+        continue;
+      }
+
       const nextSize =
         resolved.metadata.size > 0
           ? resolved.metadata.size
@@ -93,21 +159,7 @@ async function repairCompletedTaskMetadata(): Promise<void> {
         totalBytes: nextSize > 0 ? nextSize : task.totalBytes,
         updatedAt: Date.now(),
       });
-      continue;
     }
-
-    const record = await getFile(task.fileId);
-    if (!record || record.size <= 0) {
-      continue;
-    }
-
-    useDownloadStore.getState().updateTask(task.id, {
-      mimeType: record.mimeType || record.blob.type || "application/octet-stream",
-      size: record.size,
-      loadedBytes: record.size,
-      totalBytes: record.size,
-      updatedAt: Date.now(),
-    });
   }
 }
 
@@ -125,6 +177,10 @@ function ensureFeedbackSubscriptions(): void {
   feedbackSubscribed = true;
 
   on("download:added", ({ task }) => {
+    if (task.hiddenInUi) {
+      return;
+    }
+
     if (announcedDownloads.has(task.id)) {
       return;
     }
@@ -135,23 +191,35 @@ function ensureFeedbackSubscriptions(): void {
 
   on("download:completed", ({ taskId }) => {
     const task = useDownloadStore.getState().tasks[taskId];
+    if (task?.hiddenInUi) {
+      return;
+    }
     toast.success(`Offline ready: ${task?.fileName ?? "File"}`);
     vibrate(10);
   });
 
   on("download:failed", ({ taskId, error }) => {
     const task = useDownloadStore.getState().tasks[taskId];
+    if (task?.hiddenInUi) {
+      return;
+    }
     toast.error(`${task?.fileName ?? "Download"} failed: ${error}`);
     vibrate(14);
   });
 
   on("download:paused", ({ taskId }) => {
     const task = useDownloadStore.getState().tasks[taskId];
+    if (task?.hiddenInUi) {
+      return;
+    }
     toast.message(`Paused: ${task?.fileName ?? "Download"}`);
   });
 
   on("download:canceled", ({ taskId }) => {
     const task = useDownloadStore.getState().tasks[taskId];
+    if (task?.hiddenInUi) {
+      return;
+    }
     toast.message(`Canceled: ${task?.fileName ?? "Download"}`);
   });
 }
@@ -178,10 +246,10 @@ export function useDownloadManager() {
     })();
   }, []);
 
-  const start = useCallback(async (fileId: string) => {
+  const start = useCallback(async (fileId: string, options?: StartDownloadOptions) => {
     vibrate(8);
     try {
-      return await startDownload(fileId);
+      return await startDownload(fileId, options);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not start download";
       toast.error(message);

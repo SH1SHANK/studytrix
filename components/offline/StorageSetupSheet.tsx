@@ -401,3 +401,16 @@ export function StorageSetupSheet({
     </Dialog>
   );
 }
+
+export function GlobalStorageSetupSheet() {
+  const isSetupSheetOpen = useStorageLocationStore((s) => s.isSetupSheetOpen);
+  const openSetupSheet = useStorageLocationStore((s) => s.openSetupSheet);
+  const closeSetupSheet = useStorageLocationStore((s) => s.closeSetupSheet);
+
+  return (
+    <StorageSetupSheet
+      open={isSetupSheetOpen}
+      onOpenChange={(open) => (open ? openSetupSheet() : closeSetupSheet())}
+    />
+  );
+}

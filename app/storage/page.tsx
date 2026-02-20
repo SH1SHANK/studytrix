@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { OfflineRuntimeDiagnostics } from "@/components/offline/OfflineRuntimeDiagnostics";
 import { BulkDeletePanel } from "@/components/storage/BulkDeletePanel";
 import { CourseStorageTable } from "@/components/storage/CourseStorageTable";
 import { IntegrityStatusCard } from "@/components/storage/IntegrityStatusCard";
@@ -12,6 +13,7 @@ import { StorageInfographics } from "@/components/storage/StorageInfographics";
 import { StorageLayout } from "@/components/storage/StorageLayout";
 import { StorageOverviewCard } from "@/components/storage/StorageOverviewCard";
 import { StorageQuotaIndicator } from "@/components/storage/StorageQuotaIndicator";
+import { StorageLocationCard } from "@/components/storage/StorageLocationCard";
 import { getIntegrityIssues } from "@/features/storage/storage.integrity";
 import { exportStorageSummary } from "@/features/storage/storage.service";
 import { useStorageDashboard } from "@/ui/hooks/useStorageDashboard";
@@ -80,6 +82,12 @@ export default function StoragePage() {
               loading={loading}
               hasErrors={errors.length > 0}
             />
+          </section>
+
+          {/* ── Storage Location ──────────────────────────────── */}
+          <section className="space-y-4">
+            <StorageLocationCard />
+            <OfflineRuntimeDiagnostics />
           </section>
 
           {/* ── Quota & Breakdown ─────────────────────────────── */}

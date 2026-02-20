@@ -7,14 +7,22 @@ export type DownloadState =
   | "canceled";
 
 export type DownloadErrorCode = "OFFLINE" | "NETWORK" | "QUOTA" | "UNKNOWN";
+export type DownloadTaskKind = "file" | "folder";
 
 export interface DownloadTask {
   id: string;
   fileId: string;
   fileName: string;
+  kind?: DownloadTaskKind;
   courseCode?: string;
   mimeType?: string;
   size?: number;
+  hiddenInUi?: boolean;
+  groupId?: string;
+  groupLabel?: string;
+  groupTotalFiles?: number;
+  groupCompletedFiles?: number;
+  groupTotalBytes?: number;
   progress: number;
   loadedBytes?: number;
   totalBytes?: number;

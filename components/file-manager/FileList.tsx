@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { IconChevronDown, IconFolderOff, IconLoader2 } from "@tabler/icons-react";
+import { IconChevronDown, IconFolderOff } from "@tabler/icons-react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { useFileManagerViewMode } from "@/components/file-manager/ControlsBar";
@@ -22,9 +22,9 @@ import { useDriveFolder } from "@/features/drive/drive.hooks";
 import type { DownloadTask as DownloadManagerTask } from "@/features/download/download.types";
 import { openLocalFirst } from "@/features/offline/offline.access";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
+import { loadOfflineLibrarySnapshot } from "@/features/offline/offline.library";
 import { autoPrefetch } from "@/features/offline/offline.prefetch";
 import { useSettingsStore } from "@/features/settings/settings.store";
-import { useMotionTokens } from "@/features/motion/motion.tokens";
 import {
   formatFileSize,
   getMimeLabel,
@@ -46,6 +46,20 @@ type FileListRow = {
   modifiedTime: string | null;
   webViewLink: string | null;
 };
+
+function areSetsEqual(left: Set<string>, right: Set<string>): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 /* ─── Section Header — matches dashboard section labels with accent bar ── */
 
@@ -133,8 +147,8 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const [swipeEnabled, setSwipeEnabled] = useState(false);
   const [foldersOpen, setFoldersOpen] = useState(true);
   const [filesOpen, setFilesOpen] = useState(true);
-  const motionTokens = useMotionTokens();
   const offlineFiles = useOfflineIndexStore((state) => state.snapshot.offlineFiles);
+  const offlineSnapshotUpdatedAt = useOfflineIndexStore((state) => state.snapshot.updatedAt);
   const removeOffline = useOfflineIndexStore((state) => state.removeOffline);
   const autoPrefetchEnabled = useSettingsStore((state) => {
     const candidate = state.values.auto_prefetch;
@@ -145,6 +159,8 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
     return typeof candidate === "boolean" ? candidate : true;
   });
   const [visibleCount, setVisibleCount] = useState(120);
+  const [offlineFolderIds, setOfflineFolderIds] = useState<Set<string>>(new Set());
+  const [offlineLibraryFileIds, setOfflineLibraryFileIds] = useState<Set<string>>(new Set());
   const { tasks: downloadTasks, startDownload, animateDownload } = useDownloadManager();
 
   const { folders, files, isLoading, error } = useDriveFolder(driveFolderId);
@@ -158,6 +174,43 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
     return () =>
       mediaQuery.removeEventListener("change", updateSwipeCapability);
   }, []);
+
+  useEffect(() => {
+    let canceled = false;
+
+    void loadOfflineLibrarySnapshot({ maxAgeMs: 20_000 })
+      .then((snapshot) => {
+        if (canceled) {
+          return;
+        }
+
+        const ids = new Set<string>();
+        const fileIds = new Set<string>();
+        for (const folder of snapshot.folders) {
+          if (folder.folderId && folder.folderId !== "ungrouped") {
+            ids.add(folder.folderId);
+          }
+        }
+        for (const file of snapshot.files) {
+          if (file.fileId) {
+            fileIds.add(file.fileId);
+          }
+        }
+
+        setOfflineFolderIds((current) => (areSetsEqual(current, ids) ? current : ids));
+        setOfflineLibraryFileIds((current) => (areSetsEqual(current, fileIds) ? current : fileIds));
+      })
+      .catch(() => {
+        if (!canceled) {
+          setOfflineFolderIds(new Set());
+          setOfflineLibraryFileIds(new Set());
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [offlineSnapshotUpdatedAt]);
 
   const folderRows = useMemo<FileListRow[]>(
     () =>
@@ -274,9 +327,78 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
     return index;
   }, [downloadTasks]);
 
+  const folderGroupStatusByFolderId = useMemo(() => {
+    const map = new Map<string, { hasActive: boolean; total: number; completed: number }>();
+
+    for (const task of Object.values(downloadTasks)) {
+      if (!task.groupId || !task.groupId.startsWith("folder:")) {
+        continue;
+      }
+
+      const folderId = task.groupId.slice("folder:".length).trim();
+      if (!folderId) {
+        continue;
+      }
+
+      const current = map.get(folderId) ?? { hasActive: false, total: 0, completed: 0 };
+      current.total += 1;
+      if (task.state === "completed") {
+        current.completed += 1;
+      }
+
+      if (task.state === "queued" || task.state === "downloading" || task.state === "paused") {
+        current.hasActive = true;
+      }
+
+      map.set(folderId, current);
+    }
+
+    return map;
+  }, [downloadTasks]);
+
+  const getRowOfflineState = useCallback((item: FileListRow) => {
+    if (item.type === "file") {
+      const currentFolderOffline =
+        typeof driveFolderId === "string"
+        && driveFolderId.trim().length > 0
+        && offlineFolderIds.has(driveFolderId);
+      const groupedFolderDownloadActive =
+        typeof driveFolderId === "string"
+        && driveFolderId.trim().length > 0
+        && Boolean(folderGroupStatusByFolderId.get(driveFolderId)?.hasActive);
+      const isOffline =
+        Boolean(offlineFiles[item.id])
+        || offlineLibraryFileIds.has(item.id)
+        || currentFolderOffline;
+
+      return {
+        isOffline,
+        isDownloading: !isOffline && (Boolean(activeDownloadsByFileId.get(item.id)) || groupedFolderDownloadActive),
+      };
+    }
+
+    const folderStatus = folderGroupStatusByFolderId.get(item.id);
+    const isFolderCompletedInGroup = Boolean(
+      folderStatus && folderStatus.total > 0 && folderStatus.completed >= folderStatus.total,
+    );
+
+    return {
+      isOffline: isFolderCompletedInGroup || offlineFolderIds.has(item.id),
+      isDownloading: Boolean(folderStatus?.hasActive),
+    };
+  }, [activeDownloadsByFileId, driveFolderId, folderGroupStatusByFolderId, offlineFiles, offlineFolderIds, offlineLibraryFileIds]);
+
   const getRowSubtitle = useCallback(
     (item: FileListRow): string => {
-      if (item.type !== "file") {
+      if (item.type === "folder") {
+        const folderState = getRowOfflineState(item);
+        if (folderState.isDownloading) {
+          return "Downloading offline copy";
+        }
+        if (folderState.isOffline) {
+          return "Available Offline";
+        }
+
         return item.subtitle;
       }
 
@@ -300,7 +422,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
 
       return item.subtitle;
     },
-    [activeDownloadsByFileId, offlineFiles],
+    [activeDownloadsByFileId, getRowOfflineState, offlineFiles],
   );
 
   const handleOpenRow = useCallback(
@@ -324,7 +446,8 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           );
         }
 
-        if (offlineFiles[item.id]) {
+        const rowState = getRowOfflineState(item);
+        if (rowState.isOffline) {
           void openLocalFirst(
             item.id,
             `/api/file/${encodeURIComponent(item.id)}/stream`,
@@ -335,7 +458,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         window.open(item.webViewLink, "_blank", "noopener,noreferrer");
       }
     },
-    [autoPrefetchEnabled, departmentSegment, fileRows, offlineFiles, router, semesterSegment],
+    [autoPrefetchEnabled, departmentSegment, fileRows, getRowOfflineState, router, semesterSegment],
   );
 
   // Loading state — skeleton cards matching real card dimensions
@@ -436,29 +559,32 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                   }}
                 >
                   <div className={rowContainerClass}>
-                    {visibleRows.folders.map((item, index) => (
-                      <FileRow
-                        key={item.id}
-                        id={item.id}
-                        type={item.type}
-                        title={item.title}
-                        subtitle={getRowSubtitle(item)}
-                        mimeType={item.mimeType}
-                        sizeBytes={item.sizeBytes}
-                        modifiedTime={item.modifiedTime}
-                        isOffline={Boolean(offlineFiles[item.id])}
-                        isDownloading={Boolean(activeDownloadsByFileId.get(item.id))}
-                        viewMode={viewMode}
-                        isOpen={openRowId === item.id}
-                        swipeEnabled={swipeEnabled && !isGridView}
-                        onToggleOpen={onToggleOpen}
-                        onOpen={() => handleOpenRow(item)}
-                        onRemoveOffline={() => {
-                          void handleRemoveOffline(item);
-                        }}
-                        animationIndex={index}
-                      />
-                    ))}
+                    {visibleRows.folders.map((item, index) => {
+                      const rowState = getRowOfflineState(item);
+                      return (
+                        <FileRow
+                          key={item.id}
+                          id={item.id}
+                          type={item.type}
+                          title={item.title}
+                          subtitle={getRowSubtitle(item)}
+                          mimeType={item.mimeType}
+                          sizeBytes={item.sizeBytes}
+                          modifiedTime={item.modifiedTime}
+                          isOffline={rowState.isOffline}
+                          isDownloading={rowState.isDownloading}
+                          viewMode={viewMode}
+                          isOpen={openRowId === item.id}
+                          swipeEnabled={swipeEnabled && !isGridView}
+                          onToggleOpen={onToggleOpen}
+                          onOpen={() => handleOpenRow(item)}
+                          onRemoveOffline={() => {
+                            void handleRemoveOffline(item);
+                          }}
+                          animationIndex={index}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               </section>
@@ -487,32 +613,35 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                   }}
                 >
                   <div className={rowContainerClass}>
-                    {visibleRows.files.map((item, index) => (
-                      <FileRow
-                        key={item.id}
-                        id={item.id}
-                        type={item.type}
-                        title={item.title}
-                        subtitle={getRowSubtitle(item)}
-                        mimeType={item.mimeType}
-                        sizeBytes={item.sizeBytes}
-                        modifiedTime={item.modifiedTime}
-                        isOffline={Boolean(offlineFiles[item.id])}
-                        isDownloading={Boolean(activeDownloadsByFileId.get(item.id))}
-                        viewMode={viewMode}
-                        isOpen={openRowId === item.id}
-                        swipeEnabled={swipeEnabled && !isGridView}
-                        onToggleOpen={onToggleOpen}
-                        onOpen={() => handleOpenRow(item)}
-                        onMakeOffline={(sourceElement) => {
-                          void handleMakeOffline(item, sourceElement);
-                        }}
-                        onRemoveOffline={() => {
-                          void handleRemoveOffline(item);
-                        }}
-                        animationIndex={visibleRows.folders.length + index}
-                      />
-                    ))}
+                    {visibleRows.files.map((item, index) => {
+                      const rowState = getRowOfflineState(item);
+                      return (
+                        <FileRow
+                          key={item.id}
+                          id={item.id}
+                          type={item.type}
+                          title={item.title}
+                          subtitle={getRowSubtitle(item)}
+                          mimeType={item.mimeType}
+                          sizeBytes={item.sizeBytes}
+                          modifiedTime={item.modifiedTime}
+                          isOffline={rowState.isOffline}
+                          isDownloading={rowState.isDownloading}
+                          viewMode={viewMode}
+                          isOpen={openRowId === item.id}
+                          swipeEnabled={swipeEnabled && !isGridView}
+                          onToggleOpen={onToggleOpen}
+                          onOpen={() => handleOpenRow(item)}
+                          onMakeOffline={(sourceElement) => {
+                            void handleMakeOffline(item, sourceElement);
+                          }}
+                          onRemoveOffline={() => {
+                            void handleRemoveOffline(item);
+                          }}
+                          animationIndex={visibleRows.folders.length + index}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               </section>
@@ -520,32 +649,35 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           </div>
         ) : (
           <div className={rowContainerClass}>
-            {visibleRows.all.map((item, index) => (
-              <FileRow
-                key={item.id}
-                id={item.id}
-                type={item.type}
-                title={item.title}
-                subtitle={getRowSubtitle(item)}
-                mimeType={item.mimeType}
-                sizeBytes={item.sizeBytes}
-                modifiedTime={item.modifiedTime}
-                isOffline={Boolean(offlineFiles[item.id])}
-                isDownloading={Boolean(activeDownloadsByFileId.get(item.id))}
-                viewMode={viewMode}
-                isOpen={openRowId === item.id}
-                swipeEnabled={swipeEnabled && !isGridView}
-                onToggleOpen={onToggleOpen}
-                onOpen={() => handleOpenRow(item)}
-                onMakeOffline={(sourceElement) => {
-                  void handleMakeOffline(item, sourceElement);
-                }}
-                onRemoveOffline={() => {
-                  void handleRemoveOffline(item);
-                }}
-                animationIndex={index}
-              />
-            ))}
+            {visibleRows.all.map((item, index) => {
+              const rowState = getRowOfflineState(item);
+              return (
+                <FileRow
+                  key={item.id}
+                  id={item.id}
+                  type={item.type}
+                  title={item.title}
+                  subtitle={getRowSubtitle(item)}
+                  mimeType={item.mimeType}
+                  sizeBytes={item.sizeBytes}
+                  modifiedTime={item.modifiedTime}
+                  isOffline={rowState.isOffline}
+                  isDownloading={rowState.isDownloading}
+                  viewMode={viewMode}
+                  isOpen={openRowId === item.id}
+                  swipeEnabled={swipeEnabled && !isGridView}
+                  onToggleOpen={onToggleOpen}
+                  onOpen={() => handleOpenRow(item)}
+                  onMakeOffline={(sourceElement) => {
+                    void handleMakeOffline(item, sourceElement);
+                  }}
+                  onRemoveOffline={() => {
+                    void handleRemoveOffline(item);
+                  }}
+                  animationIndex={index}
+                />
+              );
+            })}
           </div>
         )}
 

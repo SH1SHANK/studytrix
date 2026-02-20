@@ -33,7 +33,9 @@ import {
 import { AnimatePresence, motion, type Easing } from "framer-motion";
 
 import { cn } from "@/lib/utils";
+import { DEPARTMENT_MAP, getDepartmentName } from "@/lib/academic";
 import { Button } from "@/components/ui/button";
+import { FloatingDock } from "@/components/layout/FloatingDock";
 import { HighlightedText } from "@/components/command/HighlightedText";
 import { useAcademicContext } from "@/components/layout/AcademicContext";
 import {
@@ -77,6 +79,8 @@ import {
 } from "@/features/drive/drive.types";
 import { openLocalFirst } from "@/features/offline/offline.access";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
+import { useTagStore } from "@/features/tags/tag.store";
+import { useDownloadStore } from "@/features/download/download.store";
 import {
   loadOfflineLibrarySnapshot,
   type OfflineLibrarySnapshot,
@@ -166,12 +170,61 @@ const RECENT_QUERY_STORAGE_KEY = "studytrix.command.recentQueries.v1";
 const MAX_RECENT_QUERIES = 6;
 const RECENT_COMMAND_STORAGE_KEY = "studytrix.command.recentCommands.v1";
 const MAX_RECENT_COMMANDS = 24;
+const SCOPE_STATE_STORAGE_KEY = "studytrix.command.scope.v1";
+const SCOPE_HISTORY_STORAGE_KEY = "studytrix.command.scopeHistory.v1";
+const MAX_SCOPE_HISTORY = 20;
+const SCOPE_HINT_USED_KEY = "studytrix.command.scopeHintUsed.v1";
+const SCOPE_SUMMARY_STORAGE_KEY = "studytrix.command.scopeSummary.v1";
+const SCOPE_SUMMARY_EVENT = "studytrix:command-scope-summary";
+const CMD_QUERY_PARAM = "cmd";
+const CMD_SCOPE_PARAM = "scope";
+const CMD_TEXT_PARAM = "q";
 const NESTED_INDEX_TTL_MS = 30 * 60 * 1000;
 const EMPTY_OFFLINE_LIBRARY: OfflineLibrarySnapshot = {
   files: [],
   folders: [],
   totalBytes: 0,
 };
+
+type SearchScope = {
+  mode: "global" | "actions" | "recents";
+  folder: { folderId: string; label: string } | null;
+  tag: { tagId: string; label: string } | null;
+  domain: { departmentId: string; semesterId: string; label: string } | null;
+};
+
+type ScopeSelectorMode = "folders" | "tags" | "domains";
+
+type ScopeHistoryEntry = {
+  query: string;
+  scope: SearchScope;
+  createdAt: number;
+};
+
+const GLOBAL_SCOPE: SearchScope = {
+  mode: "global",
+  folder: null,
+  tag: null,
+  domain: null,
+};
+
+function isScopeEmpty(scope: SearchScope): boolean {
+  return (
+    scope.mode === "global"
+    && scope.folder === null
+    && scope.tag === null
+    && scope.domain === null
+  );
+}
+
+function cloneScope(scope: SearchScope): SearchScope {
+  return {
+    mode: scope.mode,
+    folder: scope.folder ? { ...scope.folder } : null,
+    tag: scope.tag ? { ...scope.tag } : null,
+    domain: scope.domain ? { ...scope.domain } : null,
+  };
+}
 
 type NestedRootPayload = {
   folderId: string;
@@ -477,6 +530,287 @@ function persistRecentCommandIds(commandIds: string[]): void {
   }
 }
 
+function isSearchScope(value: unknown): value is SearchScope {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  const mode = typeof record.mode === "string" ? record.mode : "";
+  const isValidMode = mode === "global" || mode === "actions" || mode === "recents";
+  if (!isValidMode) {
+    return false;
+  }
+
+  const folder = record.folder;
+  const folderValid =
+    folder === null
+    || (
+      typeof folder === "object"
+      && folder !== null
+      && typeof (folder as { folderId?: unknown }).folderId === "string"
+      && (folder as { folderId: string }).folderId.trim().length > 0
+      && typeof (folder as { label?: unknown }).label === "string"
+      && (folder as { label: string }).label.trim().length > 0
+    );
+  if (!folderValid) {
+    return false;
+  }
+
+  const tag = record.tag;
+  const tagValid =
+    tag === null
+    || (
+      typeof tag === "object"
+      && tag !== null
+      && typeof (tag as { tagId?: unknown }).tagId === "string"
+      && (tag as { tagId: string }).tagId.trim().length > 0
+      && typeof (tag as { label?: unknown }).label === "string"
+      && (tag as { label: string }).label.trim().length > 0
+    );
+  if (!tagValid) {
+    return false;
+  }
+
+  const domain = record.domain;
+  const domainValid =
+    domain === null
+    || (
+      typeof domain === "object"
+      && domain !== null
+      && typeof (domain as { departmentId?: unknown }).departmentId === "string"
+      && (domain as { departmentId: string }).departmentId.trim().length > 0
+      && typeof (domain as { semesterId?: unknown }).semesterId === "string"
+      && (domain as { semesterId: string }).semesterId.trim().length > 0
+      && typeof (domain as { label?: unknown }).label === "string"
+      && (domain as { label: string }).label.trim().length > 0
+    );
+
+  return domainValid;
+}
+
+function loadPersistedScope(): SearchScope {
+  if (typeof window === "undefined") {
+    return GLOBAL_SCOPE;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(SCOPE_STATE_STORAGE_KEY);
+    if (!raw) {
+      return GLOBAL_SCOPE;
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    return isSearchScope(parsed) ? parsed : GLOBAL_SCOPE;
+  } catch {
+    return GLOBAL_SCOPE;
+  }
+}
+
+function persistScope(scope: SearchScope): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (
+      scope.mode === "global"
+      && scope.folder === null
+      && scope.tag === null
+      && scope.domain === null
+    ) {
+      window.sessionStorage.removeItem(SCOPE_STATE_STORAGE_KEY);
+      return;
+    }
+
+    window.sessionStorage.setItem(SCOPE_STATE_STORAGE_KEY, JSON.stringify(scope));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function loadScopeHistory(): ScopeHistoryEntry[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(SCOPE_HISTORY_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter((entry): entry is ScopeHistoryEntry => {
+        if (!entry || typeof entry !== "object") {
+          return false;
+        }
+
+        const record = entry as Record<string, unknown>;
+        return (
+          typeof record.query === "string"
+          && isSearchScope(record.scope)
+          && typeof record.createdAt === "number"
+          && Number.isFinite(record.createdAt)
+        );
+      })
+      .slice(0, MAX_SCOPE_HISTORY);
+  } catch {
+    return [];
+  }
+}
+
+function persistScopeHistory(entries: ScopeHistoryEntry[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(
+      SCOPE_HISTORY_STORAGE_KEY,
+      JSON.stringify(entries.slice(0, MAX_SCOPE_HISTORY)),
+    );
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function hasSeenScopeHint(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  try {
+    return window.sessionStorage.getItem(SCOPE_HINT_USED_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
+function markScopeHintSeen(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(SCOPE_HINT_USED_KEY, "1");
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function getScopeLabel(scope: SearchScope): string {
+  if (scope.folder) {
+    return scope.folder.label;
+  }
+
+  if (scope.tag) {
+    return `#${scope.tag.label}`;
+  }
+
+  if (scope.domain) {
+    return scope.domain.label;
+  }
+
+  if (scope.mode === "actions") {
+    return "Actions";
+  }
+
+  if (scope.mode === "recents") {
+    return "Recents";
+  }
+
+  return "Global";
+}
+
+function serializeScope(scope: SearchScope): string {
+  const parts: string[] = [];
+  if (scope.domain) {
+    parts.push(`domain:${scope.domain.departmentId}:${scope.domain.semesterId}`);
+  }
+  if (scope.folder) {
+    parts.push(`folder:${scope.folder.folderId}`);
+  }
+  if (scope.tag) {
+    parts.push(`tag:${scope.tag.tagId}`);
+  }
+  if (scope.mode !== "global") {
+    parts.push(`mode:${scope.mode}`);
+  }
+  return parts.join("|");
+}
+
+function parseScopeFromSerialized(serialized: string | null): SearchScope {
+  if (!serialized || serialized.trim().length === 0) {
+    return GLOBAL_SCOPE;
+  }
+
+  const next = cloneScope(GLOBAL_SCOPE);
+  const chunks = serialized.split("|").map((chunk) => chunk.trim()).filter(Boolean);
+  for (const chunk of chunks) {
+    if (chunk.startsWith("folder:")) {
+      const folderId = chunk.slice("folder:".length).trim();
+      if (folderId) {
+        next.folder = { folderId, label: folderId };
+      }
+      continue;
+    }
+    if (chunk.startsWith("tag:")) {
+      const tagId = chunk.slice("tag:".length).trim();
+      if (tagId) {
+        next.tag = { tagId, label: tagId };
+      }
+      continue;
+    }
+    if (chunk.startsWith("domain:")) {
+      const [departmentId, semesterId] = chunk.slice("domain:".length).split(":");
+      if (departmentId && semesterId) {
+        next.domain = {
+          departmentId: departmentId.trim().toUpperCase(),
+          semesterId: semesterId.trim(),
+          label: `${departmentId.trim().toUpperCase()} S${semesterId.trim()}`,
+        };
+      }
+      continue;
+    }
+    if (chunk === "mode:actions") {
+      next.mode = "actions";
+      continue;
+    }
+    if (chunk === "mode:recents") {
+      next.mode = "recents";
+    }
+  }
+
+  return next;
+}
+
+function writeScopeSummary(value: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (!value) {
+      window.sessionStorage.removeItem(SCOPE_SUMMARY_STORAGE_KEY);
+      window.dispatchEvent(
+        new CustomEvent(SCOPE_SUMMARY_EVENT, { detail: { value: "" } }),
+      );
+      return;
+    }
+    window.sessionStorage.setItem(SCOPE_SUMMARY_STORAGE_KEY, value);
+    window.dispatchEvent(
+      new CustomEvent(SCOPE_SUMMARY_EVENT, { detail: { value } }),
+    );
+  } catch {
+    // ignore
+  }
+}
+
 export function CommandBar({
   placeholder = "Search files, folders, or actions...",
 }: CommandBarProps) {
@@ -487,6 +821,11 @@ export function CommandBar({
     useAcademicContext();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchScope, setSearchScope] = useState<SearchScope>(GLOBAL_SCOPE);
+  const [scopeSelectorMode, setScopeSelectorMode] = useState<ScopeSelectorMode | null>(null);
+  const [scopeHistory, setScopeHistory] = useState<ScopeHistoryEntry[]>([]);
+  const [scopeHistoryCursor, setScopeHistoryCursor] = useState(-1);
+  const [isScopeHintSeen, setIsScopeHintSeen] = useState(true);
   const [driveItems, setDriveItems] = useState<DriveItem[]>([]);
   const [isDriveLoading, setIsDriveLoading] = useState(false);
   const [recentQueries, setRecentQueries] = useState<string[]>([]);
@@ -507,7 +846,15 @@ export function CommandBar({
   const motionTokens = useMotionTokens();
   const listRef = useRef<HTMLDivElement>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
+  const urlSyncRef = useRef("");
+  const urlApplyRef = useRef("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const tags = useTagStore((state) => state.tags);
+  const assignments = useTagStore((state) => state.assignments);
+  const activeTagFilters = useTagStore((state) => state.activeFilters);
+  const isTagHydrated = useTagStore((state) => state.isHydrated);
+  const hydrateTags = useTagStore((state) => state.hydrate);
+  const downloadTasks = useDownloadStore((state) => state.tasks);
 
   const pathSegments = useMemo(
     () => pathname.split("/").filter(Boolean),
@@ -774,6 +1121,68 @@ export function CommandBar({
     return titleCaseSegment(folderId);
   }, [catalogCourses, folderId, searchParams]);
 
+  const markScopeUsage = useCallback(() => {
+    if (isScopeHintSeen) {
+      return;
+    }
+
+    setIsScopeHintSeen(true);
+    markScopeHintSeen();
+  }, [isScopeHintSeen]);
+
+  const applyScope = useCallback((scope: SearchScope) => {
+    const nextScope = cloneScope(scope);
+    setSearchScope(nextScope);
+    persistScope(nextScope);
+    setScopeHistoryCursor(-1);
+    if (!isScopeEmpty(nextScope)) {
+      markScopeUsage();
+    }
+  }, [markScopeUsage]);
+
+  const removeLastScopePill = useCallback(() => {
+    if (searchScope.mode !== "global") {
+      applyScope({ ...searchScope, mode: "global" });
+      return;
+    }
+
+    if (searchScope.tag) {
+      applyScope({ ...searchScope, tag: null });
+      return;
+    }
+
+    if (searchScope.folder) {
+      applyScope({ ...searchScope, folder: null });
+      return;
+    }
+
+    if (searchScope.domain) {
+      applyScope({ ...searchScope, domain: null });
+    }
+  }, [applyScope, searchScope]);
+
+  const pushScopeHistory = useCallback((value: string, scope: SearchScope) => {
+    const normalizedQuery = value.trim();
+    if (!normalizedQuery && isScopeEmpty(scope)) {
+      return;
+    }
+
+    const nextEntry: ScopeHistoryEntry = {
+      query: normalizedQuery,
+      scope: cloneScope(scope),
+      createdAt: Date.now(),
+    };
+
+    setScopeHistory((current) => {
+      const deduped = current.filter((entry) =>
+        !(entry.query === nextEntry.query && JSON.stringify(entry.scope) === JSON.stringify(nextEntry.scope)));
+      const next = [nextEntry, ...deduped].slice(0, MAX_SCOPE_HISTORY);
+      persistScopeHistory(next);
+      return next;
+    });
+    setScopeHistoryCursor(-1);
+  }, []);
+
   const folderCommands = useMemo<EngineCommandItem[]>(() => {
     const baseCommands: EngineCommandItem[] = isFolderScope
       ? driveItems.filter(isDriveFolder).map((item) => ({
@@ -787,6 +1196,8 @@ export function CommandBar({
         payload: {
           route:
             `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(item.id)}?name=${encodeURIComponent(item.name)}`,
+          departmentId,
+          semesterId,
         },
       }))
       : catalogCourses.map((course) => ({
@@ -800,6 +1211,8 @@ export function CommandBar({
         payload: {
           route:
             `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(course.driveFolderId)}?name=${encodeURIComponent(course.courseName)}`,
+          departmentId,
+          semesterId,
         },
       }));
 
@@ -821,6 +1234,8 @@ export function CommandBar({
         entityId: folder.folderId,
         payload: {
           route: `/offline-library?folder=${encodeURIComponent(folder.folderId)}`,
+          departmentId,
+          semesterId,
         },
       }));
 
@@ -833,6 +1248,27 @@ export function CommandBar({
     offlineLibrary.folders,
     semesterId,
   ]);
+
+  const folderScopeOptions = useMemo(() => {
+    const courseOptions = catalogCourses
+      .filter((course) => course.driveFolderId.trim().length > 0)
+      .map((course) => ({
+        folderId: course.driveFolderId,
+        label: course.courseName,
+        subtitle: course.courseCode,
+      }));
+
+    const known = new Set(courseOptions.map((item) => item.folderId));
+    const offlineOnly = offlineLibrary.folders
+      .filter((folder) => !known.has(folder.folderId))
+      .map((folder) => ({
+        folderId: folder.folderId,
+        label: folder.path,
+        subtitle: `${folder.fileCount} offline file${folder.fileCount === 1 ? "" : "s"}`,
+      }));
+
+    return [...courseOptions, ...offlineOnly];
+  }, [catalogCourses, offlineLibrary.folders]);
 
   const activeFolderFileCommands = useMemo<EngineCommandItem[]>(() => {
     if (!isFolderScope) {
@@ -859,9 +1295,12 @@ export function CommandBar({
         entityId: item.id,
         payload: {
           url: item.webViewLink,
+          parentFolderId: activeDriveFolderId ?? folderId ?? null,
+          departmentId,
+          semesterId,
         },
       }));
-  }, [driveItems, isFolderScope]);
+  }, [activeDriveFolderId, driveItems, folderId, isFolderScope]);
 
   const nestedFileCommands = useMemo<EngineCommandItem[]>(() => {
     return nestedFileEntries.map((entry) => {
@@ -897,6 +1336,9 @@ export function CommandBar({
         payload: {
           url: entry.webViewLink,
           route,
+          parentFolderId: entry.parentFolderId,
+          departmentId,
+          semesterId,
         },
       };
     });
@@ -955,6 +1397,9 @@ export function CommandBar({
         payload: {
           route: `/offline-library?folder=${encodeURIComponent(file.folderId)}`,
           url: `/api/file/${encodeURIComponent(file.fileId)}/stream`,
+          parentFolderId: file.folderId,
+          departmentId,
+          semesterId,
           offlineOnly: true,
         },
       });
@@ -965,6 +1410,200 @@ export function CommandBar({
   }, [activeFolderFileCommands, nestedFileCommands, offlineLibrary.files]);
   const deferredQuery = useDeferredValue(query);
   const trimmedDeferredQuery = deferredQuery.trim();
+
+  const taggedEntityIds = useMemo(() => {
+    if (!searchScope.tag) {
+      return new Set<string>();
+    }
+
+    const set = new Set<string>();
+    for (const assignment of Object.values(assignments)) {
+      if (assignment.tagIds.includes(searchScope.tag.tagId)) {
+        set.add(assignment.entityId);
+      }
+    }
+    return set;
+  }, [assignments, searchScope]);
+
+  const recentScopedFileIds = useMemo(() => {
+    const ids = new Set<string>();
+    const fileCommandById = new Map(fileCommands.map((item) => [item.id, item]));
+
+    for (const commandId of recentCommandIds) {
+      const command = fileCommandById.get(commandId);
+      if (command?.entityId) {
+        ids.add(command.entityId);
+      }
+    }
+
+    for (const task of Object.values(downloadTasks)) {
+      if (task.state === "completed" && task.fileId.trim().length > 0) {
+        ids.add(task.fileId);
+      }
+    }
+
+    return ids;
+  }, [downloadTasks, fileCommands, recentCommandIds]);
+
+  const domainScopeOptions = useMemo(() => {
+    const options: Array<{
+      departmentId: string;
+      semesterId: string;
+      label: string;
+      subtitle: string;
+    }> = [];
+
+    for (const departmentKey of Object.keys(DEPARTMENT_MAP)) {
+      const departmentName = getDepartmentName(departmentKey);
+      for (let sem = 1; sem <= 8; sem += 1) {
+        options.push({
+          departmentId: departmentKey,
+          semesterId: String(sem),
+          label: `${departmentName} · Semester ${sem}`,
+          subtitle: `${departmentKey} S${sem}`,
+        });
+      }
+    }
+
+    return options;
+  }, []);
+
+  const currentFolderScopeSuggestion = useMemo(() => {
+    if (!isFolderScope || !activeDriveFolderId) {
+      return null;
+    }
+
+    return {
+      folderId: activeDriveFolderId,
+      label: activeFolderTitle,
+      subtitle: "Current folder",
+    };
+  }, [activeDriveFolderId, activeFolderTitle, isFolderScope]);
+
+  const currentTagScopeSuggestion = useMemo(() => {
+    const firstActive = activeTagFilters[0];
+    if (!firstActive) {
+      return null;
+    }
+
+    const tag = tags.find((item) => item.id === firstActive);
+    if (!tag) {
+      return null;
+    }
+
+    return tag;
+  }, [activeTagFilters, tags]);
+
+  const scopeSelectorItems = useMemo<EngineCommandItem[]>(() => {
+    if (!scopeSelectorMode) {
+      return [];
+    }
+
+    const needle = trimmedDeferredQuery.toLowerCase();
+    if (scopeSelectorMode === "folders") {
+      const rankedOptions = folderScopeOptions
+        .filter((option) => {
+          if (!needle) {
+            return true;
+          }
+          return (
+            option.label.toLowerCase().includes(needle)
+            || option.subtitle.toLowerCase().includes(needle)
+          );
+        });
+
+      const ordered = [...rankedOptions];
+      if (
+        currentFolderScopeSuggestion
+        && !ordered.some((option) => option.folderId === currentFolderScopeSuggestion.folderId)
+      ) {
+        ordered.unshift(currentFolderScopeSuggestion);
+      }
+
+      return ordered.slice(0, 30).map((option) => ({
+          id: `scope-folder-${option.folderId}`,
+          title: option.label,
+          subtitle: option.subtitle,
+          keywords: ["scope", "folder", option.subtitle],
+          group: "folders",
+          scope: "global",
+          entityId: option.folderId,
+          payload: {
+            scopeKind: "folder",
+            folderId: option.folderId,
+            label: option.label,
+          },
+        }));
+    }
+
+    if (scopeSelectorMode === "tags") {
+      const rankedTags = tags.filter((tag) => {
+        if (!needle) {
+          return true;
+        }
+        return tag.name.toLowerCase().includes(needle);
+      });
+
+      const orderedTags = [...rankedTags];
+      if (
+        currentTagScopeSuggestion
+        && !orderedTags.some((tag) => tag.id === currentTagScopeSuggestion.id)
+      ) {
+        orderedTags.unshift(currentTagScopeSuggestion);
+      }
+
+      return orderedTags.slice(0, 30).map((tag) => ({
+        id: `scope-tag-${tag.id}`,
+        title: `#${tag.name}`,
+        subtitle: `${tag.uses} use${tag.uses === 1 ? "" : "s"}`,
+        keywords: ["scope", "tag", tag.name],
+        group: "actions",
+        scope: "global",
+        payload: {
+          scopeKind: "tag",
+          tagId: tag.id,
+          label: tag.name,
+        },
+      }));
+    }
+
+    return domainScopeOptions
+      .filter((option) => {
+        if (!needle) {
+          return true;
+        }
+
+        return (
+          option.label.toLowerCase().includes(needle)
+          || option.subtitle.toLowerCase().includes(needle)
+          || option.departmentId.toLowerCase().includes(needle)
+          || option.semesterId.toLowerCase().includes(needle)
+        );
+      })
+      .slice(0, 30)
+      .map((option) => ({
+        id: `scope-domain-${option.departmentId}-${option.semesterId}`,
+        title: option.label,
+        subtitle: option.subtitle,
+        keywords: ["scope", "department", "semester", option.departmentId, option.semesterId],
+        group: "navigation",
+        scope: "global",
+        payload: {
+          scopeKind: "domain",
+          departmentId: option.departmentId,
+          semesterId: option.semesterId,
+          label: option.label,
+        },
+      }));
+  }, [
+    currentFolderScopeSuggestion,
+    currentTagScopeSuggestion,
+    domainScopeOptions,
+    folderScopeOptions,
+    scopeSelectorMode,
+    tags,
+    trimmedDeferredQuery,
+  ]);
 
   const folderCommandById = useMemo(
     () => new Map(folderCommands.map((item) => [item.id, item])),
@@ -1052,6 +1691,64 @@ export function CommandBar({
     return registry;
   }, [router]);
 
+  const matchesScopedFilters = useCallback((item: EngineCommandItem): boolean => {
+    if (searchScope.mode === "actions") {
+      return item.group === "actions" || item.group === "system" || item.group === "navigation";
+    }
+
+    if (searchScope.mode === "recents") {
+      if (!(item.group === "files" && item.entityId && recentScopedFileIds.has(item.entityId))) {
+        return false;
+      }
+    }
+
+    if (searchScope.domain) {
+      const itemDepartmentId = typeof item.payload?.departmentId === "string"
+        ? item.payload.departmentId
+        : "";
+      const itemSemesterId = typeof item.payload?.semesterId === "string"
+        ? item.payload.semesterId
+        : "";
+
+      if (
+        itemDepartmentId !== searchScope.domain.departmentId
+        || itemSemesterId !== searchScope.domain.semesterId
+      ) {
+        return false;
+      }
+    }
+
+    if (searchScope.folder) {
+      if (item.group === "files") {
+        const parentFolderId = typeof item.payload?.parentFolderId === "string"
+          ? item.payload.parentFolderId
+          : "";
+        if (parentFolderId !== searchScope.folder.folderId) {
+          return false;
+        }
+      } else if (item.group === "folders") {
+        if (item.entityId !== searchScope.folder.folderId) {
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+
+    if (searchScope.tag) {
+      if (!(item.group === "files" && item.entityId && taggedEntityIds.has(item.entityId))) {
+        return false;
+      }
+    }
+
+    const hasFileScopes = Boolean(searchScope.folder || searchScope.tag || searchScope.domain);
+    if (hasFileScopes && item.group !== "files" && item.group !== "folders") {
+      return false;
+    }
+
+    return true;
+  }, [recentScopedFileIds, searchScope, taggedEntityIds]);
+
   const searchSnapshot = useMemo(() => {
     const startedAt =
       typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -1079,6 +1776,10 @@ export function CommandBar({
       resultItems = Array.from(merged.values());
     }
 
+    if (!isScopeEmpty(searchScope)) {
+      resultItems = resultItems.filter(matchesScopedFilters);
+    }
+
     resultItems = resultItems.slice(0, 24);
     const endedAt =
       typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -1087,13 +1788,25 @@ export function CommandBar({
       exactResults: resultItems,
       durationMs: Math.max(0, endedAt - startedAt),
     };
-  }, [commandContext, commandService, deferredQuery, fuzzyFolderResults]);
+  }, [
+    commandContext,
+    commandService,
+    deferredQuery,
+    fuzzyFolderResults,
+    searchScope,
+    matchesScopedFilters,
+  ]);
   const exactResults = searchSnapshot.exactResults;
   const searchDurationMs = searchSnapshot.durationMs;
 
   const fallbackResults = useMemo(() => {
-    return commandService.search("", commandContext).slice(0, 10);
-  }, [commandContext, commandService]);
+    const base = commandService.search("", commandContext);
+    if (isScopeEmpty(searchScope)) {
+      return base.slice(0, 10);
+    }
+
+    return base.filter(matchesScopedFilters).slice(0, 10);
+  }, [commandContext, commandService, matchesScopedFilters, searchScope]);
 
   const showingFallbackResults =
     trimmedDeferredQuery.length > 0 && exactResults.length === 0;
@@ -1139,10 +1852,16 @@ export function CommandBar({
     showingFallbackResults,
   ]);
 
+  const displayResults = useMemo(
+    () => (scopeSelectorMode ? scopeSelectorItems : results),
+    [results, scopeSelectorItems, scopeSelectorMode],
+  );
+  const hasAnyScope = useMemo(() => !isScopeEmpty(searchScope), [searchScope]);
+
   const groupedResults = useMemo(() => {
     const groups = new Map<EngineCommandGroup, EngineCommandItem[]>();
 
-    for (const item of results) {
+    for (const item of displayResults) {
       const current = groups.get(item.group);
       if (current) {
         current.push(item);
@@ -1155,20 +1874,20 @@ export function CommandBar({
       group,
       items: groups.get(group) ?? [],
     })).filter((entry) => entry.items.length > 0);
-  }, [results]);
+  }, [displayResults]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    for (const item of results.slice(0, 6)) {
+    for (const item of displayResults.slice(0, 6)) {
       const route = item.payload?.route;
       if (typeof route === "string" && route.length > 0) {
         void router.prefetch(route);
       }
     }
-  }, [open, results, router]);
+  }, [displayResults, open, router]);
 
   const handleOpenPalette = useCallback(() => {
     vibrate(8);
@@ -1178,7 +1897,57 @@ export function CommandBar({
   const handleClosePalette = useCallback(() => {
     vibrate(6);
     setOpen(false);
+    setScopeSelectorMode(null);
   }, []);
+
+  const handleQueryChange = useCallback((nextValue: string) => {
+    setScopeHistoryCursor(-1);
+    if (scopeSelectorMode) {
+      setQuery(nextValue);
+      return;
+    }
+
+    if (nextValue.startsWith("/")) {
+      setScopeSelectorMode("folders");
+      setQuery(nextValue.slice(1));
+      markScopeUsage();
+      return;
+    }
+
+    if (nextValue.startsWith("#")) {
+      setScopeSelectorMode("tags");
+      setQuery(nextValue.slice(1));
+      markScopeUsage();
+      return;
+    }
+
+    if (nextValue.startsWith(":")) {
+      setScopeSelectorMode("domains");
+      setQuery(nextValue.slice(1));
+      markScopeUsage();
+      return;
+    }
+
+    if (nextValue.startsWith(">")) {
+      applyScope({
+        ...searchScope,
+        mode: "actions",
+      });
+      setQuery(nextValue.slice(1));
+      return;
+    }
+
+    if (nextValue.startsWith("@")) {
+      applyScope({
+        ...searchScope,
+        mode: "recents",
+      });
+      setQuery(nextValue.slice(1));
+      return;
+    }
+
+    setQuery(nextValue);
+  }, [applyScope, markScopeUsage, scopeSelectorMode, searchScope]);
 
   const pushRecentQuery = useCallback((value: string) => {
     const normalized = value.trim().toLowerCase();
@@ -1211,6 +1980,7 @@ export function CommandBar({
   const executeCommand = useCallback(
     (item: EngineCommandItem) => {
       vibrate(10);
+      pushScopeHistory(trimmedDeferredQuery, searchScope);
       pushRecentQuery(trimmedDeferredQuery);
       pushRecentCommandId(item.id);
 
@@ -1247,8 +2017,87 @@ export function CommandBar({
       dispatcher.execute(item);
       setOpen(false);
     },
-    [dispatcher, offlineFiles, pushRecentCommandId, pushRecentQuery, router, trimmedDeferredQuery],
+    [
+      dispatcher,
+      offlineFiles,
+      pushRecentCommandId,
+      pushRecentQuery,
+      pushScopeHistory,
+      router,
+      searchScope,
+      trimmedDeferredQuery,
+    ],
   );
+
+  const handleScopeSelectorChoose = useCallback((item: EngineCommandItem): boolean => {
+    if (!scopeSelectorMode) {
+      return false;
+    }
+
+    const scopeKind = typeof item.payload?.scopeKind === "string" ? item.payload.scopeKind : "";
+    if (scopeKind === "folder") {
+      const folderId = typeof item.payload?.folderId === "string" ? item.payload.folderId : "";
+      const label = typeof item.payload?.label === "string" ? item.payload.label : "Folder";
+      if (!folderId) {
+        return true;
+      }
+      applyScope({
+        ...searchScope,
+        folder: { folderId, label },
+      });
+      setScopeSelectorMode(null);
+      setQuery("");
+      return true;
+    }
+
+    if (scopeKind === "tag") {
+      const tagId = typeof item.payload?.tagId === "string" ? item.payload.tagId : "";
+      const label = typeof item.payload?.label === "string" ? item.payload.label : "Tag";
+      if (!tagId) {
+        return true;
+      }
+      applyScope({
+        ...searchScope,
+        tag: { tagId, label },
+      });
+      setScopeSelectorMode(null);
+      setQuery("");
+      return true;
+    }
+
+    if (scopeKind === "domain") {
+      const departmentIdValue =
+        typeof item.payload?.departmentId === "string" ? item.payload.departmentId : "";
+      const semesterIdValue =
+        typeof item.payload?.semesterId === "string" ? item.payload.semesterId : "";
+      const label = typeof item.payload?.label === "string" ? item.payload.label : "Department";
+      if (!departmentIdValue || !semesterIdValue) {
+        return true;
+      }
+
+      applyScope({
+        ...searchScope,
+        domain: {
+          departmentId: departmentIdValue,
+          semesterId: semesterIdValue,
+          label,
+        },
+      });
+      setScopeSelectorMode(null);
+      setQuery("");
+      return true;
+    }
+
+    return true;
+  }, [applyScope, scopeSelectorMode, searchScope]);
+
+  const handleItemSelect = useCallback((item: EngineCommandItem) => {
+    if (handleScopeSelectorChoose(item)) {
+      return;
+    }
+
+    executeCommand(item);
+  }, [executeCommand, handleScopeSelectorChoose]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1258,7 +2107,18 @@ export function CommandBar({
     setIsCoarsePointer(window.matchMedia("(pointer: coarse)").matches);
     setRecentQueries(loadRecentQueries());
     setRecentCommandIds(loadRecentCommandIds());
+    setSearchScope(loadPersistedScope());
+    setScopeHistory(loadScopeHistory());
+    setIsScopeHintSeen(hasSeenScopeHint());
   }, []);
+
+  useEffect(() => {
+    if (!open || isTagHydrated) {
+      return;
+    }
+
+    void hydrateTags().catch(() => undefined);
+  }, [hydrateTags, isTagHydrated, open]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1274,22 +2134,53 @@ export function CommandBar({
         });
       }
 
+      const isReenterScope =
+        event.ctrlKey
+        && event.shiftKey
+        && (event.code === "Slash" || event.key === "?");
+      if (isReenterScope) {
+        const lastScopedEntry = scopeHistory.find((entry) => !isScopeEmpty(entry.scope));
+        if (lastScopedEntry) {
+          event.preventDefault();
+          if (!open) {
+            setOpen(true);
+          }
+          applyScope(lastScopedEntry.scope);
+          setScopeSelectorMode(null);
+          return;
+        }
+      }
+
       if (event.key === "Escape" && open) {
         event.preventDefault();
+        if (scopeSelectorMode) {
+          vibrate(6);
+          setScopeSelectorMode(null);
+          setQuery("");
+          setScopeHistoryCursor(-1);
+          return;
+        }
+
         if (query.trim().length > 0) {
-          // First Escape: clear query but keep palette open
           vibrate(6);
           setQuery("");
-        } else {
-          // Second Escape: close palette
-          setOpen(false);
+          setScopeHistoryCursor(-1);
+          return;
         }
+
+        if (!isScopeEmpty(searchScope)) {
+          vibrate(6);
+          applyScope(GLOBAL_SCOPE);
+          return;
+        }
+
+        setOpen(false);
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [applyScope, open, query, scopeHistory, scopeSelectorMode, searchScope]);
 
   useEffect(() => {
     if (!open || typeof window === "undefined") {
@@ -1326,10 +2217,10 @@ export function CommandBar({
     };
   }, [open]);
 
-  // Reset active index when results change
+  // Reset active index when visible items change
   useEffect(() => {
     setActiveIndex(0);
-  }, [results]);
+  }, [displayResults]);
 
   // Scroll active item into view on keyboard navigation
   useEffect(() => {
@@ -1345,11 +2236,15 @@ export function CommandBar({
     queueMicrotask(() => {
       setOpen(false);
       setQuery("");
+      setScopeSelectorMode(null);
+      setScopeHistoryCursor(-1);
       setActiveIndex(0);
     });
   }, [pathname]);
 
   const showLoadingSkeleton =
+    !scopeSelectorMode
+    &&
     !trimmedDeferredQuery
     && (
       isCatalogLoading
@@ -1397,102 +2292,157 @@ export function CommandBar({
     viewportMetrics.width,
   ]);
 
+  const scopePills = useMemo(() => {
+    const pills: Array<{
+      key: string;
+      label: string;
+      icon: "folder" | "tag" | "domain" | "mode";
+      onRemove: () => void;
+    }> = [];
+
+    if (searchScope.domain) {
+      pills.push({
+        key: `domain-${searchScope.domain.departmentId}-${searchScope.domain.semesterId}`,
+        label: searchScope.domain.label,
+        icon: "domain",
+        onRemove: () => applyScope({ ...searchScope, domain: null }),
+      });
+    }
+
+    if (searchScope.folder) {
+      pills.push({
+        key: `folder-${searchScope.folder.folderId}`,
+        label: searchScope.folder.label,
+        icon: "folder",
+        onRemove: () => applyScope({ ...searchScope, folder: null }),
+      });
+    }
+
+    if (searchScope.tag) {
+      pills.push({
+        key: `tag-${searchScope.tag.tagId}`,
+        label: `#${searchScope.tag.label}`,
+        icon: "tag",
+        onRemove: () => applyScope({ ...searchScope, tag: null }),
+      });
+    }
+
+    if (searchScope.mode !== "global") {
+      pills.push({
+        key: `mode-${searchScope.mode}`,
+        label: searchScope.mode === "actions" ? "Actions" : "Recents",
+        icon: "mode",
+        onRemove: () => applyScope({ ...searchScope, mode: "global" }),
+      });
+    }
+
+    return pills;
+  }, [applyScope, searchScope]);
+
+  const activeScopeLabel = useMemo(() => {
+    if (scopePills.length === 0) {
+      return "Global";
+    }
+    return scopePills.map((pill) => pill.label).join(" + ");
+  }, [scopePills]);
+
+  const scopeInputPaddingClass = useMemo(() => {
+    if (scopePills.length === 0) {
+      return "";
+    }
+
+    if (scopePills.length === 1) {
+      return "pl-40";
+    }
+    if (scopePills.length === 2) {
+      return "pl-52";
+    }
+    return "pl-64";
+  }, [scopePills.length]);
+
+  useEffect(() => {
+    if (scopePills.length === 0) {
+      writeScopeSummary("");
+      return;
+    }
+
+    writeScopeSummary(activeScopeLabel);
+  }, [activeScopeLabel, scopePills.length]);
+
+  useEffect(() => {
+    const cmd = searchParams.get(CMD_QUERY_PARAM);
+    if (cmd !== "open") {
+      return;
+    }
+
+    const serializedScope = searchParams.get(CMD_SCOPE_PARAM);
+    const queryFromUrl = searchParams.get(CMD_TEXT_PARAM) ?? "";
+    const key = `${cmd}|${serializedScope ?? ""}|${queryFromUrl}`;
+    if (urlApplyRef.current === key) {
+      return;
+    }
+    urlApplyRef.current = key;
+
+    const parsedScope = parseScopeFromSerialized(serializedScope);
+    if (parsedScope.folder) {
+      const folderOption = folderScopeOptions.find((option) => option.folderId === parsedScope.folder?.folderId);
+      if (folderOption) {
+        parsedScope.folder = { folderId: folderOption.folderId, label: folderOption.label };
+      }
+    }
+    if (parsedScope.tag) {
+      const tagOption = tags.find((tag) => tag.id === parsedScope.tag?.tagId);
+      if (tagOption) {
+        parsedScope.tag = { tagId: tagOption.id, label: tagOption.name };
+      }
+    }
+    if (parsedScope.domain) {
+      parsedScope.domain = {
+        ...parsedScope.domain,
+        label: `${getDepartmentName(parsedScope.domain.departmentId)} · Semester ${parsedScope.domain.semesterId}`,
+      };
+    }
+
+    applyScope(parsedScope);
+    setQuery(queryFromUrl);
+    setScopeSelectorMode(null);
+    setOpen(true);
+  }, [applyScope, folderScopeOptions, searchParams, tags]);
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    if (open) {
+      nextParams.set(CMD_QUERY_PARAM, "open");
+      nextParams.set(CMD_TEXT_PARAM, query);
+      const serialized = serializeScope(searchScope);
+      if (serialized) {
+        nextParams.set(CMD_SCOPE_PARAM, serialized);
+      } else {
+        nextParams.delete(CMD_SCOPE_PARAM);
+      }
+    } else {
+      nextParams.delete(CMD_QUERY_PARAM);
+      nextParams.delete(CMD_SCOPE_PARAM);
+      nextParams.delete(CMD_TEXT_PARAM);
+    }
+
+    const qs = nextParams.toString();
+    const nextUrl = qs ? `${pathname}?${qs}` : pathname;
+    if (urlSyncRef.current === nextUrl) {
+      return;
+    }
+    urlSyncRef.current = nextUrl;
+    router.replace(nextUrl, { scroll: false });
+  }, [open, pathname, query, router, searchParams, searchScope]);
+
   return (
     <>
-      <div
-        className={cn(
-          "fixed bottom-4 left-0 right-0 z-40 mx-auto flex w-full max-w-fit items-center justify-center transition-all duration-300",
-          open ? "pointer-events-none translate-y-8 opacity-0" : "translate-y-0 opacity-100",
-        )}
-      >
-        <motion.div 
-          className="flex h-16 items-center gap-1.5 rounded-full border border-border/60 bg-card/75 px-3 shadow-lg backdrop-blur-2xl transition-colors hover:bg-card/95"
-          whileHover={{ y: -2 }}
-          transition={{ type: "spring", stiffness: 400, damping: 25 }}
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/")}
-            className={cn(
-              "h-11 w-11 shrink-0 rounded-full transition-all",
-              !["/tags", "/downloads", "/storage", "/settings"].includes(pathname)
-                ? "bg-primary/15 text-primary ring-1 ring-ring/35"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            title="Home"
-          >
-            <IconHome className="size-5" />
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/downloads")}
-            className={cn(
-              "h-11 w-11 shrink-0 rounded-full transition-all",
-              pathname.startsWith("/downloads")
-                ? "bg-primary/15 text-primary ring-1 ring-ring/35"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            title="Downloads"
-          >
-            <IconDownload className="size-5" />
-          </Button>
-
-          <div className="mx-1.5 h-8 w-px bg-border/80" />
-
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleOpenPalette}
-            className="group flex h-12 w-48 items-center justify-between gap-2 rounded-full border border-input bg-card/90 px-4 font-normal text-foreground shadow-sm transition-all hover:scale-[1.03] hover:bg-accent hover:text-foreground hover:shadow max-sm:w-14 max-sm:justify-center max-sm:px-0"
-            title="Search command palette"
-          >
-            <div className="flex items-center gap-2">
-              <IconSearch className="size-5 text-primary transition-colors group-hover:text-primary" />
-              <span className="max-sm:hidden">{placeholder.split(" ")[0]}...</span>
-            </div>
-            <CommandShortcut className="hidden border-border/80 bg-muted/70 text-muted-foreground sm:inline">⌘K</CommandShortcut>
-          </Button>
-
-          <div className="mx-1.5 h-8 w-px bg-border/80" />
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/storage")}
-            className={cn(
-              "h-11 w-11 shrink-0 rounded-full transition-all",
-              pathname.startsWith("/storage")
-                ? "bg-primary/15 text-primary ring-1 ring-ring/35"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            title="Storage"
-          >
-            <IconDatabase className="size-5" />
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/settings")}
-            className={cn(
-              "h-11 w-11 shrink-0 rounded-full transition-all",
-              pathname.startsWith("/settings")
-                ? "bg-primary/15 text-primary ring-1 ring-ring/35"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            title="Settings"
-          >
-            <IconSettings className="size-5" />
-          </Button>
-        </motion.div>
-      </div>
+      <FloatingDock 
+        isPaletteOpen={open}
+        onOpenPalette={() => setOpen(true)}
+        placeholder={placeholder}
+      />
 
       <AnimatePresence>
         {open ? (
@@ -1523,7 +2473,15 @@ export function CommandBar({
                   <span>
                     {showLoadingSkeleton
                       ? "Indexing context..."
-                      : `${exactResults.length} result${exactResults.length === 1 ? "" : "s"} · ${searchDurationMs < 10 ? searchDurationMs.toFixed(2) : searchDurationMs.toFixed(1)} ms${shouldApplyRecencyBias ? " · recency boost" : ""}${isNestedIndexing ? " · refreshing nested index" : ""}`}
+                      : scopeSelectorMode
+                        ? `${displayResults.length} ${
+                          scopeSelectorMode === "folders"
+                            ? "folder"
+                            : scopeSelectorMode === "tags"
+                              ? "tag"
+                              : "scope"
+                        } option${displayResults.length === 1 ? "" : "s"}`
+                        : `${exactResults.length} result${exactResults.length === 1 ? "" : "s"} · ${searchDurationMs < 10 ? searchDurationMs.toFixed(2) : searchDurationMs.toFixed(1)} ms${shouldApplyRecencyBias ? " · recency boost" : ""}${isNestedIndexing ? " · refreshing nested index" : ""}`}
                   </span>
                 </div>
                 <Button
@@ -1541,11 +2499,39 @@ export function CommandBar({
                 shouldFilter={false}
                 className="flex min-h-0 flex-1 rounded-xl border border-border/60 bg-card p-1 shadow-inner border-border/80 bg-card"
                 onKeyDown={(e) => {
-                  const flatItems = results;
+                  const flatItems = displayResults;
                   const totalItems = flatItems.length;
-                  if (totalItems === 0) return;
+
+                  if (e.key === "Backspace" && query.trim().length === 0) {
+                    if (scopeSelectorMode) {
+                      e.preventDefault();
+                      setScopeSelectorMode(null);
+                      setScopeHistoryCursor(-1);
+                      return;
+                    }
+
+                    if (!isScopeEmpty(searchScope)) {
+                      e.preventDefault();
+                      removeLastScopePill();
+                      return;
+                    }
+                  }
+
+                  if (e.key === "ArrowUp" && query.trim().length === 0 && scopeSelectorMode === null && activeIndex === 0 && scopeHistory.length > 0) {
+                    e.preventDefault();
+                    const nextCursor = Math.min(scopeHistoryCursor + 1, scopeHistory.length - 1);
+                    const entry = scopeHistory[nextCursor];
+                    if (entry) {
+                      setScopeHistoryCursor(nextCursor);
+                      applyScope(entry.scope);
+                      setQuery(entry.query);
+                      setScopeSelectorMode(null);
+                    }
+                    return;
+                  }
 
                   // Ctrl+N / Ctrl+P vim-style navigation
+                  if (totalItems === 0) return;
                   if (e.ctrlKey && e.key === "n") {
                     e.preventDefault();
                     setActiveIndex((prev) => Math.min(prev + 1, totalItems - 1));
@@ -1581,6 +2567,9 @@ export function CommandBar({
 
                   // Standard arrow navigation
                   if (e.key === "ArrowDown") {
+                    if (scopeHistoryCursor >= 0) {
+                      setScopeHistoryCursor(-1);
+                    }
                     e.preventDefault();
                     setActiveIndex((prev) => Math.min(prev + 1, totalItems - 1));
                     return;
@@ -1594,7 +2583,7 @@ export function CommandBar({
                   // Enter to execute
                   if (e.key === "Enter" && activeIndex >= 0 && activeIndex < totalItems) {
                     e.preventDefault();
-                    executeCommand(flatItems[activeIndex]);
+                    handleItemSelect(flatItems[activeIndex]);
                   }
                 }}
               >
@@ -1607,12 +2596,45 @@ export function CommandBar({
                   transition={{ type: "spring", ...motionTokens.spring }}
                   className="relative mx-auto w-full max-w-2xl"
                 >
+                  {scopePills.length > 0 ? (
+                    <div className="pointer-events-none absolute left-3 top-1/2 z-20 -translate-y-1/2">
+                      <div className="pointer-events-auto flex max-w-80 items-center gap-1 overflow-hidden">
+                        {scopePills.map((pill) => (
+                          <span key={pill.key} className="inline-flex max-w-36 items-center gap-1 rounded-full border border-border/80 bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
+                            {pill.icon === "folder" ? (
+                              <IconFolder className="size-3 text-primary" />
+                            ) : pill.icon === "tag" ? (
+                              <IconTag className="size-3 text-primary" />
+                            ) : pill.icon === "domain" ? (
+                              <IconDatabase className="size-3 text-primary" />
+                            ) : pill.label === "Actions" ? (
+                              <IconBolt className="size-3 text-primary" />
+                            ) : (
+                              <IconClockHour4 className="size-3 text-primary" />
+                            )}
+                            <span className="truncate">{pill.label}</span>
+                            <button
+                              type="button"
+                              className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+                              onClick={pill.onRemove}
+                              aria-label={`Remove ${pill.label} scope`}
+                            >
+                              <IconX className="size-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <CommandInput
                     value={query}
-                    onValueChange={(nextValue) => setQuery(nextValue)}
+                    onValueChange={handleQueryChange}
                     placeholder={placeholder}
                     autoFocus
-                    className={trimmedDeferredQuery ? "pr-10" : undefined}
+                    className={cn(
+                      scopeInputPaddingClass,
+                      trimmedDeferredQuery ? "pr-10" : undefined,
+                    )}
                   />
                   {trimmedDeferredQuery ? (
                     <Button
@@ -1623,6 +2645,7 @@ export function CommandBar({
                       onClick={() => {
                         vibrate(6);
                         setQuery("");
+                        setScopeHistoryCursor(-1);
                       }}
                     >
                       <IconX className="size-3.5" />
@@ -1631,7 +2654,7 @@ export function CommandBar({
                   ) : null}
                 </motion.div>
 
-                {!query.trim() ? (
+                {!query.trim() && !scopeSelectorMode ? (
                   <div className="space-y-2 px-2 pb-1 pt-2">
                     <div className="flex flex-wrap gap-2">
                       {QUICK_QUERIES.map((quickQuery) => {
@@ -1644,7 +2667,7 @@ export function CommandBar({
                             size="sm"
                             onClick={() => {
                               vibrate(6);
-                              setQuery(quickQuery.query);
+                              handleQueryChange(quickQuery.query);
                               pushRecentQuery(quickQuery.query);
                             }}
                             className="h-7 rounded-full"
@@ -1671,6 +2694,7 @@ export function CommandBar({
                               vibrate(6);
                               setQuery(recentQuery);
                               pushRecentQuery(recentQuery);
+                              setScopeHistoryCursor(-1);
                             }}
                             className="h-7 rounded-full border border-border/70 px-2.5 border-border/70"
                           >
@@ -1678,6 +2702,11 @@ export function CommandBar({
                           </Button>
                         ))}
                       </div>
+                    ) : null}
+                    {!isScopeHintSeen ? (
+                      <p className="px-1 text-[11px] text-muted-foreground">
+                        Scope hints: <span className="font-medium">/</span> folder, <span className="font-medium">#</span> tag, <span className="font-medium">:</span> dept/semester, <span className="font-medium">&gt;</span> actions, <span className="font-medium">@</span> recents
+                      </p>
                     ) : null}
                   </div>
                 ) : null}
@@ -1698,7 +2727,7 @@ export function CommandBar({
                     </div>
                   ) : (
                     <>
-                      {showingFallbackResults ? (
+                      {showingFallbackResults && !scopeSelectorMode ? (
                         <div className="mx-1 mb-2 rounded-lg border border-border/70 bg-muted/70 px-3 py-2 text-[11px] text-muted-foreground">
                           No exact matches. Showing top commands instead.
                         </div>
@@ -1707,11 +2736,28 @@ export function CommandBar({
                         <div className="flex flex-col items-center gap-2 py-6 text-center">
                           <IconSearch className="size-4 text-muted-foreground/80" />
                           <p className="text-xs font-medium text-foreground/80 text-muted-foreground">
-                            No results for &quot;{trimmedDeferredQuery || "..."}&quot;
+                            {scopeSelectorMode
+                              ? `No ${scopeSelectorMode === "folders" ? "folders" : scopeSelectorMode === "tags" ? "tags" : "scope options"} for "${trimmedDeferredQuery || "..."}"`
+                              : hasAnyScope
+                                ? `No files in ${activeScopeLabel} match "${trimmedDeferredQuery || "..."}"`
+                                : `No results for "${trimmedDeferredQuery || "..."}"`}
                           </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            Try: <span className="font-medium">settings</span>, <span className="font-medium">storage</span>, <span className="font-medium">tag</span>
-                          </p>
+                          {!scopeSelectorMode ? (
+                            <p className="text-[11px] text-muted-foreground">
+                              Try: <span className="font-medium">settings</span>, <span className="font-medium">storage</span>, <span className="font-medium">tag</span>
+                            </p>
+                          ) : null}
+                          {!scopeSelectorMode && hasAnyScope ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 rounded-full text-[11px]"
+                              onClick={() => applyScope(GLOBAL_SCOPE)}
+                            >
+                              Expand to global search
+                            </Button>
+                          ) : null}
                         </div>
                       </CommandEmpty>
 
@@ -1748,7 +2794,7 @@ export function CommandBar({
                                 && Boolean(item.entityId)
                                 && (item.payload?.offlineOnly === true || Boolean(item.entityId && offlineFiles[item.entityId]));
                               const contentBadge = getContentBadge(item);
-                              const flatIndex = results.indexOf(item);
+                              const flatIndex = displayResults.indexOf(item);
                               const isActive = flatIndex === activeIndex;
 
                               return (
@@ -1765,7 +2811,7 @@ export function CommandBar({
                                       ? "bg-primary/10 ring-1 ring-ring/40"
                                       : "data-[selected=true]:translate-x-0.5",
                                   )}
-                                  onSelect={() => executeCommand(item)}
+                                  onSelect={() => handleItemSelect(item)}
                                   onMouseEnter={() => setActiveIndex(flatIndex)}
                                   data-active={isActive}
                                 >
@@ -1812,11 +2858,11 @@ export function CommandBar({
                 <div className="mt-1 flex items-center justify-between rounded-md border border-border/70 px-2 py-1 text-[10px] text-muted-foreground border-border/70 text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <span className="rounded border border-border/80 px-1 py-px text-[9px] border-border">
-                      {isFolderScope ? activeFolderTitle : "Global"}
+                      {activeScopeLabel}
                     </span>
                     {showLoadingSkeleton
                       ? "Preparing context index..."
-                      : `${exactResults.length} result${exactResults.length === 1 ? "" : "s"}`}
+                      : `${displayResults.length} result${displayResults.length === 1 ? "" : "s"}`}
                   </span>
                   <span className="hidden sm:inline">↑↓ Navigate · Enter Open · Esc Close · Alt+↓ Next Group</span>
                   <span className="sm:hidden">↑↓ · Enter · Esc</span>

@@ -4,6 +4,7 @@ export type DriveFileRaw = {
   mimeType: string;
   size: number;
   modifiedTime: string | null;
+  resolvedFileId?: string;
 };
 
 export type FileMetadata = DriveFileRaw;

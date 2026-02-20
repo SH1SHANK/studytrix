@@ -97,6 +97,20 @@ function sanitizeTask(task: unknown): DownloadTask | null {
 
   const speedBytesPerSecond = normalizeFiniteNumber(task.speedBytesPerSecond, 0);
   const etaSeconds = normalizeFiniteNumber(task.etaSeconds, -1);
+  const kindCandidate = typeof task.kind === "string" ? task.kind : "";
+  const kind = kindCandidate === "folder" ? "folder" : "file";
+  const hiddenInUi = Boolean(task.hiddenInUi);
+  const groupId =
+    typeof task.groupId === "string" && task.groupId.trim().length > 0
+      ? task.groupId.trim()
+      : undefined;
+  const groupLabel =
+    typeof task.groupLabel === "string" && task.groupLabel.trim().length > 0
+      ? task.groupLabel.trim()
+      : undefined;
+  const groupTotalFiles = normalizeByteCount(task.groupTotalFiles);
+  const groupCompletedFiles = normalizeByteCount(task.groupCompletedFiles);
+  const groupTotalBytes = normalizeByteCount(task.groupTotalBytes);
   const errorCodeCandidate = typeof task.errorCode === "string" ? task.errorCode : undefined;
   const errorCode =
     errorCodeCandidate === "OFFLINE"
@@ -110,9 +124,16 @@ function sanitizeTask(task: unknown): DownloadTask | null {
     id,
     fileId,
     fileName,
+    kind,
     courseCode: typeof task.courseCode === "string" ? task.courseCode : undefined,
     mimeType: normalizeMimeType(task.mimeType),
     size: normalizeByteCount(task.size),
+    hiddenInUi,
+    groupId,
+    groupLabel,
+    groupTotalFiles,
+    groupCompletedFiles,
+    groupTotalBytes,
     progress: normalizedState === "completed" ? 100 : safeProgress,
     loadedBytes,
     totalBytes,

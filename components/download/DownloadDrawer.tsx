@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { IconDownloadOff } from "@tabler/icons-react";
 
 import {
@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { buildDownloadGrouping } from "@/features/download/download.grouping";
 import type { DownloadTask } from "@/features/download/download.types";
 import { openLocalFirst } from "@/features/offline/offline.access";
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
@@ -94,36 +95,108 @@ export function DownloadDrawer() {
     removeTask,
   } = useDownloadManager();
 
-  const grouped = useMemo(() => {
-    const values = Object.values(tasks);
+  const grouped = useMemo(() => buildDownloadGrouping(tasks), [tasks]);
 
-    return {
-      downloading: values.filter((task) => task.state === "downloading"),
-      queued: values.filter((task) => task.state === "queued"),
-      paused: values.filter((task) => task.state === "paused"),
-      failed: values.filter((task) => task.state === "failed"),
-      canceled: values.filter((task) => task.state === "canceled"),
-      completed: values.filter((task) => task.state === "completed"),
-    };
-  }, [tasks]);
-  const hasTasks = Object.keys(tasks).length > 0;
+  const runForAggregateChildren = useCallback(
+    (taskId: string, run: (child: DownloadTask) => void) => {
+      const children = grouped.childrenByAggregateTaskId.get(taskId);
+      if (!children || children.length === 0) {
+        return false;
+      }
 
-  const handleRetry = (task: DownloadTask) => {
+      for (const child of children) {
+        run(child);
+      }
+
+      return true;
+    },
+    [grouped.childrenByAggregateTaskId],
+  );
+
+  const handlePause = useCallback((taskId: string) => {
+    const didRun = runForAggregateChildren(taskId, (child) => {
+      if (child.state === "downloading") {
+        pauseDownload(child.id);
+      }
+    });
+    if (!didRun) {
+      pauseDownload(taskId);
+    }
+  }, [pauseDownload, runForAggregateChildren]);
+
+  const handleResume = useCallback((taskId: string) => {
+    const didRun = runForAggregateChildren(taskId, (child) => {
+      if (child.state === "paused" || child.state === "queued") {
+        resumeDownload(child.id);
+      }
+    });
+    if (!didRun) {
+      resumeDownload(taskId);
+    }
+  }, [resumeDownload, runForAggregateChildren]);
+
+  const handleCancel = useCallback((taskId: string) => {
+    const didRun = runForAggregateChildren(taskId, (child) => {
+      if (child.state === "downloading" || child.state === "paused" || child.state === "queued") {
+        cancelDownload(child.id);
+      }
+    });
+    if (!didRun) {
+      cancelDownload(taskId);
+    }
+  }, [cancelDownload, runForAggregateChildren]);
+
+  const handleRemove = useCallback((taskId: string) => {
+    const didRun = runForAggregateChildren(taskId, (child) => {
+      removeTask(child.id);
+    });
+    if (!didRun) {
+      removeTask(taskId);
+    }
+  }, [removeTask, runForAggregateChildren]);
+
+  const handleRetry = useCallback((task: DownloadTask) => {
+    const children = grouped.childrenByAggregateTaskId.get(task.id);
+    if (children && children.length > 0) {
+      const groupId = task.groupId ?? task.fileId;
+      const groupLabel = task.groupLabel ?? task.fileName;
+      const groupTotalFiles = task.groupTotalFiles ?? children.length;
+      const groupTotalBytes = task.groupTotalBytes;
+      for (const child of children) {
+        if (child.state !== "failed" && child.state !== "canceled") {
+          continue;
+        }
+        void startDownload(child.fileId, {
+          kind: "file",
+          hiddenInUi: true,
+          groupId,
+          groupLabel,
+          groupTotalFiles,
+          groupTotalBytes,
+        });
+      }
+      return;
+    }
+
     void startDownload(task.fileId);
-  };
+  }, [grouped.childrenByAggregateTaskId, startDownload]);
 
-  const handleOpenFile = (task: DownloadTask) => {
+  const handleOpenFile = useCallback((task: DownloadTask) => {
+    if (task.kind === "folder") {
+      return;
+    }
+
     void openLocalFirst(
       task.fileId,
       `/api/file/${encodeURIComponent(task.fileId)}/stream`,
     );
-  };
+  }, []);
 
   const sharedProps = {
-    onPause: pauseDownload,
-    onResume: resumeDownload,
-    onCancel: cancelDownload,
-    onRemove: removeTask,
+    onPause: handlePause,
+    onResume: handleResume,
+    onCancel: handleCancel,
+    onRemove: handleRemove,
     onRetry: handleRetry,
     onOpenFile: handleOpenFile,
   };
@@ -139,14 +212,14 @@ export function DownloadDrawer() {
           <DialogTitle>Downloads</DialogTitle>
         </DialogHeader>
         <div className="max-h-[60dvh] space-y-4 overflow-y-auto pr-1">
-          {hasTasks ? (
+          {grouped.hasTasks ? (
             <>
-              <Section title="Downloading" count={grouped.downloading.length} tasks={grouped.downloading} {...sharedProps} />
-              <Section title="Queued" count={grouped.queued.length} tasks={grouped.queued} {...sharedProps} />
-              <Section title="Paused" count={grouped.paused.length} tasks={grouped.paused} {...sharedProps} />
-              <Section title="Failed" count={grouped.failed.length} tasks={grouped.failed} {...sharedProps} />
-              <Section title="Canceled" count={grouped.canceled.length} tasks={grouped.canceled} limitCompleted={20} {...sharedProps} />
-              <Section title="Completed" count={grouped.completed.length} tasks={grouped.completed} limitCompleted={20} {...sharedProps} />
+              <Section title="Downloading" count={grouped.byState.downloading.length} tasks={grouped.byState.downloading} {...sharedProps} />
+              <Section title="Queued" count={grouped.byState.queued.length} tasks={grouped.byState.queued} {...sharedProps} />
+              <Section title="Paused" count={grouped.byState.paused.length} tasks={grouped.byState.paused} {...sharedProps} />
+              <Section title="Failed" count={grouped.byState.failed.length} tasks={grouped.byState.failed} {...sharedProps} />
+              <Section title="Canceled" count={grouped.byState.canceled.length} tasks={grouped.byState.canceled} limitCompleted={20} {...sharedProps} />
+              <Section title="Completed" count={grouped.byState.completed.length} tasks={grouped.byState.completed} limitCompleted={20} {...sharedProps} />
             </>
           ) : (
             <EmptyState />

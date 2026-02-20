@@ -21,13 +21,35 @@ async function fetchFileBlob(
     return localBlob;
   }
 
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new Error(`${fileName} is not available offline yet.`);
+  }
+
   const response = await fetch(`/api/file/${encodeURIComponent(fileId)}/stream`, {
     method: "GET",
     cache: "no-store",
   });
 
-  if (!response.ok || !response.body) {
-    throw new Error(`Failed to fetch ${fileName}`);
+  if (!response.ok) {
+    let reason = `Failed to fetch ${fileName}`;
+    try {
+      const payload = (await response.json()) as unknown;
+      if (
+        payload
+        && typeof payload === "object"
+        && "message" in payload
+        && typeof (payload as { message?: unknown }).message === "string"
+      ) {
+        reason = (payload as { message: string }).message;
+      }
+    } catch {
+      // fallback message
+    }
+    throw new Error(reason);
+  }
+
+  if (!response.body) {
+    throw new Error(`No stream body for ${fileName}`);
   }
 
   const reader = response.body.getReader();

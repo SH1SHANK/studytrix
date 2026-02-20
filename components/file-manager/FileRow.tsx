@@ -310,8 +310,6 @@ function FileRowComponent({
   };
 
   const renderStatusBadge = () => {
-    if (isFolder) return null;
-
     if (isOffline) {
       return (
         <span className="inline-flex shrink-0 items-center rounded-full border border-primary/35 bg-primary/12 px-1.5 py-0.5 text-[10px] font-medium text-primary">

@@ -107,5 +107,12 @@ export async function openLocalFirst(
     return true;
   }
 
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    if (pendingTab && !pendingTab.closed) {
+      pendingTab.close();
+    }
+    return false;
+  }
+
   return navigatePendingTab(pendingTab, getFallbackUrl(fileId, fallbackUrl));
 }

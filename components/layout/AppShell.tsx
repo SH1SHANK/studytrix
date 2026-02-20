@@ -5,6 +5,7 @@ import { ShareProgressDrawer } from "@/components/share/ShareProgressDrawer";
 import { AcademicProvider } from "@/components/layout/AcademicContext";
 import { Header } from "@/components/layout/Header";
 import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
+import { GlobalStorageSetupSheet } from "@/components/offline/StorageSetupSheet";
 import { Toaster } from "@/components/ui/sonner";
 
 type AppShellProps = {
@@ -49,6 +50,7 @@ export function AppShell({
         </Suspense>
         <ShareProgressDrawer />
         <Toaster />
+        <GlobalStorageSetupSheet />
       </div>
     </AcademicProvider>
   );

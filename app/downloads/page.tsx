@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconDownload, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconRefresh, IconTrash } from "@tabler/icons-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { DownloadList } from "@/components/download/DownloadList";
+import { OfflineRuntimeDiagnostics } from "@/components/offline/OfflineRuntimeDiagnostics";
+import { buildDownloadGrouping } from "@/features/download/download.grouping";
 import { getAllFiles } from "@/features/offline/offline.db";
 import { openLocalFirst } from "@/features/offline/offline.access";
 import type { StorageStats } from "@/features/offline/offline.types";
@@ -84,13 +86,106 @@ export default function DownloadsPage() {
     };
   }, [refreshStats]);
 
-  const list = useMemo(() => Object.values(tasks), [tasks]);
+  const grouped = useMemo(() => buildDownloadGrouping(tasks), [tasks]);
+  const list = grouped.values;
 
   const downloadingCount = list.filter((task) => task.state === "downloading").length;
   const queuedCount = list.filter((task) => task.state === "queued").length;
   const completedCount = list.filter((task) => task.state === "completed").length;
 
+  useEffect(() => {
+    void refreshStats();
+  }, [completedCount, refreshStats]);
+
+  const runForAggregateChildren = useCallback(
+    (taskId: string, run: (child: DownloadTask) => void) => {
+      const children = grouped.childrenByAggregateTaskId.get(taskId);
+      if (!children || children.length === 0) {
+        return false;
+      }
+
+      for (const child of children) {
+        run(child);
+      }
+
+      return true;
+    },
+    [grouped.childrenByAggregateTaskId],
+  );
+
+  const handlePause = useCallback((taskId: string) => {
+    const didRun = runForAggregateChildren(taskId, (child) => {
+      if (child.state === "downloading") {
+        pauseDownload(child.id);
+      }
+    });
+    if (!didRun) {
+      pauseDownload(taskId);
+    }
+  }, [pauseDownload, runForAggregateChildren]);
+
+  const handleResume = useCallback((taskId: string) => {
+    const didRun = runForAggregateChildren(taskId, (child) => {
+      if (child.state === "paused" || child.state === "queued") {
+        resumeDownload(child.id);
+      }
+    });
+    if (!didRun) {
+      resumeDownload(taskId);
+    }
+  }, [resumeDownload, runForAggregateChildren]);
+
+  const handleCancel = useCallback((taskId: string) => {
+    const didRun = runForAggregateChildren(taskId, (child) => {
+      if (child.state === "downloading" || child.state === "paused" || child.state === "queued") {
+        cancelDownload(child.id);
+      }
+    });
+    if (!didRun) {
+      cancelDownload(taskId);
+    }
+  }, [cancelDownload, runForAggregateChildren]);
+
+  const handleRemove = useCallback((taskId: string) => {
+    const didRun = runForAggregateChildren(taskId, (child) => {
+      removeTask(child.id);
+    });
+    if (!didRun) {
+      removeTask(taskId);
+    }
+  }, [removeTask, runForAggregateChildren]);
+
+  const handleRetry = useCallback((task: DownloadTask) => {
+    const children = grouped.childrenByAggregateTaskId.get(task.id);
+    if (children && children.length > 0) {
+      const groupId = task.groupId ?? task.fileId;
+      const groupLabel = task.groupLabel ?? task.fileName;
+      const groupTotalFiles = task.groupTotalFiles ?? children.length;
+      const groupTotalBytes = task.groupTotalBytes;
+      for (const child of children) {
+        if (child.state !== "failed" && child.state !== "canceled") {
+          continue;
+        }
+        void startDownload(child.fileId, {
+          kind: "file",
+          hiddenInUi: true,
+          groupId,
+          groupLabel,
+          groupTotalFiles,
+          groupTotalBytes,
+        });
+      }
+      return;
+    }
+
+    void startDownload(task.fileId);
+  }, [grouped.childrenByAggregateTaskId, startDownload]);
+
   const handleOpenFile = useCallback((task: DownloadTask) => {
+    if (task.kind === "folder") {
+      return;
+    }
+
     void openLocalFirst(
       task.fileId,
       `/api/file/${encodeURIComponent(task.fileId)}/stream`,
@@ -151,15 +246,16 @@ export default function DownloadsPage() {
 
         {/* ── Downloads List ──────────────────────────────── */}
         <main className="mt-6">
+          <div className="mb-4">
+            <OfflineRuntimeDiagnostics compact={true} />
+          </div>
           <DownloadList
             tasks={list}
-            onPause={pauseDownload}
-            onResume={resumeDownload}
-            onCancel={cancelDownload}
-            onRemove={removeTask}
-            onRetry={(task) => {
-              void startDownload(task.fileId);
-            }}
+            onPause={handlePause}
+            onResume={handleResume}
+            onCancel={handleCancel}
+            onRemove={handleRemove}
+            onRetry={handleRetry}
             onOpenFile={handleOpenFile}
           />
         </main>

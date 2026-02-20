@@ -107,6 +107,42 @@ function isRateLimitError(error: unknown): boolean {
   return error instanceof Error && error.message === "Rate limit exceeded";
 }
 
+function isUpstreamNetworkError(error: unknown): boolean {
+  if (!isRecord(error)) {
+    return false;
+  }
+
+  const code = typeof error.code === "string" ? error.code.toUpperCase() : "";
+  const cause = isRecord(error.cause) ? error.cause : null;
+  const causeCode =
+    cause && typeof cause.code === "string" ? cause.code.toUpperCase() : "";
+  const message =
+    typeof error.message === "string" ? error.message.toLowerCase() : "";
+
+  if (
+    code === "ENOTFOUND"
+    || code === "EAI_AGAIN"
+    || code === "ECONNRESET"
+    || code === "ECONNREFUSED"
+    || code === "ETIMEDOUT"
+    || causeCode === "ENOTFOUND"
+    || causeCode === "EAI_AGAIN"
+    || causeCode === "ECONNRESET"
+    || causeCode === "ECONNREFUSED"
+    || causeCode === "ETIMEDOUT"
+  ) {
+    return true;
+  }
+
+  return (
+    message.includes("fetch failed")
+    || message.includes("network")
+    || message.includes("socket hang up")
+    || message.includes("timed out")
+    || message.includes("econnreset")
+  );
+}
+
 function isSafePreviewMimeType(mimeType: string): boolean {
   if (mimeType.startsWith("image/")) {
     return true;
@@ -355,20 +391,11 @@ export async function GET(
       );
     }
 
-    if (request.headers.has("range")) {
-      return toErrorResponse(
-        new StreamRouteError({
-          status: 416,
-          errorCode: "RANGE_NOT_SUPPORTED",
-          message: "Byte ranges are not supported for this endpoint",
-        }),
-      );
-    }
-
     const ip = getClientIp(request);
     await enforceDriveRateLimit(ip);
 
     const raw = await fileService.getRawMetadata(fileId);
+    const resolvedFileId = raw.resolvedFileId ?? fileId;
 
     if (raw.mimeType === "application/vnd.google-apps.folder") {
       throw new StreamRouteError({
@@ -380,6 +407,7 @@ export async function GET(
 
     const drive = getDriveClient();
     const exportFormat = resolveExportFormat(raw.mimeType);
+    const rangeHeader = request.headers.get("range");
 
     if (
       raw.mimeType.startsWith("application/vnd.google-apps.")
@@ -395,11 +423,21 @@ export async function GET(
     let streamData: Readable;
     let responseMimeType = raw.mimeType || "application/octet-stream";
     let responseFileName = raw.name;
+    let responseStatus = 200;
+    const headers = new Headers();
 
     if (exportFormat) {
+      if (rangeHeader) {
+        throw new StreamRouteError({
+          status: 416,
+          errorCode: "RANGE_NOT_SUPPORTED",
+          message: "Byte ranges are not supported for exported Google files",
+        });
+      }
+
       const exportResponse = await drive.files.export(
         {
-          fileId,
+          fileId: resolvedFileId,
           mimeType: exportFormat.mimeType,
         },
         {
@@ -421,12 +459,17 @@ export async function GET(
     } else {
       const mediaResponse = await drive.files.get(
         {
-          fileId,
+          fileId: resolvedFileId,
           alt: "media",
           supportsAllDrives: true,
         },
         {
           responseType: "stream",
+          headers: rangeHeader
+            ? {
+              Range: rangeHeader,
+            }
+            : undefined,
         },
       );
 
@@ -439,31 +482,59 @@ export async function GET(
       }
 
       streamData = mediaResponse.data;
+      const statusCode =
+        typeof mediaResponse.status === "number" ? mediaResponse.status : 200;
+      if (statusCode === 206) {
+        const contentRange = mediaResponse.headers?.["content-range"];
+        if (typeof contentRange === "string" && contentRange.length > 0) {
+          headers.set("Content-Range", contentRange);
+        }
+
+        const contentLength = mediaResponse.headers?.["content-length"];
+        if (typeof contentLength === "string" && contentLength.length > 0) {
+          headers.set("Content-Length", contentLength);
+        }
+      }
+      responseStatus = statusCode;
     }
 
     const webStream = Readable.toWeb(streamData) as ReadableStream<Uint8Array>;
 
-    const headers = new Headers();
     headers.set("Content-Type", responseMimeType);
     headers.set(
       "Content-Disposition",
       buildContentDisposition(responseFileName, responseMimeType),
     );
     headers.set("Cache-Control", "private, max-age=60");
-    headers.set("Accept-Ranges", "none");
+    headers.set("Accept-Ranges", exportFormat ? "none" : "bytes");
 
-    if (!exportFormat && Number.isFinite(raw.size) && raw.size > 0) {
+    if (
+      !exportFormat
+      && !headers.has("Content-Length")
+      && Number.isFinite(raw.size)
+      && raw.size > 0
+    ) {
       headers.set("Content-Length", String(raw.size));
     }
 
     return new Response(webStream, {
-      status: 200,
+      status: responseStatus,
       headers,
     });
   } catch (error) {
     const mapped = mapGoogleApiError(error);
     if (mapped) {
       return mapStreamError(mapped);
+    }
+
+    if (isUpstreamNetworkError(error)) {
+      return toErrorResponse(
+        new StreamRouteError({
+          status: 503,
+          errorCode: "UPSTREAM_UNAVAILABLE",
+          message: "Drive upstream unavailable",
+        }),
+      );
     }
 
     console.error("File stream route error:", error);

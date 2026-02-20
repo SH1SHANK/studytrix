@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { IconRobotFace } from "@tabler/icons-react";
 
 import {
@@ -22,8 +21,15 @@ function formatBytes(bytes: number, decimals = 2): string {
 }
 
 export function ShareProgressDrawer() {
-  const { isOpen, fileName, progress, loadedBytes, totalBytes, closeDrawer } =
+  const { isOpen, title, fileName, unit, progress, loaded, total, closeDrawer } =
     useShareStore();
+
+  const leftLabel = unit === "items" ? `${Math.round(loaded)} files` : formatBytes(loaded);
+  const rightLabel = total
+    ? unit === "items"
+      ? `of ${Math.round(total)} files`
+      : `of ${formatBytes(total)}`
+    : "Loading...";
 
   return (
     <Dialog open={isOpen} onOpenChange={closeDrawer}>
@@ -37,7 +43,7 @@ export function ShareProgressDrawer() {
       >
         <DialogHeader className="mb-4">
           <DialogTitle className="text-center text-lg font-semibold tracking-tight text-foreground">
-            Preparing to Share
+            {title}
           </DialogTitle>
         </DialogHeader>
 
@@ -53,12 +59,8 @@ export function ShareProgressDrawer() {
               {fileName}
             </p>
             <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-              <span className="tabular-nums">{formatBytes(loadedBytes)}</span>
-              {totalBytes ? (
-                <span>of {formatBytes(totalBytes)}</span>
-              ) : (
-                <span className="animate-pulse">Loading...</span>
-              )}
+              <span className="tabular-nums">{leftLabel}</span>
+              <span className={total ? undefined : "animate-pulse"}>{rightLabel}</span>
             </div>
             
             <Progress
@@ -67,7 +69,7 @@ export function ShareProgressDrawer() {
             />
             {progress >= 100 && (
               <p className="animate-in fade-in slide-in-from-bottom-2 mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                Opening Share Sheet...
+                Opening share sheet...
               </p>
             )}
           </div>

@@ -7,6 +7,7 @@ import {
   formatBytes,
   getQuotaState,
 } from "@/features/storage/storage.quota";
+import { useSetting } from "@/ui/hooks/useSettings";
 
 interface StorageQuotaIndicatorProps {
   quotaBytes: number | null;
@@ -14,10 +15,22 @@ interface StorageQuotaIndicatorProps {
 }
 
 export function StorageQuotaIndicator({
-  quotaBytes,
-  usageBytes,
+  quotaBytes, // Browser quota
+  usageBytes, // Actual usage
 }: StorageQuotaIndicatorProps) {
-  const percent = computeUsagePercent(quotaBytes, usageBytes);
+  // Fetch user-defined limit from settings (in MB)
+  const [settingsLimitMb] = useSetting("storage_limit_mb");
+
+  // Calculate effective quota based on user settings and browser limits
+  const settingsLimitBytes =
+    typeof settingsLimitMb === "number" && settingsLimitMb > 0
+      ? settingsLimitMb * 1024 * 1024
+      : Infinity;
+
+  const effectiveQuotaBytes = Math.min(quotaBytes ?? Infinity, settingsLimitBytes);
+  const finalQuota = effectiveQuotaBytes === Infinity ? null : effectiveQuotaBytes;
+
+  const percent = computeUsagePercent(finalQuota, usageBytes);
   const quotaState = getQuotaState(percent);
   const value = percent ?? 0;
 
@@ -77,7 +90,7 @@ export function StorageQuotaIndicator({
               Usage: <span className="font-medium text-foreground">{usageBytes !== null ? formatBytes(usageBytes) : "Unavailable"}</span>
             </p>
             <p>
-              Quota: <span className="font-medium text-foreground">{quotaBytes !== null ? formatBytes(quotaBytes) : "Unavailable"}</span>
+              Quota: <span className="font-medium text-foreground">{finalQuota !== null ? formatBytes(finalQuota) : "Unavailable"}</span>
             </p>
             <p className="text-xs text-muted-foreground">{message}</p>
           </div>

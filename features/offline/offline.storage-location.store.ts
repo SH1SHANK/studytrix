@@ -57,6 +57,10 @@ export interface StorageLocationState {
   relinkFolder: () => Promise<boolean>;
   changeFolder: () => Promise<boolean>;
   clearError: () => void;
+
+  isSetupSheetOpen: boolean;
+  openSetupSheet: () => void;
+  closeSetupSheet: () => void;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -94,6 +98,10 @@ export const useStorageLocationStore = create<StorageLocationState>(
     migrationProgress: null,
     error: null,
     initialized: false,
+    isSetupSheetOpen: false,
+
+    openSetupSheet: () => set({ isSetupSheetOpen: true }),
+    closeSetupSheet: () => set({ isSetupSheetOpen: false }),
 
     initialize: async () => {
       if (get().initialized) {

@@ -66,6 +66,55 @@ function cloneMetadataRecord(record: MetadataRecord): MetadataRecord {
   return { ...record };
 }
 
+function normalizeFileIdList(values: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const value of values) {
+    const fileId = value.trim();
+    if (!fileId || seen.has(fileId)) {
+      continue;
+    }
+
+    seen.add(fileId);
+    normalized.push(fileId);
+  }
+
+  return normalized;
+}
+
+async function readAllIndexedDbFiles(): Promise<OfflineFileRecord[]> {
+  const db = await getDB();
+
+  if (!db) {
+    return Array.from(memoryFiles.values()).map(cloneFileRecord);
+  }
+
+  try {
+    const records = await db.getAll(FILES_STORE);
+    return records.map(cloneFileRecord);
+  } catch {
+    return Array.from(memoryFiles.values()).map(cloneFileRecord);
+  }
+}
+
+async function readIndexedDbFile(fileId: string): Promise<OfflineFileRecord | undefined> {
+  const db = await getDB();
+
+  if (!db) {
+    const cached = memoryFiles.get(fileId);
+    return cached ? cloneFileRecord(cached) : undefined;
+  }
+
+  try {
+    const record = await db.get(FILES_STORE, fileId);
+    return record ? cloneFileRecord(record) : undefined;
+  } catch {
+    const cached = memoryFiles.get(fileId);
+    return cached ? cloneFileRecord(cached) : undefined;
+  }
+}
+
 async function getDB(): Promise<IDBPDatabase<OfflineDBSchema> | null> {
   if (indexedDbDisabled) {
     return null;
@@ -107,7 +156,8 @@ export async function getFile(fileId: string): Promise<OfflineFileRecord | undef
       const blob = await provider.readFile(fileId);
       if (blob) {
         // Return a synthetic record with the blob from the provider.
-        const inMemory = memoryFiles.get(fileId);
+        const fromIndexedDb = await readIndexedDbFile(fileId);
+        const inMemory = fromIndexedDb ?? memoryFiles.get(fileId);
         return {
           fileId,
           blob,
@@ -124,20 +174,7 @@ export async function getFile(fileId: string): Promise<OfflineFileRecord | undef
     }
   }
 
-  const db = await getDB();
-
-  if (!db) {
-    const cached = memoryFiles.get(fileId);
-    return cached ? cloneFileRecord(cached) : undefined;
-  }
-
-  try {
-    const record = await db.get(FILES_STORE, fileId);
-    return record ? cloneFileRecord(record) : undefined;
-  } catch {
-    const cached = memoryFiles.get(fileId);
-    return cached ? cloneFileRecord(cached) : undefined;
-  }
+  return readIndexedDbFile(fileId);
 }
 
 export async function putFile(record: OfflineFileRecord): Promise<void> {
@@ -201,40 +238,108 @@ export async function deleteFile(fileId: string): Promise<void> {
 }
 
 export async function getAllFiles(): Promise<OfflineFileRecord[]> {
-  const db = await getDB();
+  const indexedRecords = await readAllIndexedDbFiles();
+  const mergedById = new Map(indexedRecords.map((record) => [record.fileId, record]));
 
-  if (!db) {
-    return Array.from(memoryFiles.values()).map(cloneFileRecord);
+  const provider = getActiveProvider();
+  if (provider?.kind !== "filesystem") {
+    return Array.from(mergedById.values()).map(cloneFileRecord);
   }
 
+  let providerIds: string[] = [];
   try {
-    const records = await db.getAll(FILES_STORE);
-    return records.map(cloneFileRecord);
+    providerIds = normalizeFileIdList(await provider.listFiles());
   } catch {
-    return Array.from(memoryFiles.values()).map(cloneFileRecord);
+    providerIds = [];
   }
+
+  if (providerIds.length === 0) {
+    return Array.from(mergedById.values()).map(cloneFileRecord);
+  }
+
+  const providerRecords = await Promise.all(
+    providerIds.map(async (fileId) => {
+      try {
+        const blob = await provider.readFile(fileId);
+        if (!blob) {
+          return null;
+        }
+
+        const cached = mergedById.get(fileId) ?? memoryFiles.get(fileId);
+        const now = Date.now();
+        return {
+          fileId,
+          blob,
+          size: blob.size,
+          mimeType: cached?.mimeType ?? (blob.type || "application/octet-stream"),
+          modifiedTime: cached?.modifiedTime ?? null,
+          checksum: cached?.checksum,
+          cachedAt: cached?.cachedAt ?? now,
+          lastAccessedAt: cached?.lastAccessedAt ?? now,
+        } satisfies OfflineFileRecord;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  for (const record of providerRecords) {
+    if (!record) {
+      continue;
+    }
+
+    mergedById.set(record.fileId, record);
+  }
+
+  return Array.from(mergedById.values()).map(cloneFileRecord);
 }
 
 export async function getAllFileIds(): Promise<string[]> {
   const db = await getDB();
 
+  let indexedKeys: string[] = [];
   if (!db) {
-    return Array.from(memoryFiles.keys());
+    indexedKeys = Array.from(memoryFiles.keys());
+  } else {
+    try {
+      indexedKeys = (await db.getAllKeys(FILES_STORE))
+        .filter((key): key is string => typeof key === "string");
+    } catch {
+      indexedKeys = Array.from(memoryFiles.keys());
+    }
   }
 
-  try {
-    const keys = await db.getAllKeys(FILES_STORE);
-    return keys
-      .filter((key): key is string => typeof key === "string")
-      .map((key) => key.trim())
-      .filter((key) => key.length > 0);
-  } catch {
-    return Array.from(memoryFiles.keys());
+  const provider = getActiveProvider();
+  if (provider?.kind !== "filesystem") {
+    return normalizeFileIdList(indexedKeys);
   }
+
+  let providerKeys: string[] = [];
+  try {
+    providerKeys = await provider.listFiles();
+  } catch {
+    providerKeys = [];
+  }
+
+  return normalizeFileIdList([...indexedKeys, ...providerKeys]);
 }
 
 export async function clearFiles(): Promise<void> {
   memoryFiles.clear();
+
+  const provider = getActiveProvider();
+  if (provider?.kind === "filesystem") {
+    try {
+      const fileIds = normalizeFileIdList(await provider.listFiles());
+      await Promise.all(fileIds.map(async (fileId) => {
+        try {
+          await provider.deleteFile(fileId);
+        } catch {
+        }
+      }));
+    } catch {
+    }
+  }
 
   const db = await getDB();
   if (!db) {

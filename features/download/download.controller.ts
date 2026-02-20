@@ -74,6 +74,15 @@ type FileMetadata = {
   modifiedTime: string | null;
 };
 
+export type StartDownloadOptions = {
+  kind?: "file" | "folder";
+  hiddenInUi?: boolean;
+  groupId?: string;
+  groupLabel?: string;
+  groupTotalFiles?: number;
+  groupTotalBytes?: number;
+};
+
 function now(): number {
   return Date.now();
 }
@@ -106,6 +115,15 @@ function parseString(value: unknown): string | undefined {
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizePositiveInt(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  const next = Math.floor(value);
+  return next > 0 ? next : undefined;
 }
 
 function resolveStorageLimitBytes(): number {
@@ -621,7 +639,7 @@ class DownloadController {
     );
   }
 
-  async startDownload(fileId: string): Promise<string> {
+  async startDownload(fileId: string, options?: StartDownloadOptions): Promise<string> {
     const normalizedFileId = normalizeFileId(fileId);
 
     const activeTaskId = this.findActiveTaskByFileId(normalizedFileId);
@@ -656,11 +674,17 @@ class DownloadController {
       id: taskId,
       fileId: normalizedFileId,
       fileName: metadata?.name ?? normalizedFileId,
+      kind: options?.kind === "folder" ? "folder" : "file",
       mimeType: metadata?.mimeType ?? offlineRecord?.mimeType,
       size:
         metadata?.size && metadata.size > 0
           ? metadata.size
           : offlineRecord?.size,
+      hiddenInUi: Boolean(options?.hiddenInUi),
+      groupId: parseString(options?.groupId),
+      groupLabel: parseString(options?.groupLabel),
+      groupTotalFiles: normalizePositiveInt(options?.groupTotalFiles),
+      groupTotalBytes: normalizePositiveInt(options?.groupTotalBytes),
       progress: alreadyOffline ? 100 : 0,
       loadedBytes: alreadyOffline ? (offlineRecord?.size ?? metadata?.size ?? 0) : 0,
       totalBytes:
@@ -817,8 +841,8 @@ class DownloadController {
 
 export const downloadController = new DownloadController();
 
-export async function startDownload(fileId: string): Promise<string> {
-  return downloadController.startDownload(fileId);
+export async function startDownload(fileId: string, options?: StartDownloadOptions): Promise<string> {
+  return downloadController.startDownload(fileId, options);
 }
 
 export function pauseDownload(taskId: string): void {

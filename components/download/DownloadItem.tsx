@@ -143,6 +143,9 @@ function DownloadItemComponent({
 }: DownloadItemProps) {
   const status = STATUS_CONFIG[task.state];
   const isActive = task.state === "downloading" || task.state === "queued";
+  const isFolderTask = task.kind === "folder";
+  const totalGroupFiles = Math.max(task.groupTotalFiles ?? 0, 0);
+  const completedGroupFiles = Math.max(task.groupCompletedFiles ?? 0, 0);
 
   const hasKnownTotal =
     typeof task.totalBytes === "number"
@@ -169,14 +172,24 @@ function DownloadItemComponent({
   const speedLabel = hasSpeed ? `${formatBytes(task.speedBytesPerSecond ?? 0)}/s` : null;
   const etaLabel = hasEta ? formatEta(task.etaSeconds ?? 0) : null;
 
-  const metaParts = [byteLabel, speedLabel, etaLabel].filter(Boolean);
+  const folderFilesLabel =
+    isFolderTask && totalGroupFiles > 0
+      ? `Downloaded ${completedGroupFiles}/${totalGroupFiles} files`
+      : null;
+  const metaParts = isFolderTask
+    ? [folderFilesLabel, byteLabel].filter(Boolean)
+    : [byteLabel, speedLabel, etaLabel].filter(Boolean);
   const completedSize =
     task.totalBytes
     ?? task.size
     ?? task.loadedBytes
     ?? 0;
   const completedMime = formatMimeType(task.mimeType);
-  const secondaryMeta = [task.courseCode, completedMime].filter(Boolean).join(" · ");
+  const secondaryMeta = isFolderTask
+    ? [folderFilesLabel, task.groupTotalBytes ? `Est. ${formatBytes(task.groupTotalBytes)}` : null]
+      .filter(Boolean)
+      .join(" · ")
+    : [task.courseCode, completedMime].filter(Boolean).join(" · ");
 
   return (
     <article className="rounded-xl border border-border bg-card p-3.5 shadow-sm transition-all duration-200 border-border bg-card">
@@ -210,7 +223,7 @@ function DownloadItemComponent({
           <Progress value={task.progress} className="h-1.5" />
           <div className="mt-1 flex items-center justify-between">
             <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
-              {Math.round(task.progress)}%
+              {isFolderTask && folderFilesLabel ? folderFilesLabel : `${Math.round(task.progress)}%`}
             </span>
             {metaParts.length > 0 && (
               <span className="text-[11px] text-muted-foreground/80">
@@ -271,7 +284,7 @@ function DownloadItemComponent({
           </Button>
         )}
 
-        {task.state === "completed" && (
+        {task.state === "completed" && !isFolderTask && (
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenFile(task)} className="h-7 gap-1 rounded-lg px-2.5 text-[11px]">
             <IconCheck className="size-3" />
             Open
