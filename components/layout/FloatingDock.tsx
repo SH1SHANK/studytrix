@@ -26,6 +26,54 @@ const KEYBOARD_HIDE_THRESHOLD_PX = 110;
 const HIDE_ON_SCROLL_DELTA_PX = 18;
 const SHOW_ON_SCROLL_DELTA_PX = -12;
 
+const NON_TEXT_INPUT_TYPES = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit",
+]);
+
+function isEditableElement(target: Element | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  if (target instanceof HTMLTextAreaElement) {
+    return !target.disabled && !target.readOnly;
+  }
+
+  if (!(target instanceof HTMLInputElement)) {
+    return false;
+  }
+
+  const inputType = target.type.toLowerCase();
+  return !target.disabled && !target.readOnly && !NON_TEXT_INPUT_TYPES.has(inputType);
+}
+
+function addMqlChangeListener(
+  queryList: MediaQueryList,
+  handler: (event: MediaQueryListEvent) => void,
+): () => void {
+  if (typeof queryList.addEventListener === "function") {
+    queryList.addEventListener("change", handler);
+    return () => queryList.removeEventListener("change", handler);
+  }
+
+  const legacyHandler = handler as unknown as (this: MediaQueryList, ev: MediaQueryListEvent) => void;
+  queryList.addListener(legacyHandler);
+  return () => queryList.removeListener(legacyHandler);
+}
+
 export function FloatingDock({
   isPaletteOpen,
   onOpenPalette,
@@ -42,6 +90,7 @@ export function FloatingDock({
   const [isScrollHidden, setIsScrollHidden] = useState(false);
   const scrollYRef = useRef(0);
   const frameRef = useRef<number | null>(null);
+  const keyboardBaselineHeightRef = useRef<number>(0);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -82,30 +131,54 @@ export function FloatingDock({
     const updateViewport = () => {
       const width = Math.round(visualViewport?.width ?? window.innerWidth);
       const height = visualViewport?.height ?? window.innerHeight;
-      const offsetTop = visualViewport?.offsetTop ?? 0;
-      const inset = Math.max(0, Math.round(window.innerHeight - height - offsetTop));
       setViewportWidth(width);
-      setIsKeyboardOpen(inset >= KEYBOARD_HIDE_THRESHOLD_PX);
+
+      const roundedHeight = Math.max(0, Math.round(height));
+      const hasEditableFocus = isEditableElement(document.activeElement);
+
+      if (!hasEditableFocus) {
+        keyboardBaselineHeightRef.current = Math.max(keyboardBaselineHeightRef.current, roundedHeight);
+        setIsKeyboardOpen(false);
+        return;
+      }
+
+      const baseline = Math.max(keyboardBaselineHeightRef.current, roundedHeight);
+      keyboardBaselineHeightRef.current = baseline;
+      setIsKeyboardOpen(baseline - roundedHeight >= KEYBOARD_HIDE_THRESHOLD_PX);
+    };
+
+    const onFocusChange = () => {
+      updateViewport();
+    };
+    const onOrientationChange = () => {
+      keyboardBaselineHeightRef.current = 0;
+      updateViewport();
     };
 
     updatePointer();
     updateStandalone();
     updateViewport();
 
-    pointerMql.addEventListener("change", updatePointer);
-    standaloneMql.addEventListener("change", updateStandalone);
+    const removePointerListener = addMqlChangeListener(pointerMql, updatePointer);
+    const removeStandaloneListener = addMqlChangeListener(standaloneMql, updateStandalone);
     visualViewport?.addEventListener("resize", updateViewport);
     visualViewport?.addEventListener("scroll", updateViewport);
     window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", onOrientationChange);
+    document.addEventListener("focusin", onFocusChange);
+    document.addEventListener("focusout", onFocusChange);
 
     return () => {
       window.removeEventListener(SCOPE_SUMMARY_EVENT, onScopeSummary);
       window.removeEventListener("focus", syncFromStorage);
-      pointerMql.removeEventListener("change", updatePointer);
-      standaloneMql.removeEventListener("change", updateStandalone);
+      removePointerListener();
+      removeStandaloneListener();
       visualViewport?.removeEventListener("resize", updateViewport);
       visualViewport?.removeEventListener("scroll", updateViewport);
       window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", onOrientationChange);
+      document.removeEventListener("focusin", onFocusChange);
+      document.removeEventListener("focusout", onFocusChange);
     };
   }, []);
 

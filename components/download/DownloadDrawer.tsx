@@ -13,6 +13,7 @@ import { buildDownloadGrouping } from "@/features/download/download.grouping";
 import type { DownloadTask } from "@/features/download/download.types";
 import { openLocalFirst } from "@/features/offline/offline.access";
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
+import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
 
 import { DownloadList } from "./DownloadList";
 
@@ -84,6 +85,7 @@ function Section({
 }
 
 export function DownloadDrawer() {
+  const gateDownloadRisk = useDownloadRiskGate();
   const {
     tasks,
     isDrawerOpen,
@@ -156,30 +158,67 @@ export function DownloadDrawer() {
   }, [removeTask, runForAggregateChildren]);
 
   const handleRetry = useCallback((task: DownloadTask) => {
-    const children = grouped.childrenByAggregateTaskId.get(task.id);
-    if (children && children.length > 0) {
-      const groupId = task.groupId ?? task.fileId;
-      const groupLabel = task.groupLabel ?? task.fileName;
-      const groupTotalFiles = task.groupTotalFiles ?? children.length;
-      const groupTotalBytes = task.groupTotalBytes;
-      for (const child of children) {
-        if (child.state !== "failed" && child.state !== "canceled") {
-          continue;
+    void (async () => {
+      const children = grouped.childrenByAggregateTaskId.get(task.id);
+      if (children && children.length > 0) {
+        const retryableChildren = children.filter((child) => child.state === "failed" || child.state === "canceled");
+        const proceed = await gateDownloadRisk(
+          retryableChildren.map((child) => ({
+            id: child.fileId,
+            name: child.fileName,
+            sizeBytes: child.size ?? child.totalBytes ?? null,
+            kind: "file",
+          })),
+          {
+            actionLabel: "retry download",
+            confirmButtonLabel: "Retry",
+          },
+        );
+        if (!proceed) {
+          return;
         }
-        void startDownload(child.fileId, {
-          kind: "file",
-          hiddenInUi: true,
-          groupId,
-          groupLabel,
-          groupTotalFiles,
-          groupTotalBytes,
-        });
-      }
-      return;
-    }
 
-    void startDownload(task.fileId);
-  }, [grouped.childrenByAggregateTaskId, startDownload]);
+        const groupId = task.groupId ?? task.fileId;
+        const groupLabel = task.groupLabel ?? task.fileName;
+        const groupTotalFiles = task.groupTotalFiles ?? children.length;
+        const groupTotalBytes = task.groupTotalBytes;
+        for (const child of children) {
+          if (child.state !== "failed" && child.state !== "canceled") {
+            continue;
+          }
+          void startDownload(child.fileId, {
+            kind: "file",
+            hiddenInUi: true,
+            groupId,
+            groupLabel,
+            groupTotalFiles,
+            groupTotalBytes,
+          });
+        }
+        return;
+      }
+
+      const proceed = await gateDownloadRisk(
+        [
+          {
+            id: task.fileId,
+            name: task.fileName,
+            sizeBytes: task.size ?? task.totalBytes ?? null,
+            kind: task.kind === "folder" ? "folder" : "file",
+          },
+        ],
+        {
+          actionLabel: "retry download",
+          confirmButtonLabel: "Retry",
+        },
+      );
+      if (!proceed) {
+        return;
+      }
+
+      void startDownload(task.fileId);
+    })();
+  }, [gateDownloadRisk, grouped.childrenByAggregateTaskId, startDownload]);
 
   const handleOpenFile = useCallback((task: DownloadTask) => {
     if (task.kind === "folder") {

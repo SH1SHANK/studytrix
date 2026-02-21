@@ -6,7 +6,16 @@ export type DownloadState =
   | "failed"
   | "canceled";
 
-export type DownloadErrorCode = "OFFLINE" | "NETWORK" | "QUOTA" | "UNKNOWN";
+export type DownloadErrorCode =
+  | "OFFLINE"
+  | "NETWORK"
+  | "RATE_LIMITED"
+  | "NOT_FOUND"
+  | "ACCESS_DENIED"
+  | "INVALID_ID"
+  | "UNSUPPORTED_TYPE"
+  | "QUOTA"
+  | "UNKNOWN";
 export type DownloadTaskKind = "file" | "folder";
 
 export interface DownloadTask {

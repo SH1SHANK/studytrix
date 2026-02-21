@@ -21,12 +21,14 @@ import { useTagStore } from "@/features/tags/tag.store";
 import type { EntityType } from "@/features/tags/tag.types";
 import { Button } from "@/components/ui/button";
 import { shareNativeFile } from "@/features/share/share.service";
+import { sanitizeShareUrl } from "@/features/share/share.page";
 import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { expandFolders } from "@/features/bulk/bulk.service";
 import { makeFilesOffline } from "@/features/bulk/bulk.offline";
 import { toast } from "sonner";
 import { downloadAsZip, shareAsZip } from "@/features/bulk/bulk.share";
 import { useShareStore } from "@/features/share/share.store";
+import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
 import {
   buildFolderRouteHref,
   parseFolderTrailParam,
@@ -77,16 +79,43 @@ function sanitizeDownloadFileName(value: string): string {
   return value.trim().replace(/[<>:\"/\\|?*\x00-\x1f]/g, "_") || "download";
 }
 
-function toAbsoluteUrl(pathOrUrl: string): string | null {
-  if (typeof window === "undefined") {
-    return null;
+function legacyCopyToClipboard(text: string): boolean {
+  if (typeof document === "undefined") {
+    return false;
   }
 
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-9999px";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+
+  const selection = document.getSelection();
+  const previousRange = selection && selection.rangeCount > 0
+    ? selection.getRangeAt(0)
+    : null;
+
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  let copied = false;
   try {
-    return new URL(pathOrUrl, window.location.origin).toString();
+    copied = document.execCommand("copy");
   } catch {
-    return null;
+    copied = false;
   }
+
+  textarea.remove();
+
+  if (selection && previousRange) {
+    selection.removeAllRanges();
+    selection.addRange(previousRange);
+  }
+
+  return copied;
 }
 
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -95,22 +124,167 @@ async function copyToClipboard(text: string): Promise<boolean> {
       await navigator.clipboard.writeText(text);
       return true;
     } catch {
-      return false;
+      // Fallback below for browser/PWA contexts that block async clipboard.
     }
   }
 
-  return false;
+  return legacyCopyToClipboard(text);
 }
 
-function triggerFileDownload(path: string, fileName: string): void {
+function triggerFileDownload(path: string, fileName: string): boolean {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
   const anchor = document.createElement("a");
   anchor.href = path;
   anchor.download = sanitizeDownloadFileName(fileName);
   anchor.rel = "noopener noreferrer";
   anchor.style.display = "none";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
+  try {
+    document.body.appendChild(anchor);
+    anchor.click();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    anchor.remove();
+  }
+}
+
+function downloadBlob(blob: Blob, fileName: string): boolean {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = sanitizeDownloadFileName(fileName);
+  anchor.rel = "noopener noreferrer";
+  anchor.style.display = "none";
+
+  try {
+    document.body.appendChild(anchor);
+    anchor.click();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+    anchor.remove();
+  }
+}
+
+function parseDownloadFileName(
+  fileName: string,
+  contentDisposition: string | null,
+): string {
+  const fallback = sanitizeDownloadFileName(fileName);
+  if (!contentDisposition) {
+    return fallback;
+  }
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return sanitizeDownloadFileName(decodeURIComponent(utf8Match[1]));
+    } catch {
+      return fallback;
+    }
+  }
+
+  const asciiMatch = contentDisposition.match(/filename="([^"]+)"/i);
+  if (asciiMatch?.[1]) {
+    return sanitizeDownloadFileName(asciiMatch[1]);
+  }
+
+  return fallback;
+}
+
+function isStandaloneMode(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true;
+}
+
+async function downloadFileWithFallback(path: string, fileName: string): Promise<boolean> {
+  if (!isStandaloneMode()) {
+    return triggerFileDownload(path, fileName);
+  }
+
+  try {
+    const response = await fetch(path, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return triggerFileDownload(path, fileName);
+    }
+
+    const blob = await response.blob();
+    const resolvedName = parseDownloadFileName(
+      fileName,
+      response.headers.get("content-disposition"),
+    );
+    return downloadBlob(blob, resolvedName) || triggerFileDownload(path, resolvedName);
+  } catch {
+    return triggerFileDownload(path, fileName);
+  }
+}
+
+type FileClipboardResult = "copied" | "unsupported" | "failed";
+
+async function copyFileToClipboard(
+  path: string,
+  fallbackFileName: string,
+  mimeTypeHint?: string | null,
+): Promise<FileClipboardResult> {
+  if (
+    typeof window === "undefined"
+    || typeof navigator === "undefined"
+    || window.isSecureContext !== true
+    || typeof ClipboardItem === "undefined"
+    || !navigator.clipboard?.write
+  ) {
+    return "unsupported";
+  }
+
+  try {
+    const response = await fetch(path, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return "failed";
+    }
+
+    const blob = await response.blob();
+    const contentTypeHeader = response.headers.get("content-type") ?? "";
+    const contentType = (contentTypeHeader.split(";")[0] ?? "").trim();
+    const resolvedType = contentType || mimeTypeHint || blob.type || "application/octet-stream";
+    const resolvedName = parseDownloadFileName(
+      fallbackFileName,
+      response.headers.get("content-disposition"),
+    );
+    const normalizedBlob = blob.type ? blob : blob.slice(0, blob.size, resolvedType);
+    const file = new File([normalizedBlob], resolvedName, {
+      type: normalizedBlob.type || resolvedType,
+    });
+
+    const item = new ClipboardItem({
+      [file.type || "application/octet-stream"]: file,
+    });
+    await navigator.clipboard.write([item]);
+    return "copied";
+  } catch {
+    return "failed";
+  }
 }
 
 function summarizeFailedFiles(summary: { failedFiles: string[] }, fallback: string): string | null {
@@ -141,6 +315,7 @@ export function EntityActionsMenu({
   isOffline = false,
   isDownloading = false,
 }: EntityActionsMenuProps) {
+  const gateDownloadRisk = useDownloadRiskGate();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const hydrationRequestedRef = useRef(false);
@@ -187,7 +362,6 @@ export function EntityActionsMenu({
   const currentTrailIds = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_IDS_QUERY_PARAM));
 
   const fileStreamPath = `/api/file/${encodeURIComponent(entityId)}/stream`;
-  const fileCopyLink = toAbsoluteUrl(fileStreamPath);
   const folderRoutePath = entityType === "folder"
     ? (() => {
       if (isAcademicRoute) {
@@ -225,25 +399,47 @@ export function EntityActionsMenu({
       return null;
     })()
     : null;
-  const folderCopyLink = folderRoutePath ? toAbsoluteUrl(folderRoutePath) : null;
 
-  const handleCopyLink = useCallback(() => {
-    const linkToCopy = entityType === "folder" ? folderCopyLink : fileCopyLink;
-    if (!linkToCopy) {
-      toast.error("Could not prepare link for this item.");
-      return;
-    }
-
+  const handleCopyAction = useCallback(() => {
     triggerHaptic(6);
-    void copyToClipboard(linkToCopy).then((copied) => {
-      if (copied) {
-        toast.success(entityType === "folder" ? "Folder link copied." : "File link copied.");
+    if (entityType === "folder") {
+      const linkToCopy = folderRoutePath ? sanitizeShareUrl(folderRoutePath) : null;
+      if (!linkToCopy) {
+        toast.error("Could not prepare link for this folder.");
         return;
       }
 
-      toast.error("Clipboard is not available in this browser.");
-    });
-  }, [entityType, fileCopyLink, folderCopyLink]);
+      void copyToClipboard(linkToCopy).then((copied) => {
+        if (copied) {
+          toast.success("Folder link copied.");
+          return;
+        }
+
+        toast.error("Clipboard is not available in this browser.");
+      });
+      return;
+    }
+
+    void (async () => {
+      const result = await copyFileToClipboard(
+        fileStreamPath,
+        title,
+        entityDetails?.mimeType ?? undefined,
+      );
+
+      if (result === "copied") {
+        toast.success(`Copied "${title}" to clipboard.`);
+        return;
+      }
+
+      if (result === "unsupported") {
+        toast.error("File clipboard copy is not supported on this device/browser.");
+        return;
+      }
+
+      toast.error(`Could not copy "${title}"`);
+    })();
+  }, [entityDetails?.mimeType, entityType, fileStreamPath, folderRoutePath, title]);
 
   const handleDownload = useCallback(() => {
     triggerHaptic();
@@ -269,6 +465,23 @@ export function EntityActionsMenu({
 
           if (files.length === 0) {
             throw new Error("Folder is empty");
+          }
+
+          const proceed = await gateDownloadRisk(
+            files.map((file) => ({
+              id: file.id,
+              name: file.name,
+              sizeBytes: file.size,
+              kind: "file",
+            })),
+            {
+              actionLabel: "folder download",
+              confirmButtonLabel: "Download Anyway",
+            },
+          );
+          if (!proceed) {
+            shareStore.endShare();
+            return;
           }
 
           shareStore.startShare(`${title}.zip`, files.length, {
@@ -301,9 +514,34 @@ export function EntityActionsMenu({
       return;
     }
 
-    triggerFileDownload(fileStreamPath, title);
-    toast.success(`Downloading "${title}"`);
-  }, [entityId, entityType, fileStreamPath, title]);
+    void (async () => {
+      const proceed = await gateDownloadRisk(
+        [
+          {
+            id: entityId,
+            name: title,
+            sizeBytes: entityDetails?.sizeBytes ?? null,
+            kind: "file",
+          },
+        ],
+        {
+          actionLabel: "download",
+          confirmButtonLabel: "Download",
+        },
+      );
+      if (!proceed) {
+        return;
+      }
+
+      const started = await downloadFileWithFallback(fileStreamPath, title);
+      if (started) {
+        toast.success(`Downloading "${title}"`);
+        return;
+      }
+
+      toast.error(`Could not download "${title}"`);
+    })();
+  }, [entityDetails?.sizeBytes, entityId, entityType, fileStreamPath, gateDownloadRisk, title]);
 
   return (
     <>
@@ -446,6 +684,23 @@ export function EntityActionsMenu({
                         throw new Error("Folder is empty");
                       }
 
+                      const proceed = await gateDownloadRisk(
+                        files.map((file) => ({
+                          id: file.id,
+                          name: file.name,
+                          sizeBytes: file.size,
+                          kind: "file",
+                        })),
+                        {
+                          actionLabel: "folder share",
+                          confirmButtonLabel: "Share Anyway",
+                        },
+                      );
+                      if (!proceed) {
+                        shareStore.endShare();
+                        return;
+                      }
+
                       shareStore.startShare(
                         `${title}.zip`,
                         files.length,
@@ -484,7 +739,27 @@ export function EntityActionsMenu({
                     }
                   })();
                 } else {
-                  void shareNativeFile(entityId, title, entityDetails?.mimeType ?? "application/octet-stream");
+                  void (async () => {
+                    const proceed = await gateDownloadRisk(
+                      [
+                        {
+                          id: entityId,
+                          name: title,
+                          sizeBytes: entityDetails?.sizeBytes ?? null,
+                          kind: "file",
+                        },
+                      ],
+                      {
+                        actionLabel: "file sharing",
+                        confirmButtonLabel: "Share File",
+                      },
+                    );
+                    if (!proceed) {
+                      return;
+                    }
+
+                    await shareNativeFile(entityId, title, entityDetails?.mimeType ?? "application/octet-stream");
+                  })();
                 }
               }}
             >
@@ -517,14 +792,16 @@ export function EntityActionsMenu({
               className="min-h-11 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-slate-100 focus:text-slate-800 dark:focus:bg-slate-800 dark:focus:text-slate-100"
               onClick={(event) => {
                 event.stopPropagation();
-                handleCopyLink();
+                handleCopyAction();
               }}
             >
               <IconCopy className="size-4 text-slate-500 dark:text-slate-300" />
               <div className="flex flex-col gap-0.5">
-                <span>{entityType === "folder" ? "Copy Folder Link" : "Copy File Link"}</span>
+                <span>{entityType === "folder" ? "Copy Folder Link" : "Copy File"}</span>
                 <span className="text-[11px] font-normal text-muted-foreground">
-                  Paste into notes, chat, or browser
+                  {entityType === "folder"
+                    ? "Paste a clean link into notes or chat"
+                    : "Copy the actual file for pasting into chat/apps"}
                 </span>
               </div>
             </DropdownMenuItem>
@@ -540,10 +817,27 @@ export function EntityActionsMenu({
                 
                 if (entityType === "folder") {
                   const downloadPromise = expandFolders([entityId])
-                    .then((files) => {
+                    .then(async (files) => {
                       if (files.length === 0) {
                         throw new Error("Folder is empty");
                       }
+
+                      const proceed = await gateDownloadRisk(
+                        files.map((file) => ({
+                          id: file.id,
+                          name: file.name,
+                          sizeBytes: file.size,
+                          kind: "file",
+                        })),
+                        {
+                          actionLabel: "offline save",
+                          confirmButtonLabel: "Save Offline",
+                        },
+                      );
+                      if (!proceed) {
+                        throw new Error("Download canceled.");
+                      }
+
                       return makeFilesOffline(files, {
                         group: {
                           id: `folder:${entityId}`,
@@ -558,7 +852,27 @@ export function EntityActionsMenu({
                     error: (err) => err instanceof Error ? err.message : `Failed to download "${title}"`,
                   });
                 } else {
-                  onMakeOffline?.(event.currentTarget as HTMLElement);
+                  void (async () => {
+                    const proceed = await gateDownloadRisk(
+                      [
+                        {
+                          id: entityId,
+                          name: title,
+                          sizeBytes: entityDetails?.sizeBytes ?? null,
+                          kind: "file",
+                        },
+                      ],
+                      {
+                        actionLabel: "offline save",
+                        confirmButtonLabel: "Save Offline",
+                      },
+                    );
+                    if (!proceed) {
+                      return;
+                    }
+
+                    onMakeOffline?.(event.currentTarget as HTMLElement);
+                  })();
                 }
               }}
               disabled={isOffline || isDownloading}

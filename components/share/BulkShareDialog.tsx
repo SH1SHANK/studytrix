@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { bulkShare } from "@/features/bulk/bulk.share";
 import type { BulkShareMode, ResolvedSelection } from "@/features/bulk/bulk.types";
 import { formatFileSize } from "@/features/drive/drive.types";
+import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
 
 type BulkShareDialogProps = {
   open: boolean;
@@ -66,6 +67,7 @@ export function BulkShareDialog({
   selection,
   onComplete,
 }: BulkShareDialogProps) {
+  const gateDownloadRisk = useDownloadRiskGate();
   const [phase, setPhase] = useState<DialogPhase>("choose");
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -81,6 +83,22 @@ export function BulkShareDialog({
   const handleShare = useCallback(
     async (mode: BulkShareMode) => {
       if (!selection || selection.files.length === 0) return;
+
+      const proceed = await gateDownloadRisk(
+        selection.files.map((file) => ({
+          id: file.id,
+          name: file.name,
+          sizeBytes: file.size,
+          kind: "file",
+        })),
+        {
+          actionLabel: mode === "zip" ? "zip preparation" : "file sharing",
+          confirmButtonLabel: mode === "zip" ? "Prepare ZIP" : "Continue Sharing",
+        },
+      );
+      if (!proceed) {
+        return;
+      }
 
       setErrorMessage(null);
       setPhase("processing");
@@ -116,7 +134,7 @@ export function BulkShareDialog({
         );
       }
     },
-    [selection, onOpenChange, onComplete],
+    [gateDownloadRisk, selection, onOpenChange, onComplete],
   );
 
   if (!selection) return null;

@@ -9,8 +9,6 @@ import {
   type ThemeId,
 } from "@/features/theme/theme.constants";
 
-const DARK_THEME_IDS = new Set<ThemeId>(["midnight", "eclipse", "graphite"]);
-
 function resolveThemeId(value: string | undefined): ThemeId {
   if (THEMES.some((theme) => theme.id === value)) {
     return value as ThemeId;
@@ -55,7 +53,7 @@ export function ThemeStatusBarSync() {
       upsertMeta("theme-color", themeColor, "(prefers-color-scheme: dark)");
       upsertMeta(
         "apple-mobile-web-app-status-bar-style",
-        DARK_THEME_IDS.has(themeId) ? "black-translucent" : "default",
+        "black-translucent",
       );
 
       document.documentElement.style.backgroundColor = themeColor;

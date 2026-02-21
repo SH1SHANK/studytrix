@@ -10,6 +10,24 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "0.9.0",
+    releasedOn: "2026-02-21",
+    title: "Robust Download Pipeline + Prefix-First Command UX",
+    summary:
+      "Unified large-file safety across all download entrypoints, added transient retry resilience, and simplified CommandCenter into a cleaner sticky-prefix workflow.",
+    highlights: [
+      "Added shared download risk evaluation with enforced thresholds: warn at >=25MB and blocking confirmation at >=100MB.",
+      "Added a single global download risk dialog and shared gate hook so file download, folder ZIP/share, offline save, and retry flows all use one preflight path.",
+      "Refactored download controller reliability with transient-only auto-retries (up to 3 attempts), normalized error-code semantics, and consistent retryCount task state updates.",
+      "Added controller-level pre-download storage-limit checks when metadata size is known while preserving final post-download enforcement.",
+      "Replaced CommandCenter idle quick rows with one compact essential bar: Folder, Tag, Actions, and Clear.",
+      "Implemented sticky deterministic prefix handling for `/`, `#`, `>`, `:`, and `@` with predictable paste/delete transitions and mixed-prefix normalization.",
+      "Added keyboard reliability updates for scope interaction: Alt+1 (Folder), Alt+2 (Tag), Alt+3 (Actions), and layered Esc/Backspace cancel behavior.",
+      "Improved share/copy ergonomics by preferring actual file clipboard copy where supported and keeping shared links sanitized/clean.",
+      "Included additional PWA shell polish and interaction refinements for standalone-app behavior and dock stability.",
+    ],
+  },
+  {
     version: "0.8.3",
     releasedOn: "2026-02-21",
     title: "PWA + Discoverability Polish",

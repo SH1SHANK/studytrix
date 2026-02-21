@@ -3,9 +3,6 @@ import { toast } from "sonner";
 import type { DriveItem } from "@/features/drive/drive.types";
 import { startDownload } from "@/features/download/download.controller";
 import { useDownloadStore } from "@/features/download/download.store";
-import { formatFileSize } from "@/features/drive/drive.types";
-
-import { LARGE_FILE_THRESHOLD_BYTES } from "./bulk.types";
 
 type OfflineBatchGroup = {
   id: string;
@@ -14,6 +11,7 @@ type OfflineBatchGroup = {
 
 type MakeFilesOfflineOptions = {
   group?: OfflineBatchGroup;
+  preflight?: (files: DriveItem[]) => Promise<boolean> | boolean;
 };
 
 /**
@@ -30,22 +28,11 @@ export async function makeFilesOffline(
     return;
   }
 
-  // Show large-file notice if applicable.
-  const largeFiles = files.filter(
-    (f) => (f.size ?? 0) > LARGE_FILE_THRESHOLD_BYTES,
-  );
-
-  if (largeFiles.length > 0) {
-    const names = largeFiles
-      .slice(0, 3)
-      .map((f) => `"${f.name}" (${formatFileSize(f.size)})`)
-      .join(", ");
-    const suffix = largeFiles.length > 3 ? ` and ${largeFiles.length - 3} more` : "";
-
-    toast.warning(
-      `${largeFiles.length} large file${largeFiles.length > 1 ? "s" : ""} detected: ${names}${suffix}. These may take longer to download.`,
-      { duration: 6000 },
-    );
+  if (options?.preflight) {
+    const proceed = await options.preflight(files);
+    if (!proceed) {
+      return;
+    }
   }
 
   // Open the download drawer so the user sees progress.

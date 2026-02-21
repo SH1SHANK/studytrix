@@ -94,6 +94,17 @@ import {
   FOLDER_TRAIL_QUERY_PARAM,
 } from "@/features/navigation/folder-trail";
 import { useSetting } from "@/ui/hooks/useSettings";
+import {
+  normalizeStickyPrefixInput,
+  type PrefixMode,
+} from "@/features/command/command.prefix";
+import {
+  type EssentialScopeAction,
+  isEssentialActionActive,
+  resolveEssentialScopeTransition,
+  shouldShowEssentialScopeBar,
+} from "@/features/command/command.scope-ui";
+import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
 
 type CommandBarProps = {
   placeholder?: string;
@@ -157,27 +168,6 @@ const GROUP_META: Record<
   },
 };
 
-const QUICK_QUERIES: ReadonlyArray<{
-  label: string;
-  query: string;
-  icon: ComponentType<{ className?: string }>;
-}> = [
-  { label: "Tags", query: "tag", icon: IconTag },
-  { label: "Settings", query: "settings", icon: IconSettings },
-  { label: "Storage", query: "storage", icon: IconDatabase },
-  { label: "Offline", query: "offline", icon: IconCloudOff },
-];
-
-const SCOPE_QUICK_ACTIONS: ReadonlyArray<{
-  label: string;
-  prefix: "/" | "#" | ":";
-  icon: ComponentType<{ className?: string }>;
-}> = [
-  { label: "Folder", prefix: "/", icon: IconFolder },
-  { label: "Tag", prefix: "#", icon: IconTag },
-  { label: "Domain", prefix: ":", icon: IconDatabase },
-];
-
 const DEPARTMENT_SEGMENT_PATTERN = /^[A-Z]{2,5}$/;
 const RECENT_QUERY_STORAGE_KEY = "studytrix.command.recentQueries.v1";
 const MAX_RECENT_QUERIES = 6;
@@ -221,9 +211,20 @@ const GLOBAL_SCOPE: SearchScope = {
   domain: null,
 };
 
-function resolveScopeSelectorDescriptor(mode: ScopeSelectorMode | null): {
+const ESSENTIAL_SCOPE_ACTIONS: Array<{
+  key: EssentialScopeAction;
   label: string;
-  prefix: "/" | "#" | ":";
+  icon: ComponentType<{ className?: string }>;
+}> = [
+  { key: "folder", label: "Folder", icon: IconFolder },
+  { key: "tag", label: "Tag", icon: IconTag },
+  { key: "actions", label: "Actions", icon: IconBolt },
+  { key: "clear", label: "Clear", icon: IconX },
+];
+
+function resolvePrefixModeDescriptor(mode: PrefixMode | null): {
+  label: string;
+  prefix: "/" | "#" | ":" | ">" | "@";
   icon: ComponentType<{ className?: string }>;
 } | null {
   if (mode === "folders") {
@@ -248,6 +249,30 @@ function resolveScopeSelectorDescriptor(mode: ScopeSelectorMode | null): {
       prefix: ":",
       icon: IconDatabase,
     };
+  }
+
+  if (mode === "actions") {
+    return {
+      label: "Actions",
+      prefix: ">",
+      icon: IconBolt,
+    };
+  }
+
+  if (mode === "recents") {
+    return {
+      label: "Recents",
+      prefix: "@",
+      icon: IconClockHour4,
+    };
+  }
+
+  return null;
+}
+
+function toScopeSelectorMode(mode: PrefixMode | null): ScopeSelectorMode | null {
+  if (mode === "folders" || mode === "tags" || mode === "domains") {
+    return mode;
   }
 
   return null;
@@ -877,6 +902,7 @@ function writeScopeSummary(value: string): void {
 export function CommandBar({
   placeholder = "Search files, folders, or actions...",
 }: CommandBarProps) {
+  const gateDownloadRisk = useDownloadRiskGate();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -886,12 +912,13 @@ export function CommandBar({
   const [query, setQuery] = useState("");
   const [searchScope, setSearchScope] = useState<SearchScope>(GLOBAL_SCOPE);
   const [scopeSelectorMode, setScopeSelectorMode] = useState<ScopeSelectorMode | null>(null);
+  const [stickyPrefixMode, setStickyPrefixMode] = useState<PrefixMode | null>(null);
   const [scopeHistory, setScopeHistory] = useState<ScopeHistoryEntry[]>([]);
   const [scopeHistoryCursor, setScopeHistoryCursor] = useState(-1);
   const [isScopeHintSeen, setIsScopeHintSeen] = useState(true);
   const [driveItems, setDriveItems] = useState<DriveItem[]>([]);
   const [isDriveLoading, setIsDriveLoading] = useState(false);
-  const [recentQueries, setRecentQueries] = useState<string[]>([]);
+  const [, setRecentQueries] = useState<string[]>([]);
   const [recentCommandIds, setRecentCommandIds] = useState<string[]>([]);
   const [nestedFileEntries, setNestedFileEntries] = useState<NestedCommandFileEntry[]>([]);
   const [offlineLibrary, setOfflineLibrary] = useState<OfflineLibrarySnapshot>(EMPTY_OFFLINE_LIBRARY);
@@ -1255,6 +1282,46 @@ export function CommandBar({
       markScopeUsage();
     }
   }, [markScopeUsage]);
+
+  const clearStickyPrefixMode = useCallback(() => {
+    if (stickyPrefixMode === "actions" || stickyPrefixMode === "recents") {
+      applyScope({ ...searchScope, mode: "global" });
+    }
+    setScopeSelectorMode(null);
+    setStickyPrefixMode(null);
+  }, [applyScope, searchScope, stickyPrefixMode]);
+
+  const activatePrefixMode = useCallback((mode: PrefixMode) => {
+    setStickyPrefixMode(mode);
+    setScopeHistoryCursor(-1);
+    setQuery("");
+    markScopeUsage();
+
+    const selectorMode = toScopeSelectorMode(mode);
+    setScopeSelectorMode(selectorMode);
+
+    if (mode === "actions") {
+      applyScope({ ...searchScope, mode: "actions" });
+      return;
+    }
+
+    if (mode === "recents") {
+      applyScope({ ...searchScope, mode: "recents" });
+      return;
+    }
+
+    if (searchScope.mode !== "global") {
+      applyScope({ ...searchScope, mode: "global" });
+    }
+  }, [applyScope, markScopeUsage, searchScope]);
+
+  const handleClearSearchAndScope = useCallback(() => {
+    setQuery("");
+    setScopeHistoryCursor(-1);
+    setScopeSelectorMode(null);
+    setStickyPrefixMode(null);
+    applyScope(GLOBAL_SCOPE);
+  }, [applyScope]);
 
   const removeLastScopePill = useCallback(() => {
     if (searchScope.mode !== "global") {
@@ -1935,14 +2002,38 @@ export function CommandBar({
     });
     registry.register("toggle-view", () => undefined);
     registry.register("mark-offline", (item) => {
-      if (!item.entityId) {
+      const entityId = item.entityId;
+      if (!entityId) {
         return;
       }
 
-      void startDownload(item.entityId);
+      void (async () => {
+        const proceed = await gateDownloadRisk(
+          [
+            {
+              id: entityId,
+              name: item.title,
+              sizeBytes:
+                typeof item.payload?.size === "number"
+                  ? item.payload.size
+                  : null,
+              kind: "file",
+            },
+          ],
+          {
+            actionLabel: "offline save",
+            confirmButtonLabel: "Save Offline",
+          },
+        );
+        if (!proceed) {
+          return;
+        }
+
+        await startDownload(entityId);
+      })();
     });
     return registry;
-  }, [router]);
+  }, [gateDownloadRisk, router]);
 
   const matchesScopedFilters = useCallback((item: EngineCommandItem): boolean => {
     if (searchScope.mode === "actions") {
@@ -2171,47 +2262,58 @@ export function CommandBar({
     vibrate(6);
     setOpen(false);
     setScopeSelectorMode(null);
+    setStickyPrefixMode(null);
   }, []);
 
   const handleQueryChange = useCallback((nextValue: string) => {
     setScopeHistoryCursor(-1);
-    if (nextValue.startsWith("/") || nextValue.startsWith("#") || nextValue.startsWith(":")) {
-      const nextMode: ScopeSelectorMode = nextValue.startsWith("/")
-        ? "folders"
-        : nextValue.startsWith("#")
-          ? "tags"
-          : "domains";
-      setScopeSelectorMode(nextMode);
-      setQuery(nextValue.slice(1));
-      markScopeUsage();
+    const normalized = normalizeStickyPrefixInput(nextValue, stickyPrefixMode);
+    const nextStickyMode = normalized.mode;
+    if (nextStickyMode) {
+      if (nextStickyMode !== stickyPrefixMode) {
+        markScopeUsage();
+      }
+      setStickyPrefixMode(nextStickyMode);
+      setScopeSelectorMode(toScopeSelectorMode(nextStickyMode));
+
+      if (nextStickyMode === "actions") {
+        if (searchScope.mode !== "actions") {
+          applyScope({
+            ...searchScope,
+            mode: "actions",
+          });
+        }
+      } else if (nextStickyMode === "recents") {
+        if (searchScope.mode !== "recents") {
+          applyScope({
+            ...searchScope,
+            mode: "recents",
+          });
+        }
+      } else if (searchScope.mode !== "global") {
+        applyScope({
+          ...searchScope,
+          mode: "global",
+        });
+      }
+
+      setQuery(normalized.query);
       return;
     }
 
-    if (scopeSelectorMode) {
-      setQuery(nextValue);
-      return;
+    setScopeSelectorMode(null);
+    if (stickyPrefixMode) {
+      setStickyPrefixMode(null);
+      if (searchScope.mode !== "global") {
+        applyScope({
+          ...searchScope,
+          mode: "global",
+        });
+      }
     }
 
-    if (nextValue.startsWith(">")) {
-      applyScope({
-        ...searchScope,
-        mode: "actions",
-      });
-      setQuery(nextValue.slice(1));
-      return;
-    }
-
-    if (nextValue.startsWith("@")) {
-      applyScope({
-        ...searchScope,
-        mode: "recents",
-      });
-      setQuery(nextValue.slice(1));
-      return;
-    }
-
-    setQuery(nextValue);
-  }, [applyScope, markScopeUsage, scopeSelectorMode, searchScope]);
+    setQuery(normalized.query);
+  }, [applyScope, markScopeUsage, searchScope, stickyPrefixMode]);
 
   const pushRecentQuery = useCallback((value: string) => {
     const normalized = value.trim().toLowerCase();
@@ -2319,6 +2421,7 @@ export function CommandBar({
         folder: { folderId, label },
       });
       setScopeSelectorMode(null);
+      setStickyPrefixMode(null);
       setQuery("");
       return true;
     }
@@ -2334,6 +2437,7 @@ export function CommandBar({
         tag: { tagId, label },
       });
       setScopeSelectorMode(null);
+      setStickyPrefixMode(null);
       setQuery("");
       return true;
     }
@@ -2357,6 +2461,7 @@ export function CommandBar({
         },
       });
       setScopeSelectorMode(null);
+      setStickyPrefixMode(null);
       setQuery("");
       return true;
     }
@@ -2420,6 +2525,25 @@ export function CommandBar({
           }
           applyScope(lastScopedEntry.scope);
           setScopeSelectorMode(null);
+          setStickyPrefixMode(null);
+          return;
+        }
+      }
+
+      if (open && event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        if (event.key === "1") {
+          event.preventDefault();
+          activatePrefixMode("folders");
+          return;
+        }
+        if (event.key === "2") {
+          event.preventDefault();
+          activatePrefixMode("tags");
+          return;
+        }
+        if (event.key === "3") {
+          event.preventDefault();
+          activatePrefixMode("actions");
           return;
         }
       }
@@ -2429,6 +2553,7 @@ export function CommandBar({
         if (scopeSelectorMode) {
           vibrate(6);
           setScopeSelectorMode(null);
+          setStickyPrefixMode(null);
           setQuery("");
           setScopeHistoryCursor(-1);
           return;
@@ -2437,6 +2562,13 @@ export function CommandBar({
         if (query.trim().length > 0) {
           vibrate(6);
           setQuery("");
+          setScopeHistoryCursor(-1);
+          return;
+        }
+
+        if (stickyPrefixMode) {
+          vibrate(6);
+          clearStickyPrefixMode();
           setScopeHistoryCursor(-1);
           return;
         }
@@ -2453,7 +2585,17 @@ export function CommandBar({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [applyScope, open, query, scopeHistory, scopeSelectorMode, searchScope]);
+  }, [
+    activatePrefixMode,
+    applyScope,
+    clearStickyPrefixMode,
+    open,
+    query,
+    scopeHistory,
+    scopeSelectorMode,
+    searchScope,
+    stickyPrefixMode,
+  ]);
 
   useEffect(() => {
     if (!open || typeof window === "undefined") {
@@ -2510,6 +2652,7 @@ export function CommandBar({
       setOpen(false);
       setQuery("");
       setScopeSelectorMode(null);
+      setStickyPrefixMode(null);
       setScopeHistoryCursor(-1);
       setActiveIndex(0);
     });
@@ -2616,22 +2759,28 @@ export function CommandBar({
 
     return pills;
   }, [applyScope, searchScope]);
-  const scopeSelectorDescriptor = useMemo(
-    () => resolveScopeSelectorDescriptor(scopeSelectorMode),
-    [scopeSelectorMode],
+  const stickyModeDescriptor = useMemo(
+    () => resolvePrefixModeDescriptor(stickyPrefixMode),
+    [stickyPrefixMode],
   );
   const commandInputPlaceholder = useMemo(() => {
-    if (scopeSelectorMode === "folders") {
+    if (stickyPrefixMode === "folders") {
       return "Choose a folder scope...";
     }
-    if (scopeSelectorMode === "tags") {
+    if (stickyPrefixMode === "tags") {
       return "Choose a tag scope...";
     }
-    if (scopeSelectorMode === "domains") {
+    if (stickyPrefixMode === "domains") {
       return "Choose a department/semester scope...";
     }
+    if (stickyPrefixMode === "actions") {
+      return "Search actions...";
+    }
+    if (stickyPrefixMode === "recents") {
+      return "Search recent items...";
+    }
     return scopePills.length > 0 ? "Search..." : placeholder;
-  }, [placeholder, scopePills.length, scopeSelectorMode]);
+  }, [placeholder, scopePills.length, stickyPrefixMode]);
 
   const activeScopeLabel = useMemo(() => {
     if (scopePills.length === 0) {
@@ -2639,9 +2788,19 @@ export function CommandBar({
     }
     return scopePills.map((pill) => pill.label).join(" + ");
   }, [scopePills]);
-  const footerScopeLabel = scopeSelectorDescriptor
-    ? `${scopeSelectorDescriptor.label} (${scopeSelectorDescriptor.prefix})`
+  const footerScopeLabel = stickyModeDescriptor
+    ? `${stickyModeDescriptor.label} (${stickyModeDescriptor.prefix})`
     : activeScopeLabel;
+
+  const showEssentialScopeBar = shouldShowEssentialScopeBar(query);
+  const essentialScopeUiState = useMemo(
+    () => ({
+      prefixMode: stickyPrefixMode,
+      scopeSelectorMode,
+      searchMode: searchScope.mode,
+    }),
+    [scopeSelectorMode, searchScope.mode, stickyPrefixMode],
+  );
 
   useEffect(() => {
     if (scopePills.length === 0) {
@@ -2689,6 +2848,7 @@ export function CommandBar({
     applyScope(parsedScope);
     setQuery(queryFromUrl);
     setScopeSelectorMode(null);
+    setStickyPrefixMode(null);
     setOpen(true);
   }, [applyScope, folderScopeOptions, searchParams, tags]);
 
@@ -2797,6 +2957,16 @@ export function CommandBar({
                     if (scopeSelectorMode) {
                       e.preventDefault();
                       setScopeSelectorMode(null);
+                      if (stickyPrefixMode && toScopeSelectorMode(stickyPrefixMode) === scopeSelectorMode) {
+                        setStickyPrefixMode(null);
+                      }
+                      setScopeHistoryCursor(-1);
+                      return;
+                    }
+
+                    if (stickyPrefixMode) {
+                      e.preventDefault();
+                      clearStickyPrefixMode();
                       setScopeHistoryCursor(-1);
                       return;
                     }
@@ -2896,16 +3066,16 @@ export function CommandBar({
                       effectiveVisualQuery ? "pr-10" : undefined,
                     )}
                     prefixNode={
-                      scopePills.length > 0 || scopeSelectorDescriptor ? (
+                      scopePills.length > 0 || stickyModeDescriptor ? (
                         <div className="flex max-w-[55vw] shrink-0 items-center gap-1.5 overflow-x-auto no-scrollbar pl-1.5 py-1 sm:max-w-80">
-                          {scopeSelectorDescriptor ? (() => {
-                            const ScopeSelectorIcon = scopeSelectorDescriptor.icon;
+                          {stickyModeDescriptor ? (() => {
+                            const StickyIcon = stickyModeDescriptor.icon;
                             return (
-                              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/25 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary">
-                                <ScopeSelectorIcon className="size-3.5 shrink-0" />
-                                <span>{scopeSelectorDescriptor.label}</span>
+                              <div className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/25 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary">
+                                <StickyIcon className="size-3.5 shrink-0" />
+                                <span>{stickyModeDescriptor.label}</span>
                                 <span className="rounded border border-primary/25 bg-primary/10 px-1 py-px text-[9px]">
-                                  {scopeSelectorDescriptor.prefix}
+                                  {stickyModeDescriptor.prefix}
                                 </span>
                               </div>
                             );
@@ -2966,84 +3136,41 @@ export function CommandBar({
                   ) : null}
                 </motion.div>
 
-                {!query.trim() && !scopeSelectorMode ? (
-                  <div className="space-y-2 px-2 pb-1 pt-2">
-                    <div className="flex flex-wrap gap-2">
-                      {SCOPE_QUICK_ACTIONS.map((action) => {
+                {showEssentialScopeBar ? (
+                  <div className="px-2 pb-1 pt-2">
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                      {ESSENTIAL_SCOPE_ACTIONS.map((action) => {
                         const ScopeIcon = action.icon;
+                        const isActive = isEssentialActionActive(action.key, essentialScopeUiState);
                         return (
                           <Button
-                            key={action.prefix}
+                            key={action.key}
                             type="button"
-                            variant="ghost"
+                            variant={isActive ? "secondary" : "outline"}
                             size="sm"
                             onClick={() => {
                               vibrate(6);
-                              handleQueryChange(action.prefix);
+                              const transition = resolveEssentialScopeTransition(action.key);
+                              if (transition.clearScope) {
+                                handleClearSearchAndScope();
+                                return;
+                              }
+
+                              if (transition.prefixMode) {
+                                activatePrefixMode(transition.prefixMode);
+                              }
                             }}
-                            className="h-7 rounded-full border border-primary/20 bg-primary/10 px-2.5 text-[11px] text-primary hover:bg-primary/20"
+                            className={cn(
+                              "h-7 shrink-0 rounded-md px-2 text-[11px]",
+                              isActive ? "border-primary/30 bg-primary/12 text-primary" : "border-border/80",
+                            )}
                           >
                             <ScopeIcon className="size-3.5" />
                             {action.label}
-                            <span className="rounded border border-primary/25 bg-primary/10 px-1 py-px text-[9px]">
-                              {action.prefix}
-                            </span>
                           </Button>
                         );
                       })}
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {QUICK_QUERIES.map((quickQuery) => {
-                        const QuickIcon = quickQuery.icon;
-                        return (
-                          <Button
-                            key={quickQuery.query}
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              vibrate(6);
-                              handleQueryChange(quickQuery.query);
-                              pushRecentQuery(quickQuery.query);
-                            }}
-                            className="h-7 rounded-full"
-                          >
-                            <QuickIcon className="size-3.5" />
-                            {quickQuery.label}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                    {recentQueries.length > 0 ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                          <IconClockHour4 className="size-3.5" />
-                          Recent
-                        </span>
-                        {recentQueries.map((recentQuery) => (
-                          <Button
-                            key={recentQuery}
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              vibrate(6);
-                              setQuery(recentQuery);
-                              pushRecentQuery(recentQuery);
-                              setScopeHistoryCursor(-1);
-                            }}
-                            className="h-7 rounded-full border border-border/70 px-2.5 border-border/70"
-                          >
-                            {recentQuery}
-                          </Button>
-                        ))}
-                      </div>
-                    ) : null}
-                    {!isScopeHintSeen ? (
-                      <p className="px-1 text-[11px] text-muted-foreground">
-                        Scope hints: <span className="font-medium">/</span> folder, <span className="font-medium">#</span> tag, <span className="font-medium">:</span> dept/semester, <span className="font-medium">&gt;</span> actions, <span className="font-medium">@</span> recents
-                      </p>
-                    ) : null}
                   </div>
                 ) : null}
 
@@ -3234,7 +3361,7 @@ export function CommandBar({
                       ? "Preparing context index..."
                       : `${displayResults.length} result${displayResults.length === 1 ? "" : "s"}`}
                   </span>
-                  <span className="hidden sm:inline">↑↓ Navigate · Enter Open · Esc Close · Alt+↓ Next Group</span>
+                  <span className="hidden sm:inline">↑↓ Navigate · Enter Open · Esc Layered Cancel · Alt+1 Folder · Alt+2 Tag · Alt+3 Actions</span>
                   <span className="sm:hidden">↑↓ · Enter · Esc</span>
                 </div>
               </Command>

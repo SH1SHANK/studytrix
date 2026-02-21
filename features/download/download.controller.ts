@@ -19,6 +19,13 @@ import {
   type QueueLifecyclePayload,
   type QueueTaskContext,
 } from "./download.queue";
+import {
+  DownloadRequestError,
+  classifyDownloadErrorCode,
+  computeRetryDelayMs,
+  isTransientDownloadError,
+  waitForRetryDelay,
+} from "./download.resilience";
 import type { DownloadTask } from "./download.types";
 
 const FILE_ID_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
@@ -29,6 +36,16 @@ const MAX_CONCURRENCY = 4;
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_STORAGE_LIMIT_MB = 500;
 const MAX_NETWORK_HOLD_TASKS = 25;
+const MAX_RETRY_ATTEMPTS = 3;
+export const DOWNLOAD_MAX_RETRY_ATTEMPTS = MAX_RETRY_ATTEMPTS;
+
+export function shouldRetryDownloadAttempt(
+  error: unknown,
+  attempt: number,
+  maxAttempts = DOWNLOAD_MAX_RETRY_ATTEMPTS,
+): boolean {
+  return attempt + 1 < maxAttempts && isTransientDownloadError(error);
+}
 
 function clampConcurrency(value: number): number {
   if (!Number.isFinite(value)) {
@@ -237,24 +254,34 @@ function mapErrorMessage(error: unknown): string {
   return "Download failed";
 }
 
-async function readResponseErrorMessage(response: Response): Promise<string> {
+async function readResponseErrorPayload(
+  response: Response,
+): Promise<{ message: string; remoteErrorCode?: string }> {
   const fallback = `Download failed (${response.status})`;
 
   try {
     const payload = (await response.json()) as unknown;
     if (!isRecord(payload)) {
-      return fallback;
+      return { message: fallback };
     }
 
     const message = parseString(payload.message);
-    if (message) {
-      return message;
-    }
-
     const errorCode = parseString(payload.errorCode);
-    return errorCode ? `${fallback}: ${errorCode}` : fallback;
+    if (message && errorCode) {
+      return { message, remoteErrorCode: errorCode };
+    }
+    if (message) {
+      return { message };
+    }
+    if (errorCode) {
+      return {
+        message: `${fallback}: ${errorCode}`,
+        remoteErrorCode: errorCode,
+      };
+    }
+    return { message: fallback };
   } catch {
-    return fallback;
+    return { message: fallback };
   }
 }
 
@@ -406,22 +433,64 @@ class DownloadController {
     }
 
     if (payload.state === "failed") {
+      const resolvedError = payload.error ?? task.error ?? "Download failed";
+      const resolvedErrorCode = task.errorCode ?? classifyDownloadErrorCode(
+        payload.error ?? new Error(resolvedError),
+      );
       this.tasks.set(payload.taskId, {
         ...task,
         state: "failed",
         networkHold: false,
-        error: payload.error,
-        errorCode: "NETWORK",
+        error: resolvedError,
+        errorCode: resolvedErrorCode,
         speedBytesPerSecond: undefined,
         etaSeconds: undefined,
+        retryCount: task.retryCount ?? 0,
         updatedAt: timestamp,
       });
       this.lastProgressAt.delete(payload.taskId);
       emit("download:failed", {
         taskId: payload.taskId,
-        error: payload.error ?? "Download failed",
+        error: resolvedError,
       });
     }
+  }
+
+  private updateTask(taskId: string, patch: Partial<DownloadTask>): void {
+    const task = this.tasks.get(taskId);
+    if (!task) {
+      return;
+    }
+
+    this.tasks.set(taskId, {
+      ...task,
+      ...patch,
+      id: task.id,
+      fileId: task.fileId,
+      createdAt: task.createdAt,
+      updatedAt: patch.updatedAt ?? now(),
+    });
+  }
+
+  private setRetryProgress(taskId: string, retryCount: number, message?: string): void {
+    this.updateTask(taskId, {
+      retryCount,
+      state: "downloading",
+      error: message,
+      errorCode: undefined,
+      networkHold: false,
+      updatedAt: now(),
+    });
+  }
+
+  private setRetryFailure(taskId: string, retryCount: number, error: unknown): void {
+    this.updateTask(taskId, {
+      retryCount,
+      error: mapErrorMessage(error),
+      errorCode: classifyDownloadErrorCode(error),
+      networkHold: false,
+      updatedAt: now(),
+    });
   }
 
   private async downloadAndPersist(
@@ -430,7 +499,9 @@ class DownloadController {
     context: QueueTaskContext,
     initialMetadata?: FileMetadata | null,
   ): Promise<void> {
-    const metadata = initialMetadata ?? this.taskMetadata.get(taskId) ?? await fetchFileMetadata(fileId, context.signal);
+    const metadata = initialMetadata
+      ?? this.taskMetadata.get(taskId)
+      ?? await fetchFileMetadata(fileId, context.signal);
     this.taskMetadata.set(taskId, metadata ?? null);
     const existingTask = this.tasks.get(taskId);
 
@@ -456,6 +527,47 @@ class DownloadController {
       emit("download:added", { task: updatedTask });
     }
 
+    if (metadata?.size && metadata.size > 0) {
+      await enforceStorageLimit(metadata.size);
+    }
+
+    for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
+      this.setRetryProgress(taskId, attempt);
+
+      try {
+        await this.downloadAndPersistAttempt(taskId, fileId, context, metadata, existingTask);
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          throw error;
+        }
+
+        this.setRetryFailure(taskId, attempt, error);
+
+        const canRetry = shouldRetryDownloadAttempt(error, attempt, MAX_RETRY_ATTEMPTS);
+        if (!canRetry) {
+          throw error;
+        }
+
+        const nextAttempt = attempt + 1;
+        const delayMs = computeRetryDelayMs(nextAttempt);
+        this.setRetryProgress(
+          taskId,
+          nextAttempt,
+          `Retrying (${nextAttempt + 1}/${MAX_RETRY_ATTEMPTS})...`,
+        );
+        await waitForRetryDelay(delayMs, context.signal);
+      }
+    }
+  }
+
+  private async downloadAndPersistAttempt(
+    taskId: string,
+    fileId: string,
+    context: QueueTaskContext,
+    metadata: FileMetadata | null,
+    existingTask?: DownloadTask,
+  ): Promise<void> {
     let startByte = this.partialBuffers.get(fileId)?.byteLength ?? 0;
     let existingPartial = startByte > 0 ? this.partialBuffers.get(fileId) ?? null : null;
     const buildHeaders = (rangeStart: number): HeadersInit => {
@@ -487,11 +599,18 @@ class DownloadController {
     }
 
     if (!response.ok) {
-      throw new Error(await readResponseErrorMessage(response));
+      const errorPayload = await readResponseErrorPayload(response);
+      throw new DownloadRequestError(errorPayload.message, {
+        status: response.status,
+        remoteErrorCode: errorPayload.remoteErrorCode,
+      });
     }
 
     if (!response.body) {
-      throw new Error("Streaming not supported");
+      throw new DownloadRequestError("Streaming not supported", {
+        status: response.status || 500,
+        remoteErrorCode: "DRIVE_STREAM_UNAVAILABLE",
+      });
     }
 
     const reader = response.body.getReader();
@@ -560,7 +679,9 @@ class DownloadController {
         loadedBytes: blob.size,
         totalBytes: blob.size,
         networkHold: false,
+        error: undefined,
         errorCode: undefined,
+        retryCount: currentTask.retryCount ?? 0,
         updatedAt: now(),
       };
       this.tasks.set(taskId, finalizedTask);
@@ -693,6 +814,7 @@ class DownloadController {
           : offlineRecord?.size,
       state: alreadyOffline ? "completed" : "queued",
       networkHold: !alreadyOffline && !online && isOfflineV3Enabled(),
+      retryCount: 0,
       error:
         !alreadyOffline && !online && isOfflineV3Enabled()
           ? "Waiting for connection"
@@ -736,6 +858,8 @@ class DownloadController {
         ...task,
         state: "failed",
         error: "Task already queued",
+        errorCode: "UNKNOWN",
+        retryCount: task.retryCount ?? 0,
         updatedAt: now(),
       });
       emit("download:failed", { taskId, error: "Task already queued" });
@@ -801,6 +925,8 @@ class DownloadController {
         ...fallback,
         state: "failed",
         error: "Could not resume download",
+        errorCode: "UNKNOWN",
+        retryCount: fallback.retryCount ?? 0,
         updatedAt: now(),
       });
       emit("download:failed", { taskId, error: "Could not resume download" });

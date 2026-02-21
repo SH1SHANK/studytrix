@@ -10,7 +10,7 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    display_override: ["window-controls-overlay", "standalone", "minimal-ui"],
+    display_override: ["standalone", "minimal-ui"],
     orientation: "portrait-primary",
     lang: "en-US",
     dir: "ltr",

@@ -38,7 +38,7 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <AcademicProvider>
-      <div className="flex min-h-screen flex-col overflow-x-hidden">
+      <div className="flex min-h-screen flex-col overflow-x-hidden pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
           <Suspense fallback={null}>
             {showHeader ? <Header title={headerTitle} hideFilters={hideHeaderFilters} /> : null}

@@ -5,7 +5,7 @@
 - Custom version declaration source at `features/version/version.ts`.
 - Curated release notes source at `features/changelog/changelog.catalog.ts`.
 - In-app version banner shown after a version bump with `View Changelog` and `Dismiss`.
-- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through `v0.8.3`.
+- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through `v0.9.0`.
 - Version label rendered in the app shell footer for quick reference.
 
 ## Dashboard and Navigation
@@ -42,6 +42,8 @@
   - `:` for domain/academic scope
   - `>` for actions scope
   - `@` for recents scope
+- Sticky prefix interaction model with deterministic mixed-prefix parsing and predictable cancel behavior.
+- Single essential scope bar in idle command state (`Folder`, `Tag`, `Actions`, `Clear`) to reduce UI clutter.
 - Nested folder-aware search resolution for both local and global search scopes.
 - Command suggestions aligned to active scope context.
 - Improved scope switching UX for quick mode transitions on desktop and mobile.
@@ -70,6 +72,9 @@
 - Reduced perceived latency by opening preparation dialogs immediately.
 - Native share via Web Share API with graceful fallback behavior.
 - Copy/download actions for files and folders with local-first behavior.
+- Unified large-file safeguards across download entrypoints (warn at `>=25MB`, confirm at `>=100MB`).
+- Shared risk-gate pipeline for download, share, offline-save, and retry actions.
+- Transient failure retry policy for downloads (up to 3 attempts) with normalized task error states.
 
 ## Page-Level Sharing
 

@@ -30,6 +30,7 @@ import {
   getMimeLabel,
 } from "@/features/drive/drive.types";
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
+import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
 import { useSelectionStore } from "@/features/selection/selection.store";
 import {
   buildFolderRouteHref,
@@ -179,6 +180,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const [offlineFolderIds, setOfflineFolderIds] = useState<Set<string>>(new Set());
   const [offlineLibraryFileIds, setOfflineLibraryFileIds] = useState<Set<string>>(new Set());
   const { tasks: downloadTasks, startDownload, animateDownload } = useDownloadManager();
+  const gateDownloadRisk = useDownloadRiskGate();
   const setContextItems = useSelectionStore((state) => state.setContextItems);
 
   const { folders, files, isLoading, error } = useDriveFolder(driveFolderId);
@@ -337,10 +339,28 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         return;
       }
 
+      const proceed = await gateDownloadRisk(
+        [
+          {
+            id: item.id,
+            name: item.title,
+            sizeBytes: item.sizeBytes,
+            kind: "file",
+          },
+        ],
+        {
+          actionLabel: "offline save",
+          confirmButtonLabel: "Save Offline",
+        },
+      );
+      if (!proceed) {
+        return;
+      }
+
       animateDownload(sourceElement ?? null);
       await startDownload(item.id);
     },
-    [animateDownload, startDownload],
+    [animateDownload, gateDownloadRisk, startDownload],
   );
 
   const handleRemoveOffline = useCallback(

@@ -115,6 +115,11 @@ function sanitizeTask(task: unknown): DownloadTask | null {
   const errorCode =
     errorCodeCandidate === "OFFLINE"
     || errorCodeCandidate === "NETWORK"
+    || errorCodeCandidate === "RATE_LIMITED"
+    || errorCodeCandidate === "NOT_FOUND"
+    || errorCodeCandidate === "ACCESS_DENIED"
+    || errorCodeCandidate === "INVALID_ID"
+    || errorCodeCandidate === "UNSUPPORTED_TYPE"
     || errorCodeCandidate === "QUOTA"
     || errorCodeCandidate === "UNKNOWN"
       ? errorCodeCandidate
@@ -391,13 +396,15 @@ function ensureEventSubscriptions(): void {
   });
 
   on("download:failed", ({ taskId, error }) => {
+    const current = useDownloadStore.getState().tasks[taskId];
     useDownloadStore.getState().updateTask(taskId, {
       state: "failed",
       networkHold: false,
       speedBytesPerSecond: undefined,
       etaSeconds: undefined,
       error,
-      errorCode: "NETWORK",
+      errorCode: current?.errorCode ?? "NETWORK",
+      retryCount: current?.retryCount ?? 0,
       updatedAt: Date.now(),
     });
   });

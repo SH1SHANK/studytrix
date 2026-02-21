@@ -1,7 +1,7 @@
 # Studytrix
 
 > **Status**: Beta  
-> **Current app version**: `v0.8.3` (released on `2026-02-21`)
+> **Current app version**: `v0.9.0` (released on `2026-02-21`)
 
 Studytrix is an offline-first academic workspace built with Next.js 16, React 19, and TypeScript. It combines Drive-backed content browsing, local persistence, command-driven navigation, and mobile/PWA-aware workflows into a single high-performance interface.
 
@@ -42,6 +42,24 @@ Scope prefixes:
 - `@`: recents scope
 
 ## Release Notes (Detailed)
+
+### v0.9.0 - Robust Download Pipeline + Prefix-First Command UX (`2026-02-21`)
+
+- Added shared large-file risk safeguards across all download entrypoints:
+  - soft warning at `>=25MB`
+  - blocking confirmation at `>=100MB`
+- Added a global download risk dialog + gate so file download, folder ZIP/share, offline save, and retry actions use one consistent preflight path.
+- Refactored download controller resilience with transient-only retries (up to 3 attempts), normalized error codes, and coherent `retryCount` updates.
+- Added known-size pre-download storage-limit checks while preserving final post-download enforcement.
+- Simplified CommandCenter idle UI to one compact essential bar: `Folder`, `Tag`, `Actions`, `Clear`.
+- Implemented sticky deterministic prefix behavior for `/`, `#`, `>`, `:`, and `@`, including mixed-prefix normalization and better paste/delete transitions.
+- Added keyboard interaction improvements:
+  - `Alt+1` Folder mode
+  - `Alt+2` Tag mode
+  - `Alt+3` Actions mode
+  - layered `Esc` / `Backspace` cancel flow
+- Improved copy/share UX by preferring actual file clipboard copy where supported and sanitizing shared links for cleaner URLs.
+- Included standalone PWA polish and dock interaction stability refinements.
 
 ### v0.8.3 - PWA + Discoverability Polish (`2026-02-21`)
 
