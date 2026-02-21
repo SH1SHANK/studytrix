@@ -3,6 +3,7 @@ import type { SettingsSchema } from "./settings.types";
 
 const rawSettingsSchema: SettingsSchema = {
   categories: [
+    "Profile",
     "Appearance",
     "Greeting",
     "CommandCenter",
@@ -16,6 +17,17 @@ const rawSettingsSchema: SettingsSchema = {
     "Danger Zone",
   ],
   items: [
+    {
+      id: "userProfile",
+      label: "Profile",
+      description: "Personal details used for greeting personalization.",
+      type: "info",
+      category: "Profile",
+      defaultValue: {
+        name: "",
+        email: "",
+      },
+    },
     {
       id: "theme",
       label: "Change Theme",

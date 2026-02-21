@@ -34,6 +34,7 @@ import {
   IconLink,
   IconFlask2,
   IconSunHigh,
+  IconUser,
 } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 export function getSettingIcon(id: string): ReactNode {
@@ -41,6 +42,8 @@ export function getSettingIcon(id: string): ReactNode {
   switch (id) {
     case "theme":
       return <IconColorSwatch {...props} />;
+    case "userProfile":
+      return <IconUser {...props} />;
     case "compact_mode":
       return <IconLayoutList {...props} />;
     case "animation_intensity":

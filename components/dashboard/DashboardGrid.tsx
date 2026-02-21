@@ -30,6 +30,7 @@ import { useCatalog } from "@/features/catalog/catalog.hooks";
 import { useCatalogIndex } from "@/features/catalog/catalog.index";
 import { generateGreetingMessage } from "@/features/dashboard/greeting";
 import { resolveGreetingPreferences } from "@/features/dashboard/greeting.preferences";
+import { resolveUserProfileSettings } from "@/features/profile/user-profile";
 import { type Course } from "@/features/catalog/catalog.types";
 import { useTagStore } from "@/features/tags/tag.store";
 import type { FilterMode, TagAssignment } from "@/features/tags/tag.types";
@@ -124,32 +125,6 @@ function matchesFilters(
   return activeFilters.some((tagId) => folderTagSet.has(tagId));
 }
 
-function resolveCurrentUserFirstName(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const candidateKeys = [
-    "studytrix.user.firstName",
-    "studytrix.user.name",
-    "user_first_name",
-  ];
-
-  for (const key of candidateKeys) {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      continue;
-    }
-
-    const normalized = raw.trim().split(/\s+/)[0]?.trim();
-    if (normalized) {
-      return normalized;
-    }
-  }
-
-  return null;
-}
-
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function DashboardGrid() {
@@ -189,10 +164,15 @@ export function DashboardGrid() {
   const [showDashboardTags] = useSetting("show_dashboard_tags");
   const [defaultTagFilterMode] = useSetting("tag_filter_mode_default");
   const [rawGreetingPreferences] = useSetting("greetingPreferences");
+  const [rawUserProfile] = useSetting("userProfile");
   const appliedTagFilterModeRef = useRef<FilterMode | null>(null);
   const greetingPreferences = useMemo(
     () => resolveGreetingPreferences(rawGreetingPreferences),
     [rawGreetingPreferences],
+  );
+  const userProfile = useMemo(
+    () => resolveUserProfileSettings(rawUserProfile),
+    [rawUserProfile],
   );
 
   const [viewMode, setViewMode] = useState<"grid" | "list">((defaultDashboardView as "grid" | "list") || "grid");
@@ -286,8 +266,9 @@ export function DashboardGrid() {
     let cancelled = false;
     setGreetingLoading(true);
 
+    const trimmedName = userProfile.name.trim();
     const resolvedUserName = greetingPreferences.useName
-      ? (resolveCurrentUserFirstName() ?? "there")
+      ? (trimmedName.length > 0 ? trimmedName : "there")
       : "there";
 
     void generateGreetingMessage(
@@ -321,7 +302,13 @@ export function DashboardGrid() {
     return () => {
       cancelled = true;
     };
-  }, [greetingPreferences]);
+  }, [
+    greetingPreferences.enabled,
+    greetingPreferences.greetingTheme,
+    greetingPreferences.includeWeather,
+    greetingPreferences.useName,
+    userProfile.name,
+  ]);
 
   // ─── Derived data ───────────────────────────────────────────────────────
 

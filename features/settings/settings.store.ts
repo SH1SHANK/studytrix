@@ -83,6 +83,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         void removeSetting("theme_mode");
       }
 
+      const deprecatedSettingKeys = [
+        "show_dashboard_quote",
+        "show_motivational_quote",
+      ];
+      for (const deprecatedKey of deprecatedSettingKeys) {
+        if (deprecatedKey in persistedValues) {
+          delete persistedValues[deprecatedKey];
+          void removeSetting(deprecatedKey);
+        }
+      }
+
       for (const [id, value] of Object.entries(persistedValues)) {
         const definition = getSettingDefinition(id);
 
