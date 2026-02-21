@@ -16,6 +16,8 @@ export type OfflineLibraryFile = {
   folderName: string;
   folderPath: string;
   courseCode: string;
+  ancestorFolderIds: string[];
+  ancestorFolderNames: string[];
 };
 
 export type OfflineLibraryFolder = {
@@ -56,6 +58,8 @@ type NestedMapValue = {
   name: string;
   parentFolderId: string;
   parentFolderName: string;
+  ancestorFolderIds: string[];
+  ancestorFolderNames: string[];
   path: string;
   courseCode: string;
   mimeType: string;
@@ -336,6 +340,8 @@ async function computeOfflineLibrarySnapshot(): Promise<OfflineLibrarySnapshot> 
         name: entry.name,
         parentFolderId: entry.parentFolderId,
         parentFolderName: entry.parentFolderName,
+        ancestorFolderIds: entry.ancestorFolderIds,
+        ancestorFolderNames: entry.ancestorFolderNames,
         path: entry.path,
         courseCode: entry.courseCode,
         mimeType: entry.mimeType,
@@ -365,6 +371,8 @@ async function computeOfflineLibrarySnapshot(): Promise<OfflineLibrarySnapshot> 
       ?? storageMeta?.courseCode
       ?? "Ungrouped";
     const folderPath = nested?.path ?? folderName;
+    const ancestorFolderIds = nested?.ancestorFolderIds ?? [];
+    const ancestorFolderNames = nested?.ancestorFolderNames ?? [];
 
     return {
       fileId,
@@ -380,6 +388,8 @@ async function computeOfflineLibrarySnapshot(): Promise<OfflineLibrarySnapshot> 
       folderName,
       folderPath,
       courseCode: nested?.courseCode ?? storageMeta?.courseCode ?? "GENERAL",
+      ancestorFolderIds,
+      ancestorFolderNames,
     };
   });
 
@@ -392,22 +402,58 @@ async function computeOfflineLibrarySnapshot(): Promise<OfflineLibrarySnapshot> 
   });
 
   const folderMap = new Map<string, OfflineLibraryFolder>();
-  for (const file of files) {
-    const key = `${file.folderId}::${file.folderPath}`;
-    const current = folderMap.get(key);
+
+  const upsertFolder = (
+    folderId: string,
+    name: string,
+    path: string,
+    size: number,
+  ) => {
+    const normalizedFolderId = folderId.trim();
+    if (!normalizedFolderId) {
+      return;
+    }
+
+    const normalizedName = name.trim() || normalizedFolderId;
+    const normalizedPath = path.trim() || normalizedName;
+    const current = folderMap.get(normalizedFolderId);
     if (!current) {
-      folderMap.set(key, {
-        folderId: file.folderId,
-        name: file.folderName,
-        path: file.folderPath,
+      folderMap.set(normalizedFolderId, {
+        folderId: normalizedFolderId,
+        name: normalizedName,
+        path: normalizedPath,
         fileCount: 1,
-        totalBytes: file.size,
+        totalBytes: size,
       });
-      continue;
+      return;
     }
 
     current.fileCount += 1;
-    current.totalBytes += file.size;
+    current.totalBytes += size;
+    if (current.path.length === 0 && normalizedPath.length > 0) {
+      current.path = normalizedPath;
+    }
+    if (current.name.length === 0 && normalizedName.length > 0) {
+      current.name = normalizedName;
+    }
+  };
+
+  for (const file of files) {
+    if (file.ancestorFolderIds.length > 0) {
+      const ancestorNames = file.ancestorFolderIds.map((_, index) =>
+        file.ancestorFolderNames[index] ?? file.folderName,
+      );
+
+      for (let index = 0; index < file.ancestorFolderIds.length; index += 1) {
+        const ancestorId = file.ancestorFolderIds[index];
+        const ancestorName = ancestorNames[index] ?? ancestorId;
+        const ancestorPath = ancestorNames.slice(0, index + 1).join(" / ");
+        upsertFolder(ancestorId, ancestorName, ancestorPath, file.size);
+      }
+      continue;
+    }
+
+    upsertFolder(file.folderId, file.folderName, file.folderPath, file.size);
   }
 
   const folders = Array.from(folderMap.values()).sort((left, right) =>

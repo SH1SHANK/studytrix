@@ -32,6 +32,7 @@ export function FloatingDock({
   const pathname = usePathname();
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [scopeSummary, setScopeSummary] = useState("");
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -59,9 +60,16 @@ export function FloatingDock({
     syncFromStorage();
     window.addEventListener(SCOPE_SUMMARY_EVENT, onScopeSummary);
     window.addEventListener("focus", syncFromStorage);
+
+    const mql = window.matchMedia("(pointer: coarse)");
+    const onPointerChange = () => setIsCoarsePointer(mql.matches);
+    onPointerChange();
+    mql.addEventListener("change", onPointerChange);
+
     return () => {
       window.removeEventListener(SCOPE_SUMMARY_EVENT, onScopeSummary);
       window.removeEventListener("focus", syncFromStorage);
+      mql.removeEventListener("change", onPointerChange);
     };
   }, []);
 
@@ -102,7 +110,7 @@ export function FloatingDock({
   return (
     <div
       className={cn(
-        "fixed bottom-5 left-0 right-0 z-40 mx-auto flex w-full max-w-fit items-center justify-center transition-all duration-500",
+        "fixed bottom-[max(env(safe-area-inset-bottom),0.75rem)] left-0 right-0 z-40 mx-auto flex w-full max-w-fit items-center justify-center transition-all duration-500 sm:bottom-5",
         isPaletteOpen ? "pointer-events-none translate-y-12 opacity-0" : "translate-y-0 opacity-100",
       )}
     >
@@ -120,12 +128,15 @@ export function FloatingDock({
                     type="button"
                     onClick={onOpenPalette}
                     layout // w-48 was too big for small screens, adjusted to w-32 or w-40, then sm:w-48
-                    className="group flex h-10 w-12 sm:h-11 sm:w-48 xl:w-56 items-center justify-between gap-1 sm:gap-2 rounded-full bg-primary/10 px-0 sm:px-4 font-normal text-primary shadow-sm ring-1 ring-primary/20 transition-all hover:bg-primary/15 hover:shadow-md active:scale-95 justify-center sm:justify-between"
+                    className={cn(
+                      "group flex h-10 items-center justify-between gap-1 rounded-full bg-primary/10 px-2 font-normal text-primary shadow-sm ring-1 ring-primary/20 transition-all hover:bg-primary/15 hover:shadow-md active:scale-95 sm:h-11 sm:w-48 sm:gap-2 sm:px-4 sm:justify-between xl:w-56",
+                      isCoarsePointer ? "w-[min(52vw,220px)] justify-between" : "w-12 justify-center sm:justify-between",
+                    )}
                     title={searchTitle}
                   >
                     <div className="flex items-center gap-2">
                       <IconSearch className="size-5 sm:size-[18px] text-primary transition-colors group-hover:text-primary" />
-                      <span className="hidden max-w-28 truncate sm:block">
+                      <span className={cn("max-w-28 truncate", isCoarsePointer ? "block" : "hidden sm:block")}>
                         {scopeSummary || `${placeholder.split(" ")[0]}...`}
                       </span>
                     </div>
@@ -180,7 +191,7 @@ export function FloatingDock({
                 )}
 
                 {/* Optional macOS style tooltip text on hover */}
-                {isHovered && (
+                {isHovered && !isCoarsePointer && (
                   <motion.div
                     initial={{ opacity: 0, y: 10, scale: 0.9 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}

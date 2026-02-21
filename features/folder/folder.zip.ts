@@ -1,8 +1,7 @@
 "use client";
 
-import { toast } from "sonner";
-
-import { downloadAsZip, shareAsZip, type ZipSourceFile } from "@/features/bulk/bulk.share";
+import { downloadAsZip, shareAsZip } from "@/features/bulk/bulk.share";
+import type { ZipSourceFile } from "@/features/bulk/bulk.types";
 
 type NestedEntry = {
   id: string;
@@ -116,8 +115,7 @@ export async function downloadFolderAsZip(
 ): Promise<void> {
   const files = await resolveFolderZipFiles(folderId, folderName);
   if (files.length === 0) {
-    toast.info("No files found in this folder.");
-    return;
+    throw new Error("No files found in this folder.");
   }
 
   await downloadAsZip(
@@ -133,8 +131,7 @@ export async function shareFolderAsZip(
 ): Promise<void> {
   const files = await resolveFolderZipFiles(folderId, folderName);
   if (files.length === 0) {
-    toast.info("No files found in this folder.");
-    return;
+    throw new Error("No files found in this folder.");
   }
 
   await shareAsZip(

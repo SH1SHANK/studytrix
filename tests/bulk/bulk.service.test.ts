@@ -3,7 +3,9 @@ import { jest } from "@jest/globals";
 import type { DriveItem } from "@/features/drive/drive.types";
 
 import {
+  expandFolders,
   resolveSelectedItems,
+  resolveAllFiles,
   computeTotalSize,
   isLargeFile,
   hasLargeFiles,
@@ -40,6 +42,17 @@ function makeFolder(overrides: Partial<DriveItem> = {}): DriveItem {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe("bulk.service", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    }
+    jest.restoreAllMocks();
+  });
+
   // ── resolveSelectedItems ──────────────────────────────────────────────
 
   describe("resolveSelectedItems", () => {
@@ -92,6 +105,158 @@ describe("bulk.service", () => {
 
       expect(result.files).toHaveLength(2);
       expect(result.folderIds).toHaveLength(0);
+    });
+  });
+
+  describe("resolveAllFiles", () => {
+    it("expands selected folders and deduplicates direct files", async () => {
+      const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/drive/nested-index")) {
+          return {
+            ok: true,
+            json: async () => ({
+              files: [
+                {
+                  id: "f1",
+                  name: "duplicate.pdf",
+                  mimeType: "application/pdf",
+                  size: 1500,
+                  modifiedTime: null,
+                  webViewLink: null,
+                  path: "Root",
+                },
+                {
+                  id: "f2",
+                  name: "nested.pdf",
+                  mimeType: "application/pdf",
+                  size: 2000,
+                  modifiedTime: null,
+                  webViewLink: null,
+                  path: "Root / Unit 1",
+                },
+              ],
+            }),
+          } as Response;
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const folder = makeFolder({ id: "d1", name: "Root" });
+      const directFile = makeFile({ id: "f1", name: "duplicate.pdf", size: 1000 });
+      const selected = new Set(["d1", "f1"]);
+
+      const progress: Array<[number, number]> = [];
+      const resolved = await resolveAllFiles(selected, [folder, directFile], (done, total) => {
+        progress.push([done, total]);
+      });
+
+      expect(resolved.files.map((file) => file.id).sort()).toEqual(["f1", "f2"]);
+      expect(resolved.totalSize).toBe(3500);
+      expect(progress.length).toBeGreaterThan(0);
+      expect(progress[progress.length - 1]).toEqual([2, 2]);
+    });
+  });
+
+  describe("expandFolders", () => {
+    it("falls back to paged folder traversal when nested-index fails", async () => {
+      const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/drive/nested-index")) {
+          return {
+            ok: false,
+            json: async () => ({}),
+          } as Response;
+        }
+
+        if (url.includes("/api/drive/d1?pageToken=next")) {
+          return {
+            ok: true,
+            json: async () => ({
+              items: [
+                {
+                  id: "f2",
+                  name: "root-2.pdf",
+                  mimeType: "application/pdf",
+                  size: 1200,
+                  modifiedTime: null,
+                  isFolder: false,
+                  webViewLink: null,
+                  iconLink: null,
+                },
+              ],
+            }),
+          } as Response;
+        }
+
+        if (url.includes("/api/drive/d1")) {
+          return {
+            ok: true,
+            json: async () => ({
+              items: [
+                {
+                  id: "f1",
+                  name: "root-1.pdf",
+                  mimeType: "application/pdf",
+                  size: 1000,
+                  modifiedTime: null,
+                  isFolder: false,
+                  webViewLink: null,
+                  iconLink: null,
+                },
+                {
+                  id: "sub",
+                  name: "Unit 1",
+                  mimeType: "application/vnd.google-apps.folder",
+                  size: null,
+                  modifiedTime: null,
+                  isFolder: true,
+                  webViewLink: null,
+                  iconLink: null,
+                },
+              ],
+              nextPageToken: "next",
+            }),
+          } as Response;
+        }
+
+        if (url.includes("/api/drive/sub")) {
+          return {
+            ok: true,
+            json: async () => ({
+              items: [
+                {
+                  id: "f3",
+                  name: "sub-1.pdf",
+                  mimeType: "application/pdf",
+                  size: 1800,
+                  modifiedTime: null,
+                  isFolder: false,
+                  webViewLink: null,
+                  iconLink: null,
+                },
+              ],
+            }),
+          } as Response;
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const progress: Array<[number, number]> = [];
+      const files = await expandFolders([{ id: "d1", name: "Root" }], {
+        onProgress: (done, total) => progress.push([done, total]),
+      });
+
+      expect(files).toHaveLength(3);
+      expect(files.find((file) => file.id === "f1")?.zipPath).toBe("Root");
+      expect(files.find((file) => file.id === "f3")?.zipPath).toBe("Root / Unit 1");
+      expect(progress[progress.length - 1]).toEqual([1, 1]);
     });
   });
 

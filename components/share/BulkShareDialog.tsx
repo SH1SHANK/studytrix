@@ -69,11 +69,13 @@ export function BulkShareDialog({
 }: BulkShareDialogProps) {
   const [phase, setPhase] = useState<DialogPhase>("choose");
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleClose = useCallback(() => {
     if (phase === "processing") return;
     setPhase("choose");
     setProgress({ done: 0, total: 0 });
+    setErrorMessage(null);
     onOpenChange(false);
   }, [phase, onOpenChange]);
 
@@ -81,18 +83,38 @@ export function BulkShareDialog({
     async (mode: BulkShareMode) => {
       if (!selection || selection.files.length === 0) return;
 
+      setErrorMessage(null);
       setPhase("processing");
       setProgress({ done: 0, total: selection.files.length });
 
       try {
-        await bulkShare(selection.files, mode, (done, total) => {
+        const summary = await bulkShare(selection.files, mode, (done, total) => {
           setProgress({ done, total });
         });
-      } finally {
+
+        if (summary.failedFiles.length > 0) {
+          const failedPreview = summary.failedFiles.slice(0, 3).join(", ");
+          const moreCount = summary.failedFiles.length - Math.min(summary.failedFiles.length, 3);
+          setErrorMessage(
+            moreCount > 0
+              ? `${summary.failedFiles.length} files could not be included (${failedPreview} and ${moreCount} more).`
+              : `${summary.failedFiles.length} files could not be included (${failedPreview}).`,
+          );
+          setPhase("choose");
+          setProgress({ done: 0, total: 0 });
+          return;
+        }
+
         setPhase("choose");
         setProgress({ done: 0, total: 0 });
         onOpenChange(false);
         onComplete?.();
+      } catch (error) {
+        setPhase("choose");
+        setProgress({ done: 0, total: 0 });
+        setErrorMessage(
+          error instanceof Error ? error.message : "Could not prepare files for sharing.",
+        );
       }
     },
     [selection, onOpenChange, onComplete],
@@ -176,6 +198,12 @@ export function BulkShareDialog({
                   </ul>
                 </div>
               )}
+
+              {errorMessage ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 dark:border-rose-800/50 dark:bg-rose-950/20 dark:text-rose-400">
+                  {errorMessage}
+                </div>
+              ) : null}
 
               <div className="space-y-2">
                 <ModeCard

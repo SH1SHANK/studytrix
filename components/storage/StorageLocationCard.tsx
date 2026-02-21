@@ -14,8 +14,10 @@ export function StorageLocationCard() {
   const openSetupSheet = useStorageLocationStore((s) => s.openSetupSheet);
   const error = useStorageLocationStore((s) => s.error);
 
-  const isMissing = status === "missing" || status === "unsupported";
-  const pathLabel = isMissing
+  const isMissing = status === "missing";
+  const isUnsupported = status === "unsupported";
+  const isAlertState = isMissing || isUnsupported;
+  const pathLabel = isAlertState
     ? "Storage Location Lost or Unsupported"
     : displayPath || "Browser Storage (Default)";
   const hasApi = supportsFileSystemAccess();
@@ -36,6 +38,10 @@ export function StorageLocationCard() {
             <>
               <IconAlertTriangle className="size-3.5" /> Relink
             </>
+          ) : isUnsupported ? (
+            <>
+              <IconSettings className="size-3.5" /> Use Default
+            </>
           ) : (
             <>
               <IconSettings className="size-3.5" /> Change
@@ -46,7 +52,7 @@ export function StorageLocationCard() {
       <CardContent>
         <div className="flex flex-col space-y-2">
           <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2.5">
-            {isMissing ? (
+            {isAlertState ? (
               <IconAlertTriangle className="size-4 shrink-0 text-destructive" />
             ) : (
               <IconFolder className="size-4 shrink-0 text-muted-foreground" />
@@ -54,7 +60,7 @@ export function StorageLocationCard() {
             <span
               className={cn(
                 "truncate text-sm font-medium",
-                isMissing ? "text-destructive" : "text-foreground",
+                isAlertState ? "text-destructive" : "text-foreground",
               )}
               title={pathLabel}
             >

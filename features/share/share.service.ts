@@ -12,6 +12,11 @@ export async function shareNativeFile(
   }
 
   const store = useShareStore.getState();
+  // Open progress dialog immediately on tap so users get instant feedback.
+  store.startShare(fileName, null, {
+    unit: "bytes",
+    title: "Preparing to Share",
+  });
 
   try {
     const response = await fetch(`/api/file/${encodeURIComponent(fileId)}/stream`, {
@@ -21,14 +26,13 @@ export async function shareNativeFile(
 
     if (!response.ok || !response.body) {
       toast.error("Failed to fetch file from server.");
+      store.setError("Failed to fetch file from server.");
       return;
     }
 
     const contentLength = response.headers.get("Content-Length");
     const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
-
-    // Open the drawer UI
-    store.startShare(fileName, totalBytes);
+    store.updateProgress(0, totalBytes);
 
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
@@ -50,7 +54,7 @@ export async function shareNativeFile(
 
     if (!navigator.canShare || !navigator.canShare({ files: [file] })) {
       toast.error("File sharing is not supported for this file type or device.");
-      store.setError();
+      store.setError("File sharing is not supported for this file type or device.");
       return;
     }
 
@@ -67,7 +71,7 @@ export async function shareNativeFile(
       return;
     }
     toast.error("An error occurred while sharing the file.");
-    store.setError();
+    store.setError("An error occurred while sharing the file.");
     console.error("Share error:", error);
   }
 }

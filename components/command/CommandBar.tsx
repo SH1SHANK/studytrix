@@ -160,6 +160,16 @@ const QUICK_QUERIES: ReadonlyArray<{
   { label: "Offline", query: "offline", icon: IconCloudOff },
 ];
 
+const SCOPE_QUICK_ACTIONS: ReadonlyArray<{
+  label: string;
+  prefix: "/" | "#" | ":";
+  icon: ComponentType<{ className?: string }>;
+}> = [
+  { label: "Folder", prefix: "/", icon: IconFolder },
+  { label: "Tag", prefix: "#", icon: IconTag },
+  { label: "Domain", prefix: ":", icon: IconDatabase },
+];
+
 const DEPARTMENT_SEGMENT_PATTERN = /^[A-Z]{2,5}$/;
 const RECENT_QUERY_STORAGE_KEY = "studytrix.command.recentQueries.v1";
 const MAX_RECENT_QUERIES = 6;
@@ -297,8 +307,21 @@ function parseNestedFileEntries(payload: unknown): NestedCommandFileEntry[] {
     const name = parseString(record.name);
     const courseCode = parseString(record.courseCode);
     const courseName = parseString(record.courseName);
+    const rootFolderId = parseString(record.rootFolderId);
     const parentFolderId = parseString(record.parentFolderId);
     const parentFolderName = parseString(record.parentFolderName);
+    const ancestorFolderIds = Array.isArray(record.ancestorFolderIds)
+      ? record.ancestorFolderIds
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean)
+      : [];
+    const ancestorFolderNames = Array.isArray(record.ancestorFolderNames)
+      ? record.ancestorFolderNames
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean)
+      : [];
 
     if (!id || !name || !courseCode || !parentFolderId) {
       continue;
@@ -313,8 +336,17 @@ function parseNestedFileEntries(payload: unknown): NestedCommandFileEntry[] {
       webViewLink: parseString(record.webViewLink),
       courseCode,
       courseName: courseName ?? courseCode,
+      rootFolderId: rootFolderId ?? ancestorFolderIds[0] ?? parentFolderId,
       parentFolderId,
       parentFolderName: parentFolderName ?? courseName ?? courseCode,
+      ancestorFolderIds:
+        ancestorFolderIds.length > 0
+          ? ancestorFolderIds
+          : [rootFolderId ?? parentFolderId, parentFolderId].filter(Boolean),
+      ancestorFolderNames:
+        ancestorFolderNames.length > 0
+          ? ancestorFolderNames
+          : [courseName ?? courseCode, parentFolderName ?? courseName ?? courseCode],
       path: parseString(record.path) ?? (courseName ?? courseCode),
     });
   }
@@ -1191,6 +1223,7 @@ export function CommandBar({
         payload: {
           route:
             `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(item.id)}?name=${encodeURIComponent(item.name)}`,
+          ancestorFolderIds: [activeDriveFolderId ?? folderId ?? null].filter(Boolean),
           departmentId,
           semesterId,
         },
@@ -1211,35 +1244,100 @@ export function CommandBar({
         },
       }));
 
-    const existingFolderIds = new Set(
-      baseCommands
-        .map((item) => item.entityId)
-        .filter((value): value is string => typeof value === "string" && value.length > 0),
-    );
+    const commandByFolderId = new Map<string, EngineCommandItem>();
+    const ordered: EngineCommandItem[] = [];
 
-    const offlineFolderCommands = offlineLibrary.folders
-      .filter((folder) => !existingFolderIds.has(folder.folderId))
-      .map((folder, index) => ({
-        id: `offline-folder-${folder.folderId}-${index}`,
+    const pushIfNew = (item: EngineCommandItem) => {
+      const folderId = typeof item.entityId === "string" ? item.entityId : "";
+      if (!folderId || commandByFolderId.has(folderId)) {
+        return;
+      }
+      commandByFolderId.set(folderId, item);
+      ordered.push(item);
+    };
+
+    for (const command of baseCommands) {
+      pushIfNew(command);
+    }
+
+    const nestedFolderMap = new Map<string, {
+      folderId: string;
+      label: string;
+      path: string;
+      courseCode: string;
+      ancestorFolderIds: string[];
+    }>();
+    for (const entry of nestedFileEntries) {
+      const ancestryIds = entry.ancestorFolderIds.length > 0
+        ? entry.ancestorFolderIds
+        : [entry.parentFolderId];
+      const ancestryNames = ancestryIds.map((_, index) =>
+        entry.ancestorFolderNames[index] ?? entry.parentFolderName,
+      );
+
+      for (let index = 0; index < ancestryIds.length; index += 1) {
+        const folderId = ancestryIds[index];
+        if (!folderId || nestedFolderMap.has(folderId)) {
+          continue;
+        }
+
+        const label = ancestryNames[index] ?? folderId;
+        const path = ancestryNames.slice(0, index + 1).join(" / ") || label;
+        nestedFolderMap.set(folderId, {
+          folderId,
+          label,
+          path,
+          courseCode: entry.courseCode,
+          ancestorFolderIds: ancestryIds.slice(0, index + 1),
+        });
+      }
+    }
+
+    for (const option of nestedFolderMap.values()) {
+      pushIfNew({
+        id: `nested-folder-${option.folderId}`,
+        title: option.label,
+        subtitle: `${option.courseCode} · ${option.path}`,
+        keywords: ["folder", "nested", option.courseCode, option.path, option.label],
+        group: "folders",
+        scope: "global",
+        entityId: option.folderId,
+        payload: {
+          route:
+            `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(option.folderId)}?name=${encodeURIComponent(option.label)}`,
+          ancestorFolderIds: option.ancestorFolderIds,
+          departmentId,
+          semesterId,
+        },
+      });
+    }
+
+    for (const folder of offlineLibrary.folders) {
+      pushIfNew({
+        id: `offline-folder-${folder.folderId}`,
         title: folder.path,
         subtitle: `${folder.fileCount} file${folder.fileCount === 1 ? "" : "s"} · Offline folder`,
         keywords: ["offline", "folder", folder.name, folder.path],
-        group: "folders" as const,
-        scope: "global" as const,
+        group: "folders",
+        scope: "global",
         entityId: folder.folderId,
         payload: {
           route: `/offline-library?folder=${encodeURIComponent(folder.folderId)}`,
           departmentId,
           semesterId,
         },
-      }));
+      });
+    }
 
-    return [...baseCommands, ...offlineFolderCommands];
+    return ordered;
   }, [
+    activeDriveFolderId,
     catalogCourses,
     departmentId,
     driveItems,
+    folderId,
     isFolderScope,
+    nestedFileEntries,
     offlineLibrary.folders,
     semesterId,
   ]);
@@ -1262,8 +1360,40 @@ export function CommandBar({
         subtitle: `${folder.fileCount} offline file${folder.fileCount === 1 ? "" : "s"}`,
       }));
 
-    return [...courseOptions, ...offlineOnly];
-  }, [catalogCourses, offlineLibrary.folders]);
+    const knownOrOffline = new Set([...known, ...offlineOnly.map((item) => item.folderId)]);
+    const nestedOnly: Array<{
+      folderId: string;
+      label: string;
+      subtitle: string;
+    }> = [];
+
+    for (const entry of nestedFileEntries) {
+      const ancestryIds = entry.ancestorFolderIds.length > 0
+        ? entry.ancestorFolderIds
+        : [entry.parentFolderId];
+      const ancestryNames = ancestryIds.map((_, index) =>
+        entry.ancestorFolderNames[index] ?? entry.parentFolderName,
+      );
+
+      for (let index = 0; index < ancestryIds.length; index += 1) {
+        const folderId = ancestryIds[index];
+        if (!folderId || knownOrOffline.has(folderId)) {
+          continue;
+        }
+
+        const label = ancestryNames[index] ?? folderId;
+        const path = ancestryNames.slice(0, index + 1).join(" / ") || label;
+        nestedOnly.push({
+          folderId,
+          label,
+          subtitle: `${entry.courseCode} · ${path}`,
+        });
+        knownOrOffline.add(folderId);
+      }
+    }
+
+    return [...courseOptions, ...offlineOnly, ...nestedOnly];
+  }, [catalogCourses, nestedFileEntries, offlineLibrary.folders]);
 
   const activeFolderFileCommands = useMemo<EngineCommandItem[]>(() => {
     if (!isFolderScope) {
@@ -1291,6 +1421,7 @@ export function CommandBar({
         payload: {
           url: item.webViewLink,
           parentFolderId: activeDriveFolderId ?? folderId ?? null,
+          ancestorFolderIds: [activeDriveFolderId ?? folderId ?? null].filter(Boolean),
           departmentId,
           semesterId,
         },
@@ -1331,6 +1462,8 @@ export function CommandBar({
         payload: {
           url: entry.webViewLink,
           route,
+          rootFolderId: entry.rootFolderId,
+          ancestorFolderIds: entry.ancestorFolderIds,
           parentFolderId: entry.parentFolderId,
           departmentId,
           semesterId,
@@ -1392,6 +1525,7 @@ export function CommandBar({
         payload: {
           route: `/offline-library?folder=${encodeURIComponent(file.folderId)}`,
           url: `/api/file/${encodeURIComponent(file.fileId)}/stream`,
+          ancestorFolderIds: file.ancestorFolderIds,
           parentFolderId: file.folderId,
           departmentId,
           semesterId,
@@ -1718,11 +1852,30 @@ export function CommandBar({
         const parentFolderId = typeof item.payload?.parentFolderId === "string"
           ? item.payload.parentFolderId
           : "";
-        if (parentFolderId !== searchScope.folder.folderId) {
+        const ancestorFolderIds = Array.isArray(item.payload?.ancestorFolderIds)
+          ? item.payload.ancestorFolderIds
+            .filter((value): value is string => typeof value === "string")
+            .map((value) => value.trim())
+            .filter(Boolean)
+          : [];
+
+        if (
+          parentFolderId !== searchScope.folder.folderId
+          && !ancestorFolderIds.includes(searchScope.folder.folderId)
+        ) {
           return false;
         }
       } else if (item.group === "folders") {
-        if (item.entityId !== searchScope.folder.folderId) {
+        const ancestorFolderIds = Array.isArray(item.payload?.ancestorFolderIds)
+          ? item.payload.ancestorFolderIds
+            .filter((value): value is string => typeof value === "string")
+            .map((value) => value.trim())
+            .filter(Boolean)
+          : [];
+        if (
+          item.entityId !== searchScope.folder.folderId
+          && !ancestorFolderIds.includes(searchScope.folder.folderId)
+        ) {
           return false;
         }
       } else {
@@ -1897,29 +2050,20 @@ export function CommandBar({
 
   const handleQueryChange = useCallback((nextValue: string) => {
     setScopeHistoryCursor(-1);
+    if (nextValue.startsWith("/") || nextValue.startsWith("#") || nextValue.startsWith(":")) {
+      const nextMode: ScopeSelectorMode = nextValue.startsWith("/")
+        ? "folders"
+        : nextValue.startsWith("#")
+          ? "tags"
+          : "domains";
+      setScopeSelectorMode(nextMode);
+      setQuery(nextValue.slice(1));
+      markScopeUsage();
+      return;
+    }
+
     if (scopeSelectorMode) {
       setQuery(nextValue);
-      return;
-    }
-
-    if (nextValue.startsWith("/")) {
-      setScopeSelectorMode("folders");
-      setQuery(nextValue.slice(1));
-      markScopeUsage();
-      return;
-    }
-
-    if (nextValue.startsWith("#")) {
-      setScopeSelectorMode("tags");
-      setQuery(nextValue.slice(1));
-      markScopeUsage();
-      return;
-    }
-
-    if (nextValue.startsWith(":")) {
-      setScopeSelectorMode("domains");
-      setQuery(nextValue.slice(1));
-      markScopeUsage();
       return;
     }
 
@@ -2246,13 +2390,18 @@ export function CommandBar({
       || (isFolderScope && isDriveLoading)
       || (isNestedIndexing && nestedFileEntries.length === 0)
     );
+  const isMobilePalette = isCoarsePointer || (viewportMetrics.width > 0 && viewportMetrics.width <= 820);
   const panelHeight = Math.min(
-    880,
-    Math.max(360, (viewportMetrics.height || 760) - 24),
+    isMobilePalette ? 920 : 880,
+    Math.max(isMobilePalette ? 420 : 360, (viewportMetrics.height || 760) - (isMobilePalette ? 8 : 24)),
   );
-  const overlayTopInset = Math.max(12, viewportMetrics.offsetTop + 12);
-  const overlayBottomInset = Math.max(12, viewportMetrics.keyboardInset + 12);
-  const listBottomInset = Math.max(18, viewportMetrics.keyboardInset + 12);
+  const overlayTopInset = isMobilePalette
+    ? Math.max(0, viewportMetrics.offsetTop)
+    : Math.max(12, viewportMetrics.offsetTop + 12);
+  const overlayBottomInset = isMobilePalette
+    ? Math.max(0, viewportMetrics.keyboardInset)
+    : Math.max(12, viewportMetrics.keyboardInset + 12);
+  const listBottomInset = Math.max(isMobilePalette ? 14 : 18, viewportMetrics.keyboardInset + (isMobilePalette ? 16 : 12));
   const inputCenterOffset = useMemo(() => {
     if (!isCoarsePointer || trimmedDeferredQuery.length === 0) {
       return 0;
@@ -2341,8 +2490,6 @@ export function CommandBar({
     return scopePills.map((pill) => pill.label).join(" + ");
   }, [scopePills]);
 
-  const scopeInputPaddingClass = "";
-
   useEffect(() => {
     if (scopePills.length === 0) {
       writeScopeSummary("");
@@ -2423,7 +2570,7 @@ export function CommandBar({
     <>
       <FloatingDock 
         isPaletteOpen={open}
-        onOpenPalette={() => setOpen(true)}
+        onOpenPalette={handleOpenPalette}
         placeholder={placeholder}
       />
 
@@ -2434,20 +2581,28 @@ export function CommandBar({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: motionTokens.durations.normal }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-background/88 backdrop-blur-md"
+            className={cn(
+              "fixed inset-0 z-50 flex bg-background/88 backdrop-blur-md",
+              isMobilePalette ? "items-end justify-stretch" : "items-center justify-center",
+            )}
             style={{
               paddingTop: overlayTopInset,
               paddingBottom: overlayBottomInset,
-              paddingLeft: 12,
-              paddingRight: 12,
+              paddingLeft: isMobilePalette ? 0 : 12,
+              paddingRight: isMobilePalette ? 0 : 12,
             }}
           >
             <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              initial={{ opacity: 0, y: isMobilePalette ? 28 : 20, scale: isMobilePalette ? 1 : 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.99 }}
+              exit={{ opacity: 0, y: isMobilePalette ? 20 : 12, scale: isMobilePalette ? 1 : 0.99 }}
               transition={{ type: "spring", ...motionTokens.spring }}
-              className="mx-auto flex w-full max-w-3xl min-h-0 flex-col rounded-2xl border border-border/70 bg-card/95 p-2 shadow-2xl border-border/80 bg-card/95"
+              className={cn(
+                "mx-auto flex w-full min-h-0 flex-col border border-border/70 bg-card/95 p-2 shadow-2xl border-border/80 bg-card/95",
+                isMobilePalette
+                  ? "max-w-none rounded-t-2xl rounded-b-none border-b-0 px-2 pb-2"
+                  : "max-w-3xl rounded-2xl",
+              )}
               style={{ height: panelHeight }}
             >
               <div className="mb-2 flex items-center justify-between px-1">
@@ -2649,6 +2804,30 @@ export function CommandBar({
                 {!query.trim() && !scopeSelectorMode ? (
                   <div className="space-y-2 px-2 pb-1 pt-2">
                     <div className="flex flex-wrap gap-2">
+                      {SCOPE_QUICK_ACTIONS.map((action) => {
+                        const ScopeIcon = action.icon;
+                        return (
+                          <Button
+                            key={action.prefix}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              vibrate(6);
+                              handleQueryChange(action.prefix);
+                            }}
+                            className="h-7 rounded-full border border-primary/20 bg-primary/10 px-2.5 text-[11px] text-primary hover:bg-primary/20"
+                          >
+                            <ScopeIcon className="size-3.5" />
+                            {action.label}
+                            <span className="rounded border border-primary/25 bg-primary/10 px-1 py-px text-[9px]">
+                              {action.prefix}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
                       {QUICK_QUERIES.map((quickQuery) => {
                         const QuickIcon = quickQuery.icon;
                         return (
@@ -2800,7 +2979,8 @@ export function CommandBar({
                                 <CommandItem
                                   value={item.id}
                                   className={cn(
-                                    "min-h-12 rounded-lg transition-all duration-150",
+                                    isMobilePalette ? "min-h-[54px]" : "min-h-12",
+                                    "rounded-lg transition-all duration-150",
                                     isActive
                                       ? "bg-primary/10 ring-1 ring-ring/40"
                                       : "data-[selected=true]:translate-x-0.5",

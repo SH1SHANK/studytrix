@@ -131,7 +131,7 @@ describe("offline.storage-location.store", () => {
       expect(state.providerType).toBe("indexeddb");
     });
 
-    it("should set missing status when filesystem config exists but API unsupported", async () => {
+    it("should set unsupported status when filesystem config exists but API unsupported", async () => {
       loadConfigMock.mockReturnValue({
         providerType: "filesystem",
         displayPath: "MyFolder",
@@ -141,7 +141,7 @@ describe("offline.storage-location.store", () => {
       await useStorageLocationStore.getState().initialize();
       const state = useStorageLocationStore.getState();
 
-      expect(state.status).toBe("missing");
+      expect(state.status).toBe("unsupported");
       expect(state.error).not.toBeNull();
       expect(state.error!.code).toBe("PERMISSION_DENIED");
     });

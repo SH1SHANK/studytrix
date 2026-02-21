@@ -149,13 +149,13 @@ export const useStorageLocationStore = create<StorageLocationState>(
         activateProvider(provider);
 
         set({
-          status: "missing",
+          status: "unsupported",
           providerType: "indexeddb",
           displayPath: config.displayPath,
           initialized: true,
           error: makeError(
             "PERMISSION_DENIED",
-            "File system access is no longer supported in this browser. Please relink or start fresh.",
+            "File system access is not available in this browser/PWA. Continue with default browser storage.",
           ),
         });
 

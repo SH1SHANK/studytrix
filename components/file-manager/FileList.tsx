@@ -30,6 +30,7 @@ import {
   getMimeLabel,
 } from "@/features/drive/drive.types";
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
+import { useSelectionStore } from "@/features/selection/selection.store";
 
 type FileListProps = {
   driveFolderId: string | null;
@@ -162,8 +163,13 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const [offlineFolderIds, setOfflineFolderIds] = useState<Set<string>>(new Set());
   const [offlineLibraryFileIds, setOfflineLibraryFileIds] = useState<Set<string>>(new Set());
   const { tasks: downloadTasks, startDownload, animateDownload } = useDownloadManager();
+  const setContextItems = useSelectionStore((state) => state.setContextItems);
 
   const { folders, files, isLoading, error } = useDriveFolder(driveFolderId);
+
+  useEffect(() => {
+    setContextItems([...folders, ...files]);
+  }, [files, folders, setContextItems]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(pointer: coarse)");
@@ -194,6 +200,11 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         for (const file of snapshot.files) {
           if (file.fileId) {
             fileIds.add(file.fileId);
+          }
+          for (const ancestorId of file.ancestorFolderIds) {
+            if (ancestorId && ancestorId !== "ungrouped") {
+              ids.add(ancestorId);
+            }
           }
         }
 
@@ -358,18 +369,13 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
 
   const getRowOfflineState = useCallback((item: FileListRow) => {
     if (item.type === "file") {
-      const currentFolderOffline =
-        typeof driveFolderId === "string"
-        && driveFolderId.trim().length > 0
-        && offlineFolderIds.has(driveFolderId);
       const groupedFolderDownloadActive =
         typeof driveFolderId === "string"
         && driveFolderId.trim().length > 0
         && Boolean(folderGroupStatusByFolderId.get(driveFolderId)?.hasActive);
       const isOffline =
         Boolean(offlineFiles[item.id])
-        || offlineLibraryFileIds.has(item.id)
-        || currentFolderOffline;
+        || offlineLibraryFileIds.has(item.id);
 
       return {
         isOffline,

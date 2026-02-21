@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
 import {
   IconAlertTriangle,
   IconBrandChrome,
@@ -59,7 +59,8 @@ function OptionCard({
       onClick={onClick}
       disabled={disabled}
       whileHover={{ scale: disabled ? 1 : 1.01 }}
-      whileTap={{ scale: disabled ? 1 : 0.98 }}
+      whileTap={{ scale: disabled ? 1 : 0.985 }}
+      transition={{ type: "spring", stiffness: 440, damping: 34 }}
       className={cn(
         "flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors",
         variant === "default"
@@ -90,6 +91,7 @@ export function StorageSetupSheet({
   const [step, setStep] = useState<SetupStep>(initialStep);
   const [folderName, setFolderName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
 
   const selectFolder = useStorageLocationStore((s) => s.selectFolder);
   const createFolder = useStorageLocationStore((s) => s.createFolder);
@@ -99,6 +101,24 @@ export function StorageSetupSheet({
   const clearError = useStorageLocationStore((s) => s.clearError);
   const status = useStorageLocationStore((s) => s.status);
   const migrationProgress = useStorageLocationStore((s) => s.migrationProgress);
+
+  useEffect(() => {
+    const mql = window.matchMedia("(pointer: coarse)");
+    const update = () => setIsCoarsePointer(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setStep(mode === "relink" ? "relink" : supportsFileSystemAccess() ? "choose" : "unsupported");
+    setFolderName("");
+    clearError();
+  }, [clearError, mode, open]);
 
   const close = useCallback(() => {
     clearError();
@@ -165,7 +185,13 @@ export function StorageSetupSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" showCloseButton={status !== "migrating"}>
+      <DialogContent
+        className={cn(
+          "w-[calc(100vw-1rem)] max-h-[calc(100vh-1.25rem)] overflow-y-auto p-4 sm:max-w-md sm:p-6",
+          isCoarsePointer && "max-h-[calc(100vh-0.5rem)]",
+        )}
+        showCloseButton={status !== "migrating"}
+      >
         <AnimatePresence mode="wait">
           {status === "migrating" && migrationProgress && (
             <motion.div
@@ -260,7 +286,7 @@ export function StorageSetupSheet({
                 placeholder="e.g. Studytrix Offline"
                 value={folderName}
                 onChange={(e) => setFolderName(e.target.value)}
-                className="h-10"
+                className="h-11"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && folderName.trim()) {
@@ -312,7 +338,8 @@ export function StorageSetupSheet({
                 <DialogTitle>Custom Folder Selection Unavailable</DialogTitle>
                 <DialogDescription>
                   Your browser doesn't support the File System Access API needed for custom folder
-                  selection. Your files will be stored securely in the browser's internal storage.
+                  selection. This is common on mobile/PWA builds. Your files will be stored securely
+                  in browser storage.
                 </DialogDescription>
               </DialogHeader>
 

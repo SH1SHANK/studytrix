@@ -11,8 +11,11 @@ export interface NestedCommandFileEntry {
   webViewLink: string | null;
   courseCode: string;
   courseName: string;
+  rootFolderId: string;
   parentFolderId: string;
   parentFolderName: string;
+  ancestorFolderIds: string[];
+  ancestorFolderNames: string[];
   path: string;
 }
 
@@ -98,10 +101,26 @@ function parseSnapshot(value: unknown): NestedCommandFileSnapshot | null {
       typeof entry.courseCode === "string" ? entry.courseCode.trim() : "";
     const courseName =
       typeof entry.courseName === "string" ? entry.courseName.trim() : "";
+    const rootFolderId =
+      typeof entry.rootFolderId === "string" ? entry.rootFolderId.trim() : "";
     const parentFolderId =
       typeof entry.parentFolderId === "string" ? entry.parentFolderId.trim() : "";
     const parentFolderName =
       typeof entry.parentFolderName === "string" ? entry.parentFolderName.trim() : "";
+    const ancestorFolderIdsRaw = Array.isArray(entry.ancestorFolderIds)
+      ? entry.ancestorFolderIds
+      : [];
+    const ancestorFolderNamesRaw = Array.isArray(entry.ancestorFolderNames)
+      ? entry.ancestorFolderNames
+      : [];
+    const ancestorFolderIds = ancestorFolderIdsRaw
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const ancestorFolderNames = ancestorFolderNamesRaw
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean);
     const path = typeof entry.path === "string" ? entry.path.trim() : "";
 
     if (!id || !name || !courseCode || !parentFolderId) {
@@ -117,8 +136,17 @@ function parseSnapshot(value: unknown): NestedCommandFileSnapshot | null {
       webViewLink,
       courseCode,
       courseName: courseName || courseCode,
+      rootFolderId: rootFolderId || ancestorFolderIds[0] || parentFolderId,
       parentFolderId,
       parentFolderName: parentFolderName || courseName || courseCode,
+      ancestorFolderIds:
+        ancestorFolderIds.length > 0
+          ? ancestorFolderIds
+          : [rootFolderId || parentFolderId, parentFolderId].filter(Boolean),
+      ancestorFolderNames:
+        ancestorFolderNames.length > 0
+          ? ancestorFolderNames
+          : [courseName || courseCode, parentFolderName || courseName || courseCode],
       path: path || (courseName || courseCode),
     });
   }

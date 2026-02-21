@@ -71,7 +71,7 @@ function SettingStorageLocationComponent({ setting }: SettingStorageLocationProp
       {/* Action buttons */}
       {!isMigrating && (
         <div className="flex items-center gap-1.5">
-          {status === "unconfigured" && hasApi && (
+          {status === "unconfigured" && (
             <Button
               type="button"
               size="sm"
@@ -79,6 +79,18 @@ function SettingStorageLocationComponent({ setting }: SettingStorageLocationProp
               onClick={() => openSetupSheet()}
             >
               <IconSettings className="size-3" /> Configure
+            </Button>
+          )}
+
+          {status === "unsupported" && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 text-xs"
+              onClick={() => openSetupSheet()}
+            >
+              <IconSettings className="size-3" /> Use Default
             </Button>
           )}
           

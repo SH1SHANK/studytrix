@@ -21,7 +21,18 @@ function formatBytes(bytes: number, decimals = 2): string {
 }
 
 export function ShareProgressDrawer() {
-  const { isOpen, title, fileName, unit, progress, loaded, total, closeDrawer } =
+  const {
+    isOpen,
+    status,
+    errorMessage,
+    title,
+    fileName,
+    unit,
+    progress,
+    loaded,
+    total,
+    closeDrawer,
+  } =
     useShareStore();
 
   const leftLabel = unit === "items" ? `${Math.round(loaded)} files` : formatBytes(loaded);
@@ -33,12 +44,8 @@ export function ShareProgressDrawer() {
 
   return (
     <Dialog open={isOpen} onOpenChange={closeDrawer}>
-      {/* 
-        We use an interactive dialog here, but effectively hide the close 
-        button and prevent outside interaction while it's preparing to share.
-      */}
       <DialogContent
-        showCloseButton={false}
+        showCloseButton={status === "error"}
         className="w-full max-w-sm rounded-[24px] border border-border p-6 shadow-2xl border-border"
       >
         <DialogHeader className="mb-4">
@@ -55,22 +62,30 @@ export function ShareProgressDrawer() {
           </div>
 
           <div className="w-full space-y-2 text-center">
-            <p className="line-clamp-1 truncate text-sm font-medium text-foreground/80 text-muted-foreground">
-              {fileName}
-            </p>
-            <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-              <span className="tabular-nums">{leftLabel}</span>
-              <span className={total ? undefined : "animate-pulse"}>{rightLabel}</span>
-            </div>
-            
-            <Progress
-              value={progress}
-              className="h-2 w-full animate-in fade-in zoom-in-95"
-            />
-            {progress >= 100 && (
-              <p className="animate-in fade-in slide-in-from-bottom-2 mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                Opening share sheet...
+            {status === "error" ? (
+              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800/40 dark:bg-rose-950/20 dark:text-rose-400">
+                {errorMessage ?? "Could not complete this share action."}
               </p>
+            ) : (
+              <>
+                <p className="line-clamp-1 truncate text-sm font-medium text-foreground/80 text-muted-foreground">
+                  {fileName}
+                </p>
+                <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                  <span className="tabular-nums">{leftLabel}</span>
+                  <span className={total ? undefined : "animate-pulse"}>{rightLabel}</span>
+                </div>
+                
+                <Progress
+                  value={progress}
+                  className="h-2 w-full animate-in fade-in zoom-in-95"
+                />
+                {progress >= 100 && (
+                  <p className="animate-in fade-in slide-in-from-bottom-2 mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    Opening share sheet...
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>

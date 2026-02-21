@@ -43,11 +43,7 @@ export function supportsFileSystemAccess(): boolean {
     return false;
   }
 
-  return (
-    typeof (window as any).showDirectoryPicker === "function" &&
-    typeof FileSystemFileHandle !== "undefined" &&
-    typeof FileSystemDirectoryHandle !== "undefined"
-  );
+  return typeof (window as any).showDirectoryPicker === "function";
 }
 
 // ─── Directory Handle Persistence ───────────────────────────────────────────
@@ -112,20 +108,35 @@ export async function loadDirectoryHandle(): Promise<{
       return { handle: null, permissionGranted: false };
     }
 
-    // Attempt silent permission re-acquisition.
-    const queryResult = await (handle as any).queryPermission({ mode: "readwrite" });
-    if (queryResult === "granted") {
-      return { handle, permissionGranted: true };
+    const queryPermission = (handle as any).queryPermission;
+    const requestPermission = (handle as any).requestPermission;
+
+    // Attempt silent permission re-acquisition when supported.
+    if (typeof queryPermission === "function") {
+      const queryResult = await queryPermission.call(handle, { mode: "readwrite" });
+      if (queryResult === "granted") {
+        return { handle, permissionGranted: true };
+      }
+
+      if (queryResult === "denied") {
+        return { handle, permissionGranted: false };
+      }
     }
 
-    // Try requesting permission — may succeed silently or require user gesture.
-    try {
-      const requestResult = await (handle as any).requestPermission({ mode: "readwrite" });
-      return { handle, permissionGranted: requestResult === "granted" };
-    } catch {
-      // requestPermission failed (e.g., no user gesture context).
-      return { handle, permissionGranted: false };
+    // Try requesting permission if the implementation exposes it.
+    if (typeof requestPermission === "function") {
+      try {
+        const requestResult = await requestPermission.call(handle, { mode: "readwrite" });
+        return { handle, permissionGranted: requestResult === "granted" };
+      } catch {
+        // requestPermission failed (e.g., no user gesture context).
+        return { handle, permissionGranted: false };
+      }
     }
+
+    // Some mobile/PWA runtimes omit permission APIs; if the handle is restored,
+    // allow runtime reads/writes to be the source of truth.
+    return { handle, permissionGranted: true };
   } catch {
     return { handle: null, permissionGranted: false };
   }
@@ -440,14 +451,25 @@ export async function pickDirectory(): Promise<FileSystemDirectoryHandle | null>
     return null;
   }
 
+  const picker = (window as any).showDirectoryPicker;
+  if (typeof picker !== "function") {
+    return null;
+  }
+
   try {
-    const handle = await (window as any).showDirectoryPicker({
+    const handle = await picker({
       mode: "readwrite",
     });
     return handle;
   } catch {
-    // User cancelled or permission denied.
-    return null;
+    // Retry without options for runtimes that reject the readwrite parameter.
+    try {
+      const handle = await picker();
+      return handle;
+    } catch {
+      // User cancelled or permission denied.
+      return null;
+    }
   }
 }
 

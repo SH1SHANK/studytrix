@@ -1,9 +1,12 @@
 import { create } from "zustand";
 
 type ShareProgressUnit = "bytes" | "items";
+type ShareStatus = "active" | "error";
 
 interface ShareState {
   isOpen: boolean;
+  status: ShareStatus;
+  errorMessage: string | null;
   fileName: string | null;
   title: string;
   unit: ShareProgressUnit;
@@ -23,12 +26,14 @@ interface ShareActions {
   ) => void;
   updateProgress: (loaded: number, total?: number | null) => void;
   endShare: () => void;
-  setError: () => void; // Optionally close or keep open with error state, we'll just close it
+  setError: (message?: string) => void;
   closeDrawer: () => void;
 }
 
 export const useShareStore = create<ShareState & ShareActions>()((set, get) => ({
   isOpen: false,
+  status: "active",
+  errorMessage: null,
   fileName: null,
   title: "Preparing to Share",
   unit: "bytes",
@@ -39,6 +44,8 @@ export const useShareStore = create<ShareState & ShareActions>()((set, get) => (
   startShare: (fileName, total, options) => {
     set({
       isOpen: true,
+      status: "active",
+      errorMessage: null,
       fileName,
       title: options?.title ?? "Preparing to Share",
       unit: options?.unit ?? "bytes",
@@ -69,18 +76,33 @@ export const useShareStore = create<ShareState & ShareActions>()((set, get) => (
   },
 
   endShare: () => {
-    // Optionally wait a second before closing so the user sees 100%
-    set({ progress: 100 });
+    set({
+      status: "active",
+      errorMessage: null,
+      progress: 100,
+    });
     setTimeout(() => {
-      set({ isOpen: false });
+      set({
+        isOpen: false,
+        status: "active",
+        errorMessage: null,
+      });
     }, 500);
   },
 
-  setError: () => {
-    set({ isOpen: false });
+  setError: (message) => {
+    set({
+      isOpen: true,
+      status: "error",
+      errorMessage: message ?? "Could not prepare this share action.",
+    });
   },
   
   closeDrawer: () => {
-    set({ isOpen: false });
+    set({
+      isOpen: false,
+      status: "active",
+      errorMessage: null,
+    });
   },
 }));

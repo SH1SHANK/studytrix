@@ -1,28 +1,40 @@
-import { zipSync, type Zippable } from "fflate";
-import { toast } from "sonner";
+import { zip, type FlateError, type Zippable } from "fflate";
 
-import type { DriveItem } from "@/features/drive/drive.types";
 import { getBlob } from "@/features/offline/offline.access";
 
-import type { BulkShareMode } from "./bulk.types";
+import type { BulkShareMode, ZipSourceFile } from "./bulk.types";
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+export class BulkShareError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BulkShareError";
+  }
+}
 
-export type ZipSourceFile = DriveItem & { zipPath?: string };
+export interface BulkShareSummary {
+  mode: BulkShareMode;
+  requestedCount: number;
+  includedCount: number;
+  failedFiles: string[];
+}
 
-async function fetchFileBlob(
-  fileId: string,
-  fileName: string,
-  onProgress?: (loaded: number) => void,
-): Promise<Blob> {
+type ZipBuildResult = {
+  zipBlob: Blob;
+  requestedCount: number;
+  includedCount: number;
+  failedFiles: string[];
+};
+
+const ZIP_FETCH_CONCURRENCY = 4;
+
+async function fetchFileBlob(fileId: string, fileName: string): Promise<Blob> {
   const localBlob = await getBlob(fileId);
   if (localBlob) {
-    onProgress?.(localBlob.size);
     return localBlob;
   }
 
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
-    throw new Error(`${fileName} is not available offline yet.`);
+    throw new BulkShareError(`${fileName} is not available offline yet.`);
   }
 
   const response = await fetch(`/api/file/${encodeURIComponent(fileId)}/stream`, {
@@ -43,32 +55,15 @@ async function fetchFileBlob(
         reason = (payload as { message: string }).message;
       }
     } catch {
-      // fallback message
+      // keep generic message
     }
-    throw new Error(reason);
+    throw new BulkShareError(reason);
   }
 
-  if (!response.body) {
-    throw new Error(`No stream body for ${fileName}`);
-  }
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let loaded = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    loaded += value.length;
-    onProgress?.(loaded);
-  }
-
-  return new Blob(chunks as BlobPart[]);
+  return await response.blob();
 }
 
 function sanitizeFileName(name: string, index: number): string {
-  // Ensure unique names in the archive by appending index if needed.
   const safe = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
   return safe || `file_${index}`;
 }
@@ -111,36 +106,83 @@ function dedupeZipEntryName(name: string, index: number, usedNames: Set<string>)
   return candidate;
 }
 
+function compressArchive(archive: Zippable): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    zip(archive, { level: 3 }, (error: FlateError | null, data: Uint8Array) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(data);
+    });
+  });
+}
+
 async function buildZipBlob(
   files: ZipSourceFile[],
   onProgress?: (done: number, total: number) => void,
-): Promise<{ blob: Blob; includedCount: number }> {
+): Promise<ZipBuildResult> {
   const total = files.length;
-  const archive: Zippable = {};
+  const archiveEntries: Array<{ entryName: string; data: Uint8Array } | null> =
+    new Array(total).fill(null);
+  const failedFiles: string[] = [];
   const usedNames = new Set<string>();
+  const entryNames = files.map((file, index) => {
+    const nextName = buildZipEntryName(file, index);
+    return dedupeZipEntryName(nextName, index, usedNames);
+  });
   let includedCount = 0;
+  let done = 0;
+  let cursor = 0;
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    let entryName = buildZipEntryName(file, i);
-    entryName = dedupeZipEntryName(entryName, i, usedNames);
+  const workers = Array.from({ length: Math.min(ZIP_FETCH_CONCURRENCY, total) }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= total) {
+        return;
+      }
 
-    try {
-      const blob = await fetchFileBlob(file.id, file.name);
-      const arrayBuffer = await blob.arrayBuffer();
-      archive[entryName] = new Uint8Array(arrayBuffer);
-      includedCount += 1;
-    } catch {
-      toast.error(`Could not include "${file.name}" in the archive.`);
+      const file = files[index];
+      const entryName = entryNames[index];
+
+      try {
+        const blob = await fetchFileBlob(file.id, file.name);
+        const arrayBuffer = await blob.arrayBuffer();
+        archiveEntries[index] = {
+          entryName,
+          data: new Uint8Array(arrayBuffer),
+        };
+        includedCount += 1;
+      } catch {
+        failedFiles.push(file.name);
+      } finally {
+        done += 1;
+        onProgress?.(done, total);
+      }
     }
+  });
 
-    onProgress?.(i + 1, total);
+  await Promise.all(workers);
+
+  if (includedCount === 0) {
+    throw new BulkShareError("Could not build archive. No files were available.");
   }
 
-  const zipped = zipSync(archive, { level: 1 });
+  const archive: Zippable = {};
+  for (const entry of archiveEntries) {
+    if (!entry) {
+      continue;
+    }
+    archive[entry.entryName] = entry.data;
+  }
+
+  const zipped = await compressArchive(archive);
   return {
-    blob: new Blob([zipped] as BlobPart[], { type: "application/zip" }),
+    zipBlob: new Blob([zipped] as BlobPart[], { type: "application/zip" }),
+    requestedCount: total,
     includedCount,
+    failedFiles,
   };
 }
 
@@ -149,74 +191,98 @@ function defaultZipName(prefix = "studytrix-files"): string {
   return `${prefix}-${timestamp}.zip`;
 }
 
-// ─── Zip Mode ───────────────────────────────────────────────────────────────
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    anchor.remove();
+  }, 1000);
+}
 
 export async function shareAsZip(
   files: ZipSourceFile[],
   onProgress?: (done: number, total: number) => void,
   zipFileName = defaultZipName("studytrix-files"),
-): Promise<void> {
+): Promise<BulkShareSummary> {
   if (files.length === 0) {
-    toast.info("No files to share.");
-    return;
+    throw new BulkShareError("No files were selected.");
   }
 
-  const { blob: zipBlob, includedCount } = await buildZipBlob(files, onProgress);
-  if (includedCount === 0) {
-    toast.error("Could not build archive. No files were available.");
-    return;
-  }
+  const result = await buildZipBlob(files, onProgress);
+  const zipFile = new File([result.zipBlob], zipFileName, { type: "application/zip" });
 
-  // Try Web Share, fall back to download.
   if (typeof navigator !== "undefined" && navigator.share) {
-    const zipFile = new File([zipBlob], zipFileName, { type: "application/zip" });
-
     if (navigator.canShare?.({ files: [zipFile] })) {
       try {
         await navigator.share({ title: zipFileName, files: [zipFile] });
-        return;
+        return {
+          mode: "zip",
+          requestedCount: result.requestedCount,
+          includedCount: result.includedCount,
+          failedFiles: result.failedFiles,
+        };
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
-          return; // User cancelled.
+          return {
+            mode: "zip",
+            requestedCount: result.requestedCount,
+            includedCount: result.includedCount,
+            failedFiles: result.failedFiles,
+          };
         }
-        // Fall through to download.
       }
     }
   }
 
-  // Fallback: trigger browser download.
-  downloadBlob(zipBlob, zipFileName);
+  downloadBlob(result.zipBlob, zipFileName);
+  return {
+    mode: "zip",
+    requestedCount: result.requestedCount,
+    includedCount: result.includedCount,
+    failedFiles: result.failedFiles,
+  };
 }
 
 export async function downloadAsZip(
   files: ZipSourceFile[],
   onProgress?: (done: number, total: number) => void,
   zipFileName = defaultZipName("studytrix-files"),
-): Promise<void> {
+): Promise<BulkShareSummary> {
   if (files.length === 0) {
-    toast.info("No files to download.");
-    return;
+    throw new BulkShareError("No files were selected.");
   }
 
-  const { blob: zipBlob, includedCount } = await buildZipBlob(files, onProgress);
-  if (includedCount === 0) {
-    toast.error("Could not build archive. No files were available.");
-    return;
-  }
+  const result = await buildZipBlob(files, onProgress);
+  downloadBlob(result.zipBlob, zipFileName);
 
-  downloadBlob(zipBlob, zipFileName);
+  return {
+    mode: "zip",
+    requestedCount: result.requestedCount,
+    includedCount: result.includedCount,
+    failedFiles: result.failedFiles,
+  };
 }
-
-// ─── Individual Mode ────────────────────────────────────────────────────────
 
 export async function shareIndividually(
   files: ZipSourceFile[],
   onProgress?: (done: number, total: number) => void,
-): Promise<void> {
-  const total = files.length;
+): Promise<BulkShareSummary> {
+  if (files.length === 0) {
+    throw new BulkShareError("No files were selected.");
+  }
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
+  const total = files.length;
+  const failedFiles: string[] = [];
+
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
 
     try {
       const blob = await fetchFileBlob(file.id, file.name);
@@ -225,9 +291,9 @@ export async function shareIndividually(
       });
 
       if (
-        typeof navigator !== "undefined" &&
-        navigator.share &&
-        navigator.canShare?.({ files: [shareFile] })
+        typeof navigator !== "undefined"
+        && navigator.share
+        && navigator.canShare?.({ files: [shareFile] })
       ) {
         await navigator.share({ title: file.name, files: [shareFile] });
       } else {
@@ -235,48 +301,35 @@ export async function shareIndividually(
       }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        // User cancelled the share sheet — stop the sequence.
-        return;
+        return {
+          mode: "individual",
+          requestedCount: total,
+          includedCount: index,
+          failedFiles,
+        };
       }
-      toast.error(`Failed to share "${file.name}".`);
+      failedFiles.push(file.name);
+    } finally {
+      onProgress?.(index + 1, total);
     }
-
-    onProgress?.(i + 1, total);
   }
-}
 
-// ─── Public Entry Point ─────────────────────────────────────────────────────
+  return {
+    mode: "individual",
+    requestedCount: total,
+    includedCount: total - failedFiles.length,
+    failedFiles,
+  };
+}
 
 export async function bulkShare(
   files: ZipSourceFile[],
   mode: BulkShareMode,
   onProgress?: (done: number, total: number) => void,
-): Promise<void> {
-  if (files.length === 0) {
-    toast.info("No files to share.");
-    return;
-  }
-
+): Promise<BulkShareSummary> {
   if (mode === "zip") {
-    await downloadAsZip(files, onProgress);
-  } else {
-    await shareIndividually(files, onProgress);
+    return await downloadAsZip(files, onProgress);
   }
-}
 
-// ─── Download Fallback ──────────────────────────────────────────────────────
-
-function downloadBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-    a.remove();
-  }, 1000);
+  return await shareIndividually(files, onProgress);
 }

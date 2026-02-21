@@ -30,6 +30,8 @@ type NestedFolderTask = {
   folderId: string;
   courseCode: string;
   courseName: string;
+  rootFolderId: string;
+  ancestryIds: string[];
   ancestry: string[];
 };
 
@@ -42,8 +44,11 @@ type NestedFileEntry = {
   webViewLink: string | null;
   courseCode: string;
   courseName: string;
+  rootFolderId: string;
   parentFolderId: string;
   parentFolderName: string;
+  ancestorFolderIds: string[];
+  ancestorFolderNames: string[];
   path: string;
 };
 
@@ -162,6 +167,8 @@ async function listFolderItems(folderId: string): Promise<DriveItem[]> {
 
 function toFileEntry(task: NestedFolderTask, item: DriveItem): NestedFileEntry {
   const parentFolderName = task.ancestry[task.ancestry.length - 1] ?? task.courseName;
+  const ancestorFolderIds = task.ancestryIds.slice();
+  const ancestorFolderNames = task.ancestry.slice();
 
   return {
     id: item.id,
@@ -172,9 +179,12 @@ function toFileEntry(task: NestedFolderTask, item: DriveItem): NestedFileEntry {
     webViewLink: item.webViewLink,
     courseCode: task.courseCode,
     courseName: task.courseName,
+    rootFolderId: task.rootFolderId,
     parentFolderId: task.folderId,
     parentFolderName,
-    path: task.ancestry.join(" / "),
+    ancestorFolderIds,
+    ancestorFolderNames,
+    path: ancestorFolderNames.join(" / "),
   };
 }
 
@@ -183,6 +193,8 @@ async function crawlNestedFiles(roots: NestedRootInput[]): Promise<NestedFileEnt
     folderId: root.folderId,
     courseCode: root.courseCode,
     courseName: root.courseName,
+    rootFolderId: root.folderId,
+    ancestryIds: [root.folderId],
     ancestry: [root.courseName],
   }));
 
@@ -223,6 +235,8 @@ async function crawlNestedFiles(roots: NestedRootInput[]): Promise<NestedFileEnt
               folderId: item.id,
               courseCode: task.courseCode,
               courseName: task.courseName,
+              rootFolderId: task.rootFolderId,
+              ancestryIds: [...task.ancestryIds, item.id],
               ancestry: [...task.ancestry, item.name],
             });
           }

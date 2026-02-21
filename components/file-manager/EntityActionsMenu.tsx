@@ -283,7 +283,23 @@ export function EntityActionsMenu({
                   void (async () => {
                     const shareStore = useShareStore.getState();
                     try {
-                      const files = await expandFolders([entityId]);
+                      shareStore.startShare(
+                        title,
+                        1,
+                        {
+                          unit: "items",
+                          title: "Preparing Folder Files",
+                        },
+                      );
+
+                      const files = await expandFolders(
+                        [{ id: entityId, name: title }],
+                        {
+                          onProgress: (done, total) => {
+                            shareStore.updateProgress(done, total);
+                          },
+                        },
+                      );
                       if (files.length === 0) {
                         throw new Error("Folder is empty");
                       }
@@ -297,7 +313,7 @@ export function EntityActionsMenu({
                         },
                       );
 
-                      await shareAsZip(
+                      const summary = await shareAsZip(
                         files,
                         (done, total) => {
                           shareStore.updateProgress(done, total);
@@ -305,11 +321,23 @@ export function EntityActionsMenu({
                         `${sanitizeZipPrefix(title)}-share.zip`,
                       );
 
+                      if (summary.failedFiles.length > 0) {
+                        const preview = summary.failedFiles.slice(0, 3).join(", ");
+                        const remainder = summary.failedFiles.length - Math.min(summary.failedFiles.length, 3);
+                        shareStore.setError(
+                          remainder > 0
+                            ? `${summary.failedFiles.length} files could not be included (${preview} and ${remainder} more).`
+                            : `${summary.failedFiles.length} files could not be included (${preview}).`,
+                        );
+                        return;
+                      }
+
                       shareStore.endShare();
                     } catch (error) {
-                      shareStore.setError();
-                      toast.error(
-                        error instanceof Error ? error.message : `Failed to share "${title}"`,
+                      shareStore.setError(
+                        error instanceof Error
+                          ? error.message
+                          : `Failed to share "${title}"`,
                       );
                     }
                   })();
