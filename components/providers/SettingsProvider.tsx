@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/features/settings/settings.store";
 
 function hexToRgb(hex: string): string | null {
@@ -14,6 +14,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const values = useSettingsStore((state) => state.values);
   const initialized = useSettingsStore((state) => state.initialized);
   const initialize = useSettingsStore((state) => state.initialize);
+  const hasWarmedCachesRef = useRef(false);
 
   useEffect(() => {
     if (!initialized) {
@@ -62,6 +63,31 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       root.removeAttribute("data-reduce-motion");
     }
   }, [values, initialized]);
+
+  useEffect(() => {
+    if (!initialized) {
+      return;
+    }
+
+    const warmupEnabled = values.cache_warmup_on_start === true;
+    if (!warmupEnabled || hasWarmedCachesRef.current) {
+      return;
+    }
+
+    hasWarmedCachesRef.current = true;
+
+    void (async () => {
+      await Promise.allSettled([
+        import("@/features/offline/offline.library")
+          .then((module) => module.loadOfflineLibrarySnapshot({ maxAgeMs: 0 }))
+          .then(() => undefined),
+        import("@/features/offline/offline.index.store")
+          .then((module) => module.useOfflineIndexStore.getState().hydrate())
+          .then(() => undefined),
+        fetch("/api/catalog/index", { cache: "force-cache" }).then(() => undefined),
+      ]);
+    })();
+  }, [initialized, values.cache_warmup_on_start]);
 
   return <>{children}</>;
 }

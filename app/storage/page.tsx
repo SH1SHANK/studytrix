@@ -17,6 +17,8 @@ import { StorageLocationCard } from "@/components/storage/StorageLocationCard";
 import { getIntegrityIssues } from "@/features/storage/storage.integrity";
 import { exportStorageSummary } from "@/features/storage/storage.service";
 import { useStorageDashboard } from "@/ui/hooks/useStorageDashboard";
+import { useSetting } from "@/ui/hooks/useSettings";
+import { cn } from "@/lib/utils";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -27,6 +29,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export default function StoragePage() {
+  const [compactMode] = useSetting("compact_mode");
+  const isCompact = compactMode === true;
   const {
     records,
     stats,
@@ -62,7 +66,7 @@ export default function StoragePage() {
 
   return (
     <AppShell headerTitle="Storage" hideHeaderFilters={true}>
-      <div className="px-4 pt-4 pb-8 sm:px-5 sm:pt-5">
+      <div className={cn("px-4 sm:px-5", isCompact ? "pt-3 pb-6 sm:pt-4" : "pt-4 pb-8 sm:pt-5")}>
         <StorageLayout
           loading={loading}
           onRefresh={() => {
@@ -75,7 +79,7 @@ export default function StoragePage() {
           {loading && records.length === 0 ? <p className="text-sm text-muted-foreground">Loading storage data...</p> : null}
 
           {/* ── Overview ──────────────────────────────────────── */}
-          <section className="space-y-2">
+          <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
             <SectionLabel>Overview</SectionLabel>
             <StorageOverviewCard
               stats={stats}
@@ -85,15 +89,15 @@ export default function StoragePage() {
           </section>
 
           {/* ── Storage Location ──────────────────────────────── */}
-          <section className="space-y-4">
+          <section className={cn(isCompact ? "space-y-3" : "space-y-4")}>
             <StorageLocationCard />
-            <OfflineRuntimeDiagnostics />
+            <OfflineRuntimeDiagnostics compact={isCompact} />
           </section>
 
           {/* ── Quota & Breakdown ─────────────────────────────── */}
-          <section className="space-y-2">
+          <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
             <SectionLabel>Quota &amp; Breakdown</SectionLabel>
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className={cn("grid lg:grid-cols-2", isCompact ? "gap-2.5" : "gap-3")}>
               <StorageQuotaIndicator
                 quotaBytes={stats?.quotaBytes ?? null}
                 usageBytes={stats?.usageBytes ?? null}
@@ -103,9 +107,9 @@ export default function StoragePage() {
           </section>
 
           {/* ── Files & Courses ────────────────────────────────── */}
-          <section className="space-y-2">
+          <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
             <SectionLabel>Files &amp; Courses</SectionLabel>
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className={cn("grid lg:grid-cols-2", isCompact ? "gap-2.5" : "gap-3")}>
               <LargestFilesList
                 files={largestFiles}
                 onDelete={async (id) => {
@@ -117,9 +121,9 @@ export default function StoragePage() {
           </section>
 
           {/* ── Health ─────────────────────────────────────────── */}
-          <section className="space-y-2">
+          <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
             <SectionLabel>Health &amp; Maintenance</SectionLabel>
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className={cn("grid lg:grid-cols-2", isCompact ? "gap-2.5" : "gap-3")}>
               <StorageInfographics records={records} />
               <IntegrityStatusCard
                 corruptedCount={issues.corrupted.length}
@@ -131,7 +135,7 @@ export default function StoragePage() {
           </section>
 
           {/* ── Danger Zone ────────────────────────────────────── */}
-          <section className="space-y-2">
+          <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
             <SectionLabel>Danger Zone</SectionLabel>
             <BulkDeletePanel
               corruptedCount={issues.corrupted.length}

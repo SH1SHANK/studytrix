@@ -3,7 +3,6 @@
 import {
   type ComponentType,
   useCallback,
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -20,10 +19,8 @@ import {
   IconCloudOff,
   IconClockHour4,
   IconDatabase,
-  IconDownload,
   IconFile,
   IconFolder,
-  IconHome,
   IconSearch,
   IconSettings,
   IconSparkles,
@@ -45,7 +42,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandShortcut,
 } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CommandDispatcher } from "@/features/command/command.dispatcher";
@@ -86,6 +82,7 @@ import {
   type OfflineLibrarySnapshot,
 } from "@/features/offline/offline.library";
 import { buildNestedRootSignature } from "@/features/offline/offline.query-cache.keys";
+import { useSetting } from "@/ui/hooks/useSettings";
 
 type CommandBarProps = {
   placeholder?: string;
@@ -731,30 +728,6 @@ function markScopeHintSeen(): void {
   }
 }
 
-function getScopeLabel(scope: SearchScope): string {
-  if (scope.folder) {
-    return scope.folder.label;
-  }
-
-  if (scope.tag) {
-    return `#${scope.tag.label}`;
-  }
-
-  if (scope.domain) {
-    return scope.domain.label;
-  }
-
-  if (scope.mode === "actions") {
-    return "Actions";
-  }
-
-  if (scope.mode === "recents") {
-    return "Recents";
-  }
-
-  return "Global";
-}
-
 function serializeScope(scope: SearchScope): string {
   const parts: string[] = [];
   if (scope.domain) {
@@ -882,6 +855,24 @@ export function CommandBar({
   const isTagHydrated = useTagStore((state) => state.isHydrated);
   const hydrateTags = useTagStore((state) => state.hydrate);
   const downloadTasks = useDownloadStore((state) => state.tasks);
+  const [searchDebounceSetting] = useSetting("search_debounce");
+  const [fuzzySearchEnabledSetting] = useSetting("fuzzy_search_enabled");
+  const [resultLimitSetting] = useSetting("result_limit");
+  const [debugCommandScoringSetting] = useSetting("debug_command_scoring");
+  const searchDebounceMs = useMemo(() => {
+    const raw = typeof searchDebounceSetting === "number" ? searchDebounceSetting : 40;
+    return Math.max(20, Math.min(250, Math.round(raw)));
+  }, [searchDebounceSetting]);
+  const fuzzySearchEnabled = fuzzySearchEnabledSetting !== false;
+  const resultLimit = useMemo(() => {
+    const parsed = Number.parseInt(String(resultLimitSetting ?? "50"), 10);
+    if (parsed === 20 || parsed === 50 || parsed === 100) {
+      return parsed;
+    }
+    return 50;
+  }, [resultLimitSetting]);
+  const debugCommandScoring = debugCommandScoringSetting === true;
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
   const pathSegments = useMemo(
     () => pathname.split("/").filter(Boolean),
@@ -941,6 +932,16 @@ export function CommandBar({
 
     return course?.driveFolderId ?? folderId;
   }, [catalogCourses, folderId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query);
+    }, searchDebounceMs);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [query, searchDebounceMs]);
 
   useEffect(() => {
     if (!isFolderScope || !activeDriveFolderId) {
@@ -1426,7 +1427,7 @@ export function CommandBar({
           semesterId,
         },
       }));
-  }, [activeDriveFolderId, driveItems, folderId, isFolderScope]);
+  }, [activeDriveFolderId, departmentId, driveItems, folderId, isFolderScope, semesterId]);
 
   const nestedFileCommands = useMemo<EngineCommandItem[]>(() => {
     return nestedFileEntries.map((entry) => {
@@ -1536,9 +1537,8 @@ export function CommandBar({
     }
 
     return Array.from(merged.values());
-  }, [activeFolderFileCommands, nestedFileCommands, offlineLibrary.files]);
-  const deferredQuery = useDeferredValue(query);
-  const trimmedDeferredQuery = deferredQuery.trim();
+  }, [activeFolderFileCommands, departmentId, nestedFileCommands, offlineLibrary.files, semesterId]);
+  const trimmedDeferredQuery = debouncedQuery.trim();
 
   const taggedEntityIds = useMemo(() => {
     if (!searchScope.tag) {
@@ -1755,12 +1755,16 @@ export function CommandBar({
   }, [folderCommands]);
 
   const fuzzyFolderResults = useMemo<EngineCommandItem[]>(() => {
-    const normalizedQuery = deferredQuery.trim();
+    if (!fuzzySearchEnabled) {
+      return [];
+    }
+
+    const normalizedQuery = debouncedQuery.trim();
     if (normalizedQuery.length < FOLDER_QUERY_MIN_LENGTH) {
       return [];
     }
 
-    const hits = searchFoldersWithIndex(normalizedQuery, folderSearchIndex, 24);
+    const hits = searchFoldersWithIndex(normalizedQuery, folderSearchIndex, resultLimit);
 
     return hits
       .map((hit) => {
@@ -1782,7 +1786,7 @@ export function CommandBar({
         } as EngineCommandItem;
       })
       .filter((item): item is EngineCommandItem => item !== null);
-  }, [deferredQuery, folderCommandById, folderSearchIndex]);
+  }, [debouncedQuery, folderCommandById, folderSearchIndex, fuzzySearchEnabled, resultLimit]);
 
   const commandContext = useMemo<CommandContext>(() => {
     return {
@@ -1900,8 +1904,8 @@ export function CommandBar({
   const searchSnapshot = useMemo(() => {
     const startedAt =
       typeof performance !== "undefined" ? performance.now() : Date.now();
-    const baseResults = commandService.search(deferredQuery, commandContext);
-    const normalizedQuery = deferredQuery.trim();
+    const baseResults = commandService.search(debouncedQuery, commandContext);
+    const normalizedQuery = debouncedQuery.trim();
     let resultItems = baseResults;
 
     if (normalizedQuery.length >= FOLDER_QUERY_MIN_LENGTH) {
@@ -1928,7 +1932,7 @@ export function CommandBar({
       resultItems = resultItems.filter(matchesScopedFilters);
     }
 
-    resultItems = resultItems.slice(0, 24);
+    resultItems = resultItems.slice(0, resultLimit);
     const endedAt =
       typeof performance !== "undefined" ? performance.now() : Date.now();
 
@@ -1939,10 +1943,11 @@ export function CommandBar({
   }, [
     commandContext,
     commandService,
-    deferredQuery,
+    debouncedQuery,
     fuzzyFolderResults,
     searchScope,
     matchesScopedFilters,
+    resultLimit,
   ]);
   const exactResults = searchSnapshot.exactResults;
   const searchDurationMs = searchSnapshot.durationMs;
@@ -1950,11 +1955,11 @@ export function CommandBar({
   const fallbackResults = useMemo(() => {
     const base = commandService.search("", commandContext);
     if (isScopeEmpty(searchScope)) {
-      return base.slice(0, 10);
+      return base.slice(0, resultLimit);
     }
 
-    return base.filter(matchesScopedFilters).slice(0, 10);
-  }, [commandContext, commandService, matchesScopedFilters, searchScope]);
+    return base.filter(matchesScopedFilters).slice(0, resultLimit);
+  }, [commandContext, commandService, matchesScopedFilters, resultLimit, searchScope]);
 
   const showingFallbackResults =
     trimmedDeferredQuery.length > 0 && exactResults.length === 0;
@@ -3016,6 +3021,12 @@ export function CommandBar({
                                   {contentBadge ? (
                                     <span className="shrink-0 rounded-full border border-border/80 bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground border-border/80 bg-muted text-muted-foreground">
                                       {contentBadge}
+                                    </span>
+                                  ) : null}
+
+                                  {debugCommandScoring && typeof item.score === "number" ? (
+                                    <span className="shrink-0 rounded-full border border-primary/25 bg-primary/8 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                      Score {Math.round(item.score)}
                                     </span>
                                   ) : null}
                                 </CommandItem>

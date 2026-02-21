@@ -62,6 +62,7 @@ type FileRowProps = {
   onRemoveOffline?: () => void;
   /** Stagger index for entrance animation */
   animationIndex?: number;
+  compact?: boolean;
 };
 
 type FileTagBadge = {
@@ -159,6 +160,7 @@ function FileRowComponent({
   onMakeOffline,
   onRemoveOffline,
   animationIndex = 0,
+  compact = false,
 }: FileRowProps) {
   const suppressClickRef = useRef(false);
   const isFolder = type === "folder";
@@ -329,6 +331,28 @@ function FileRowComponent({
     return null;
   };
 
+  // Motion values for swipe
+  const x = useMotionValue(0);
+  const progress = useTransform(
+    x,
+    [-ACTION_PANEL_WIDTH, -ACTION_PANEL_WIDTH * 0.3, 0],
+    [1, 0.3, 0],
+  );
+  const starOpacity = useTransform(progress, [0, 0.25, 0.6], [0, 0, 1]);
+  const offlineOpacity = useTransform(progress, [0, 0.35, 0.7], [0, 0, 1]);
+  const tagsOpacity = useTransform(progress, [0, 0.45, 0.8], [0, 0, 1]);
+
+  const snapOpen = useCallback(() => {
+    triggerHaptic(6);
+    void animate(x, -ACTION_PANEL_WIDTH, SPRING_CONFIG);
+    onToggleOpen(id);
+  }, [id, onToggleOpen, x]);
+
+  const snapClose = useCallback(() => {
+    void animate(x, 0, SPRING_CONFIG);
+    onToggleOpen(null);
+  }, [onToggleOpen, x]);
+
   /* ─── Grid View ─── */
   if (viewMode === "grid") {
     return (
@@ -343,7 +367,8 @@ function FileRowComponent({
           }
         }}
         className={cn(
-          "group card-entrance relative cursor-pointer rounded-xl border p-4 shadow-sm transition-all duration-200 data-[compact=true]:p-3",
+          "group card-entrance relative cursor-pointer rounded-xl border shadow-sm transition-all duration-200",
+          compact ? "p-3" : "p-4",
           "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
           "focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
           isSelected && "ring-2 ring-ring bg-primary/10",
@@ -385,7 +410,8 @@ function FileRowComponent({
           {/* Icon container */}
           <div
             className={cn(
-              "flex h-11 w-11 items-center justify-center rounded-lg transition-colors duration-200",
+              "flex items-center justify-center rounded-lg transition-colors duration-200",
+              compact ? "h-9 w-9" : "h-11 w-11",
               isFolder && "bg-primary/10 text-primary",
             )}
             style={fileIconStyle}
@@ -418,28 +444,6 @@ function FileRowComponent({
   }
 
   /* ─── List View (swipeable) ─── */
-
-  // Motion values for swipe
-  const x = useMotionValue(0);
-  const progress = useTransform(
-    x,
-    [-ACTION_PANEL_WIDTH, -ACTION_PANEL_WIDTH * 0.3, 0],
-    [1, 0.3, 0],
-  );
-  const starOpacity = useTransform(progress, [0, 0.25, 0.6], [0, 0, 1]);
-  const offlineOpacity = useTransform(progress, [0, 0.35, 0.7], [0, 0, 1]);
-  const tagsOpacity = useTransform(progress, [0, 0.45, 0.8], [0, 0, 1]);
-
-  const snapOpen = useCallback(() => {
-    triggerHaptic(6);
-    void animate(x, -ACTION_PANEL_WIDTH, SPRING_CONFIG);
-    onToggleOpen(id);
-  }, [id, onToggleOpen, x]);
-
-  const snapClose = useCallback(() => {
-    void animate(x, 0, SPRING_CONFIG);
-    onToggleOpen(null);
-  }, [onToggleOpen, x]);
 
   // Sync with parent open state
   const currentX = x.get();
@@ -585,7 +589,12 @@ function FileRowComponent({
         onDragEnd={handleDragEnd}
         onClick={handleRowClick}
       >
-        <div className="flex min-h-[64px] items-center gap-3 px-4 py-3 data-[compact=true]:min-h-[52px] data-[compact=true]:px-3 data-[compact=true]:py-2">
+        <div
+          className={cn(
+            "flex items-center gap-3",
+            compact ? "min-h-[52px] px-3 py-2" : "min-h-[64px] px-4 py-3",
+          )}
+        >
 
           {/* Checkbox Overlay for List View */}
           <AnimatePresence>
@@ -613,7 +622,8 @@ function FileRowComponent({
           {/* Icon container */}
           <div
             className={cn(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors duration-200 data-[compact=true]:h-9 data-[compact=true]:w-9",
+              "flex shrink-0 items-center justify-center rounded-lg transition-colors duration-200",
+              compact ? "h-9 w-9" : "h-11 w-11",
               isFolder && "bg-primary/10 text-primary",
             )}
             style={fileIconStyle}

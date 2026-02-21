@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   IconArrowLeft,
@@ -20,13 +20,6 @@ import { getFileMetadataWithCache } from "@/features/file/file-metadata.client";
 
 interface TagFilesViewProps {
   tagId: string;
-}
-
-interface ResolvedEntity {
-  entityId: string;
-  entityType: EntityType;
-  displayName: string | null;
-  loading: boolean;
 }
 
 export function TagFilesView({ tagId }: TagFilesViewProps) {

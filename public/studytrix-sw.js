@@ -1,5 +1,3 @@
-/* eslint-disable no-restricted-globals */
-
 const url = new URL(self.location.href);
 const version = url.searchParams.get("v") || "v3";
 const SHELL_CACHE = `studytrix-shell-${version}`;

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -13,7 +14,18 @@ import { exportSettings, importSettings } from "@/features/settings/settings.ser
 import { useSettingsStore } from "@/features/settings/settings.store";
 import type { SettingItem } from "@/features/settings/settings.types";
 import { useSettingsSearch } from "@/ui/hooks/useSettings";
-import { IconSearch, IconDownload, IconUpload, IconRotate, IconSettings, IconChevronDown } from "@tabler/icons-react";
+import {
+  IconSearch,
+  IconDownload,
+  IconUpload,
+  IconRotate,
+  IconChevronDown,
+  IconChevronRight,
+  IconHistory,
+  IconBolt,
+  IconKeyboard,
+  IconBook2,
+} from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useSetting } from "@/ui/hooks/useSettings";
 
@@ -30,7 +42,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 import { SettingsCategory } from "./SettingsCategory";
@@ -40,6 +51,56 @@ interface CategoryGroup {
   category: string;
   items: SettingItem[];
 }
+
+const SUPPORT_ACTION_LINKS: Record<string, { url: string; label: string }> = {
+  github_source: {
+    url: "https://github.com/sh1shank/studytrix",
+    label: "Source code",
+  },
+  give_feedback: {
+    url: "https://github.com/sh1shank/studytrix/discussions",
+    label: "Feedback",
+  },
+  report_issue: {
+    url: "https://github.com/sh1shank/studytrix/issues/new",
+    label: "Issue reporter",
+  },
+  suggest_feature: {
+    url: "https://github.com/sh1shank/studytrix/issues/new?labels=enhancement",
+    label: "Feature request",
+  },
+  contact_support: {
+    url: "mailto:team@attendrix.com?subject=Studytrix%20Support",
+    label: "Support contact",
+  },
+};
+
+const GUIDE_LINKS = [
+  {
+    href: "/changelog",
+    label: "Changelog",
+    description: "Track each version and release highlight.",
+    icon: IconHistory,
+  },
+  {
+    href: "/features",
+    label: "Features",
+    description: "Explore platform capabilities by module.",
+    icon: IconBolt,
+  },
+  {
+    href: "/shortcuts",
+    label: "Shortcut Hints",
+    description: "Keyboard and command-prefix quick guide.",
+    icon: IconKeyboard,
+  },
+  {
+    href: "/documentation",
+    label: "Documentation",
+    description: "Detailed technical and product reference.",
+    icon: IconBook2,
+  },
+] as const;
 
 function formatCategoryName(category: string): string {
   return category.replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -69,7 +130,8 @@ export function SettingsLayout() {
   const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [showMobileNav, setShowMobileNav] = useState(false);
-  const [disableGlass] = useSetting("disable_glass_effects");
+  const [compactMode] = useSetting("compact_mode");
+  const isCompact = compactMode === true;
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -185,25 +247,31 @@ export function SettingsLayout() {
   }, [initialize]);
 
   const handleAction = useCallback(async (id: string) => {
-    if (id !== "clear_offline_storage") {
+    if (id === "clear_offline_storage") {
+      try {
+        const offline = await import("@/features/offline/offline.db");
+        const offlineIndex = await import("@/features/offline/offline.index.store");
+        await Promise.all([
+          offline.clearFiles(),
+          offline.clearSearchIndex(),
+          offline.clearMetadata(),
+        ]);
+        await offlineIndex.useOfflineIndexStore.getState().hydrate();
+
+        setStatus("Offline storage cleared");
+        setError(null);
+      } catch {
+        setError("Failed to clear offline storage");
+        setStatus(null);
+      }
       return;
     }
 
-    try {
-      const offline = await import("@/features/offline/offline.db");
-      const offlineIndex = await import("@/features/offline/offline.index.store");
-      await Promise.all([
-        offline.clearFiles(),
-        offline.clearSearchIndex(),
-        offline.clearMetadata(),
-      ]);
-      await offlineIndex.useOfflineIndexStore.getState().hydrate();
-
-      setStatus("Offline storage cleared");
+    const supportAction = SUPPORT_ACTION_LINKS[id];
+    if (supportAction) {
+      window.open(supportAction.url, "_blank", "noopener,noreferrer");
+      setStatus(`${supportAction.label} opened`);
       setError(null);
-    } catch {
-      setError("Failed to clear offline storage");
-      setStatus(null);
     }
   }, []);
 
@@ -223,9 +291,9 @@ export function SettingsLayout() {
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-3xl pb-24">
+    <div className={cn("mx-auto w-full max-w-3xl", isCompact ? "pb-20" : "pb-24")}>
       {/* ── Header ─────────────────────────────────────────── */}
-      <header className="space-y-4 mb-8">
+      <header className={cn(isCompact ? "mb-6 space-y-3" : "mb-8 space-y-4")}>
         {/* Search */}
         <div className="relative">
           <IconSearch
@@ -238,7 +306,10 @@ export function SettingsLayout() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search settings..."
-            className="h-11 rounded-xl border-border bg-muted/50 pl-10 text-[15px] border-none shadow-sm focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-muted"
+            className={cn(
+              "rounded-xl border-border bg-muted/50 pl-10 border-none shadow-sm focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-muted",
+              isCompact ? "h-10 text-sm" : "h-11 text-[15px]",
+            )}
           />
         </div>
 
@@ -246,7 +317,10 @@ export function SettingsLayout() {
         <div className="md:hidden">
           <button
             onClick={() => setShowMobileNav((v) => !v)}
-            className="flex w-full items-center justify-between rounded-xl border border-border/40 bg-card px-4 py-3 text-[15px] font-medium text-foreground/80"
+            className={cn(
+              "flex w-full items-center justify-between rounded-xl border border-border/40 bg-card px-4 text-[15px] font-medium text-foreground/80",
+              isCompact ? "py-2.5 text-sm" : "py-3",
+            )}
           >
             <span>
               {activeCategory ? formatCategoryName(activeCategory) : "Jump to section"}
@@ -279,7 +353,7 @@ export function SettingsLayout() {
         </div>
 
         {/* ── Desktop Sidebar Nav (hidden on mobile) ──────── */}
-        <nav className="hidden items-start gap-6 md:flex pt-4">
+        <nav className={cn("hidden items-start gap-6 md:flex", isCompact ? "pt-2.5" : "pt-4")}>
           <div className="flex flex-wrap gap-2">
             {categoryGroups.map((group) => {
               if (group.items.length === 0) return null;
@@ -301,6 +375,38 @@ export function SettingsLayout() {
           </div>
         </nav>
 
+        <section className="space-y-2">
+          <h2 className="px-1 text-[13px] font-medium uppercase tracking-wide text-muted-foreground sm:px-4">
+            Guides & References
+          </h2>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {GUIDE_LINKS.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="group flex items-center gap-3 rounded-xl border border-border/50 bg-card px-3 py-3 transition-colors hover:bg-accent/35"
+                >
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {item.label}
+                    </span>
+                    <span className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                      {item.description}
+                    </span>
+                  </span>
+                  <IconChevronRight className="size-4 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+
         {/* Feedback banners */}
         {status && (
           <Alert className="animate-in fade-in slide-in-from-top-1 border-primary/20 bg-primary/5">
@@ -315,7 +421,7 @@ export function SettingsLayout() {
       </header>
 
       {/* ── Categories ─────────────────────────────────────── */}
-      <main className="space-y-8">
+      <main className={cn(isCompact ? "space-y-6" : "space-y-8")}>
         {categoryGroups.map((group) => {
           if (group.items.length === 0) return null;
 
@@ -338,7 +444,7 @@ export function SettingsLayout() {
       </main>
 
       {/* ── Data Management Footer ─────────────────────────── */}
-      <footer className="mt-12 space-y-4 border-t border-border/40 pt-8">
+      <footer className={cn("space-y-4 border-t border-border/40", isCompact ? "mt-10 pt-6" : "mt-12 pt-8")}>
         <h3 className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground pl-1 sm:pl-4">
           Data Management
         </h3>

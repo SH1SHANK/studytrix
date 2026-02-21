@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   IconArrowUpRight,
-  IconArchive,
   IconCircleCheck,
   IconCloudDown,
   IconDeviceFloppy,
@@ -14,11 +13,9 @@ import {
 } from "@tabler/icons-react";
 import { useShallow } from "zustand/react/shallow";
 
-import { formatFileSize, getMimeLabel } from "@/features/drive/drive.types";
 import { cn } from "@/lib/utils";
-import { getTagChipTextColor } from "@/features/tags/tag.filter";
 import { useTagStore } from "@/features/tags/tag.store";
-import type { EntityType, Tag } from "@/features/tags/tag.types";
+import type { EntityType } from "@/features/tags/tag.types";
 import { Button } from "@/components/ui/button";
 import { shareNativeFile } from "@/features/share/share.service";
 import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
@@ -29,15 +26,8 @@ import { shareAsZip } from "@/features/bulk/bulk.share";
 import { useShareStore } from "@/features/share/share.store";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -60,30 +50,10 @@ type EntityActionsMenuProps = {
   isDownloading?: boolean;
 };
 
-const EMPTY_TAG_IDS: string[] = [];
-
 function triggerHaptic(duration = 8): void {
   if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
     navigator.vibrate(duration);
   }
-}
-
-
-function formatModifiedTimeLabel(modifiedTime: string | null | undefined): string {
-  if (!modifiedTime) {
-    return "";
-  }
-
-  const timestamp = Date.parse(modifiedTime);
-  if (!Number.isFinite(timestamp)) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(timestamp));
 }
 
 function sanitizeZipPrefix(value: string): string {
@@ -110,14 +80,12 @@ export function EntityActionsMenu({
 }: EntityActionsMenuProps) {
   const hydrationRequestedRef = useRef(false);
   const {
-    tags,
     assignments,
     isHydrated,
     hydrate,
     toggleStar,
   } = useTagStore(
     useShallow((state) => ({
-      tags: state.tags,
       assignments: state.assignments,
       isHydrated: state.isHydrated,
       hydrate: state.hydrate,
@@ -137,26 +105,9 @@ export function EntityActionsMenu({
   }, [hydrate, isHydrated]);
 
   const assignment = assignments[entityId];
-  const assignedTagIds = assignment?.tagIds ?? EMPTY_TAG_IDS;
-  const assignedTagIdSet = useMemo(() => new Set(assignedTagIds), [assignedTagIds]);
   const isStarred = assignment?.starred ?? false;
   // Previously restricted offline actions and share to 'file' only. We now allow it for 'folder' as well.
   const supportsOfflineActions = true;
-
-  const assignedTags = useMemo(
-    () => tags.filter((tag) => assignedTagIdSet.has(tag.id)),
-    [assignedTagIdSet, tags],
-  );
-
-  const sizeLabel =
-    entityType === "file" ? formatFileSize(entityDetails?.sizeBytes ?? null) : "";
-  const mimeLabel =
-    entityType === "file"
-      ? getMimeLabel(entityDetails?.mimeType ?? "", title)
-      : "Folder";
-  const modifiedLabel = formatModifiedTimeLabel(entityDetails?.modifiedTime ?? null);
-  const assignedTagCountLabel =
-    assignedTags.length === 1 ? "1 tag applied" : `${assignedTags.length} tags applied`;
 
   const handleToggleStar = useCallback(() => {
     triggerHaptic();

@@ -22,7 +22,7 @@ export const useSelectionStore = create<SelectionState & SelectionActions>()((se
   contextItems: [],
 
   setSelectionMode: (active: boolean) => {
-    set((state) => {
+    set(() => {
       // If turning off selection mode, also clear all selected items
       if (!active) {
         return { isSelectionMode: false, selectedIds: new Set(), contextItems: [] };
@@ -69,4 +69,3 @@ export const useSelectionStore = create<SelectionState & SelectionActions>()((se
     set({ contextItems: items });
   },
 }));
-

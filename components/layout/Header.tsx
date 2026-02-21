@@ -3,9 +3,10 @@
 import {
   IconArrowLeft,
   IconChevronDown,
+  IconShare,
 } from "@tabler/icons-react";
 import { useMemo } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,24 +21,37 @@ import {
 import { DownloadButton } from "@/components/download/DownloadButton";
 import { DEPARTMENT_MAP, getDepartmentName } from "@/lib/academic";
 import { SettingsMenu } from "@/components/settings/SettingsMenu";
+import { shareCurrentPage } from "@/features/share/share.page";
+import { useSetting } from "@/ui/hooks/useSettings";
 
 const DEPARTMENT_OPTIONS = Object.keys(DEPARTMENT_MAP);
 
 export function Header({ title, hideFilters }: { title?: string; hideFilters?: boolean } = {}) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const { department, setDepartment, semester, setSemester } =
     useAcademicContext();
+  const [compactMode] = useSetting("compact_mode");
+  const [showHeaderMotivation] = useSetting("show_header_motivation");
+  const [shareIncludeAcademicContext] = useSetting("share_include_academic_context");
   const semesters = useMemo(() => Array.from({ length: 8 }, (_, i) => i + 1), []);
+  const isCompact = compactMode === true;
   const departmentLabel = getDepartmentName(department);
   const isRootPage = pathname === "/";
   const contextTriggerClass =
-    "h-10 min-w-0 shrink gap-1 rounded-md px-1.5 text-lg font-semibold tracking-tight text-foreground transition-all duration-200 active:scale-[0.98] hover:bg-muted text-foreground hover:bg-muted sm:text-xl";
+    `min-w-0 shrink gap-1 rounded-md px-1.5 font-semibold tracking-tight text-foreground transition-all duration-200 active:scale-[0.98] hover:bg-muted ${
+      isCompact ? "h-9 text-base sm:text-lg" : "h-10 text-lg sm:text-xl"
+    }`;
+  const hasQueryState = searchParams.toString().length > 0;
+  const iconButtonClass = isCompact
+    ? "size-9 rounded-md transition-all duration-200 active:scale-[0.98] hover:bg-muted"
+    : "size-10 rounded-md transition-all duration-200 active:scale-[0.98] hover:bg-muted";
 
   return (
-    <header className="px-4 pt-5 sm:pt-6">
-      <div className="space-y-1.5">
+    <header className={isCompact ? "px-4 pt-4 sm:pt-5" : "px-4 pt-5 sm:pt-6"}>
+      <div className={isCompact ? "space-y-1" : "space-y-1.5"}>
         <div className="flex flex-wrap items-center justify-between gap-x-2.5 gap-y-1.5">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {!isRootPage ? (
@@ -45,7 +59,7 @@ export function Header({ title, hideFilters }: { title?: string; hideFilters?: b
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="size-10 rounded-md transition-all duration-200 active:scale-[0.98] hover:bg-muted"
+                className={iconButtonClass}
                 aria-label="Go back"
                 onClick={() => {
                   if (window.history.length > 1) {
@@ -61,7 +75,7 @@ export function Header({ title, hideFilters }: { title?: string; hideFilters?: b
             ) : null}
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
               {hideFilters ? (
-                <h1 className="truncate pl-1 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                <h1 className={isCompact ? "truncate pl-1 text-lg font-semibold tracking-tight text-foreground sm:text-xl" : "truncate pl-1 text-xl font-semibold tracking-tight text-foreground sm:text-2xl"}>
                   {title}
                 </h1>
               ) : (
@@ -124,13 +138,32 @@ export function Header({ title, hideFilters }: { title?: string; hideFilters?: b
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <DownloadButton className="h-9 gap-1.5 rounded-md px-2.5 text-sm" compact />
-            <SettingsMenu />
+            <Button
+              type="button"
+              aria-label="Share current page"
+              variant="ghost"
+              size="icon"
+              className={isCompact ? "size-9 rounded-lg transition-all hover:bg-muted/60 active:scale-[0.97]" : "size-10 rounded-lg transition-all hover:bg-muted/60 active:scale-[0.97]"}
+              onClick={() => {
+                void shareCurrentPage({
+                  title: title ?? "Studytrix",
+                  text: hasQueryState
+                    ? "Open this Studytrix page with my active filters."
+                    : "Open this Studytrix page.",
+                  department: shareIncludeAcademicContext === false ? undefined : department,
+                  semester: shareIncludeAcademicContext === false ? undefined : semester,
+                });
+              }}
+            >
+              <IconShare className="size-[18px] text-muted-foreground" />
+            </Button>
+            <DownloadButton className={isCompact ? "h-8 gap-1.5 rounded-md px-2 text-xs" : "h-9 gap-1.5 rounded-md px-2.5 text-sm"} compact />
+            <SettingsMenu className={isCompact ? "size-9" : undefined} />
           </div>
         </div>
 
-        {isRootPage && (
-          <p className="pl-0.5 text-sm leading-snug text-muted-foreground">
+        {isRootPage && showHeaderMotivation !== false && (
+          <p className={isCompact ? "pl-0.5 text-xs leading-snug text-muted-foreground" : "pl-0.5 text-sm leading-snug text-muted-foreground"}>
             Keep momentum with one focused session today.
           </p>
         )}

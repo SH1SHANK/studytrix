@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import type { KeyboardEvent } from "react";
 import { useCallback, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type Fuse from "fuse.js";
 import type { FuseResultMatch } from "fuse.js";
 import { IconFolder, IconSearch } from "@tabler/icons-react";
 

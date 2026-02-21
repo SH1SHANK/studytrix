@@ -2,7 +2,6 @@ import {
   IconColorSwatch,
   IconLayoutList,
   IconWand,
-  IconQuote,
   IconDeviceMobileVibration,
   IconSortAscending,
   IconLayoutDashboard,
@@ -28,6 +27,13 @@ import {
   IconTrash,
   IconRefresh,
   IconSettings,
+  IconMoodSmile,
+  IconBellRinging,
+  IconWifi,
+  IconShare2,
+  IconLink,
+  IconFlask2,
+  IconSunHigh,
 } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 export function getSettingIcon(id: string): ReactNode {
@@ -39,8 +45,8 @@ export function getSettingIcon(id: string): ReactNode {
       return <IconLayoutList {...props} />;
     case "animation_intensity":
       return <IconWand {...props} />;
-    case "show_dashboard_quote":
-      return <IconQuote {...props} />;
+    case "greetingPreferences":
+      return <IconSunHigh {...props} />;
     case "enable_haptics":
       return <IconDeviceMobileVibration {...props} />;
     case "default_sort_order":
@@ -49,6 +55,10 @@ export function getSettingIcon(id: string): ReactNode {
       return <IconLayoutDashboard {...props} />;
     case "show_dashboard_tags":
       return <IconTags {...props} />;
+    case "show_header_motivation":
+      return <IconMoodSmile {...props} />;
+    case "show_version_update_banner":
+      return <IconBellRinging {...props} />;
     case "disable_glass_effects":
       return <IconWindow {...props} />;
     case "search_debounce":
@@ -67,6 +77,10 @@ export function getSettingIcon(id: string): ReactNode {
       return <IconLayout {...props} />;
     case "show_file_metadata":
       return <IconInfoCircle {...props} />;
+    case "page_share_preference":
+      return <IconShare2 {...props} />;
+    case "share_include_academic_context":
+      return <IconLink {...props} />;
     case "tag_filter_mode_default":
       return <IconFilter {...props} />;
     case "virtualized_lists":
@@ -75,6 +89,10 @@ export function getSettingIcon(id: string): ReactNode {
       return <IconBolt {...props} />;
     case "debug_command_scoring":
       return <IconBug {...props} />;
+    case "experimental_features_opt_in":
+      return <IconFlask2 {...props} />;
+    case "show_connectivity_banner":
+      return <IconWifi {...props} />;
     case "github_source":
       return <IconBrandGithub {...props} />;
     case "give_feedback":

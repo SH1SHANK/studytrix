@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   IconChevronDown,
   IconLayoutGrid,
@@ -9,6 +9,7 @@ import {
 
 import { useShallow } from "zustand/react/shallow";
 import { useSelectionStore } from "@/features/selection/selection.store";
+import { useSettingsStore } from "@/features/settings/settings.store";
 import { DownloadButton } from "@/components/download/DownloadButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
 
 export type FileViewMode = "grid" | "list";
 export type FileLayoutMode = "separated" | "combined";
@@ -39,8 +41,16 @@ type FileManagerViewModeProviderProps = {
 export function FileManagerViewModeProvider({
   children,
 }: FileManagerViewModeProviderProps) {
-  const [viewMode, setViewMode] = useState<FileViewMode>("list");
+  const defaultViewMode = useSettingsStore((state) => {
+    const candidate = state.values.default_view_mode;
+    return candidate === "list" ? "list" : "grid";
+  });
+  const [viewMode, setViewMode] = useState<FileViewMode>(defaultViewMode);
   const [layoutMode, setLayoutMode] = useState<FileLayoutMode>("separated");
+
+  useEffect(() => {
+    setViewMode(defaultViewMode);
+  }, [defaultViewMode]);
 
   const value = useMemo(
     () => ({
@@ -74,6 +84,10 @@ export function useFileManagerViewMode() {
 export function ControlsBar() {
   const { viewMode, setViewMode } = useFileManagerViewMode();
   const [sortLabel, setSortLabel] = useState("Recent");
+  const compactModeEnabled = useSettingsStore((state) => {
+    const candidate = state.values.compact_mode;
+    return typeof candidate === "boolean" ? candidate : false;
+  });
   const { isSelectionMode, setSelectionMode } = useSelectionStore(
     useShallow((state) => ({
       isSelectionMode: state.isSelectionMode,
@@ -86,11 +100,14 @@ export function ControlsBar() {
       {/* Subtle separator */}
       <div className="h-px bg-linear-to-r from-transparent via-border to-transparent" />
 
-      <div className="flex items-center justify-between gap-2 px-4 py-3">
+      <div className={cn("flex items-center justify-between gap-2 px-4", compactModeEnabled ? "py-2" : "py-3")}>
         {/* Left group — Downloads + Sort */}
         <div className="flex items-center gap-2">
           <DownloadButton
-            className="h-9 gap-1.5 rounded-lg border-border bg-card px-3 text-xs font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-muted active:scale-[0.97]"
+            className={cn(
+              "gap-1.5 rounded-lg border-border bg-card px-3 text-xs font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-muted active:scale-[0.97]",
+              compactModeEnabled ? "h-8 px-2.5" : "h-9 px-3",
+            )}
             compact
           />
 
@@ -100,7 +117,10 @@ export function ControlsBar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 gap-1.5 rounded-lg border-border bg-card px-3 text-xs font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-muted active:scale-[0.97]"
+                  className={cn(
+                    "gap-1.5 rounded-lg border-border bg-card text-xs font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-muted active:scale-[0.97]",
+                    compactModeEnabled ? "h-8 px-2.5" : "h-9 px-3",
+                  )}
                 />
               }
             >
@@ -135,7 +155,10 @@ export function ControlsBar() {
           <Button
             variant={isSelectionMode ? "secondary" : "outline"}
             size="sm"
-            className="h-9 rounded-lg font-medium shadow-sm transition-all duration-200 active:scale-[0.97]"
+            className={cn(
+              "rounded-lg font-medium shadow-sm transition-all duration-200 active:scale-[0.97]",
+              compactModeEnabled ? "h-8 px-2.5 text-xs" : "h-9",
+            )}
             onClick={() => setSelectionMode(!isSelectionMode)}
           >
             {isSelectionMode ? "Cancel" : "Select"}
@@ -156,14 +179,20 @@ export function ControlsBar() {
           <ToggleGroupItem
             value="grid"
             aria-label="Grid view"
-            className="h-9 min-w-9 rounded-lg border-border shadow-sm transition-all duration-200 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm"
+            className={cn(
+              "rounded-lg border-border shadow-sm transition-all duration-200 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm",
+              compactModeEnabled ? "h-8 min-w-8" : "h-9 min-w-9",
+            )}
           >
             <IconLayoutGrid className="size-4" />
           </ToggleGroupItem>
           <ToggleGroupItem
             value="list"
             aria-label="List view"
-            className="h-9 min-w-9 rounded-lg border-border shadow-sm transition-all duration-200 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm"
+            className={cn(
+              "rounded-lg border-border shadow-sm transition-all duration-200 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm",
+              compactModeEnabled ? "h-8 min-w-8" : "h-9 min-w-9",
+            )}
           >
             <IconList className="size-4" />
           </ToggleGroupItem>

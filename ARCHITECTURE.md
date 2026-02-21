@@ -1,138 +1,162 @@
 # System Architecture
 
-Studytrix is built as an offline-first, service-oriented Next.js application. It orchestrates between upstream cloud storage (Google Drive), local persistence (IndexedDB/FileSystem API), and high-performance caching layers (Redis).
+Studytrix is an offline-first Next.js application with clear client/server boundaries. The client emphasizes resilient storage, responsive command/search UX, and mobile-first interaction flows. The server provides secure Drive proxying, validation, and cache/rate-limit controls.
 
 ## High-Level System Overview
 
 ```mermaid
 graph TD
     User([User])
-    
-    subgraph Client ["Client Browser"]
-        UI[React UI Components]
+
+    subgraph Client["Client (React + Next.js App Router)"]
+        UI[UI Components]
+        CMD[Command + Scope Engine]
+        BULK[Bulk/Share/Zip Pipeline]
+        SET[Settings + Guides]
         ZS[Zustand Stores]
-        IDB[(IndexedDB / FS API)]
-        
+        LOC[(IndexedDB / File System Access API)]
+
+        UI <--> CMD
+        UI <--> BULK
+        UI <--> SET
         UI <--> ZS
-        ZS <--> IDB
+        ZS <--> LOC
     end
-    
-    subgraph Server ["Next.js Server"]
-        API[API Routes]
-        CAD[Catalog Data]
-        RED[(Redis Cache)]
-        
-        API <--> CAD
-        API <--> RED
+
+    subgraph Server["Next.js Server Layer"]
+        API[Route Handlers]
+        CAT[Catalog Data]
+        CACHE[(Redis / Memory Cache)]
+
+        API <--> CAT
+        API <--> CACHE
     end
-    
-    subgraph External ["External Services"]
-        GDA[Google Drive API]
-        ANJ[API Ninjas]
+
+    subgraph External["External Services"]
+        DRIVE[Google Drive API]
+        WEATHER[Open-Meteo]
     end
-    
+
     UI <--> API
-    API <--> GDA
-    API <--> ANJ
+    API <--> DRIVE
+    UI <--> WEATHER
 ```
 
-## API Layer
+## Core Runtime Layers
 
-### File Stream Endpoint
+### Client UI and State
 
-- Path: `/api/file/[fileId]/stream`
-- Returns: streamed binary response
-- Features:
-  - Safe content headers
-  - Drive binary proxy without exposing credentials
-  - Deterministic error normalization with diagnostics
-  - Rate-limit enforcement
+- `components/*` provides app shell, file manager, settings, and feedback surfaces.
+- Zustand stores coordinate command, selection, download, offline index, and settings state.
+- UI follows immediate-feedback design for long-running actions (prepare dialogs before heavy work).
+
+### Server Proxy and Validation
+
+- Drive requests are server-side only using service-account credentials.
+- API routes normalize errors and avoid leaking internal details.
+- Route validation protects dynamic department/semester/file params.
+- Cache and dedupe reduce repeated upstream load.
 
 ## Feature Module Layout
 
-### `features/drive`
+### `features/command`
 
-- `drive.service.ts`: Drive folder-list orchestration
-- `drive.cache.ts`: cache and in-flight request dedupe
-- `drive.rateLimit.ts`: Redis/memory rate limiting
-- `drive.types.ts`: normalized transport types
-
-### `features/file`
-
-- `file.service.ts`: raw metadata orchestration
-- `file.cache.ts`: TTL metadata cache
-- `file.types.ts`: strict metadata types
+- Scope-aware indexing and search for global and local folder contexts.
+- Prefix-based mode switching (`/`, `#`, `:`, `>`, `@`).
+- Nested path discovery support for deeper folder hierarchies.
 
 ### `features/offline`
 
-- `offline.storage-location.ts`: Abstraction layer resolving to either native FileSystem Access API or IndexedDB.
-- `offline.db.ts`: IndexedDB abstraction
-- `offline.rules.ts`: pure download eligibility rules
-- `offline.prefetch.ts`: low-priority prefetch logic
-- `offline.integrity.ts`: checksum/integrity checks
-- `offline.sync.ts`: stale cache invalidation against remote metadata
-- `offline.access.ts`: local-first blob access/open helpers
-- `offline.index.store.ts`: reactive offline availability snapshot
-- `offline.flags.ts`: feature toggle configuration
-- `offline.migration.ts`: reset-on-upgrade migration
+- Storage abstraction with File System Access first, IndexedDB fallback.
+- Offline availability index and metadata hydration.
+- Storage location setup, migration, relink, and diagnostics.
+- Integrity verification and stale cache invalidation.
 
 ### `features/download`
 
-- `download.queue.ts`: concurrent priority queue
-- `download.controller.ts`: canonical download + persistence orchestration
-- `download.store.ts`: reactive state adapter for UI
+- Concurrent queue control with bounded throughput.
+- Progress and lifecycle state for batch/individual downloads.
 
 ### `features/bulk`
 
-- `bulk.types.ts`: selection state contracts
-- `bulk.share.ts`: orchestration for individual file sharing and client-side ZIP generation
-- `bulk.download.ts`: orchestration for batched downloads
+- Multi-entity selection contracts and orchestration.
+- Zip + share prepare flows with folder expansion and mixed selection support.
+- UI feedback integrated with progress dialogs for preparation and execution stages.
 
-### `features/command`
+### `features/share`
 
-- Contextually aware (local folder scope vs. global workspace scope) search and navigation index.
+- `share.page.ts` centralizes page-level sharing and copy-link fallback.
+- Preserves route/query filters to share current context.
+
+### `features/version` and `features/changelog`
+
+- `version.ts` holds app version declaration and dismissal storage keys.
+- `changelog.catalog.ts` holds custom curated release entries (not commit-derived).
+- Drives changelog page and version update banner visibility.
+
+### `features/settings`
+
+- Typed schema-driven settings registry.
+- Searchable settings layout with category sections and mobile quick-nav.
+- Settings-integrated guide links to Changelog, Features, and Shortcut Hints pages.
+- Object-based greeting preference storage and controls (`greetingPreferences`).
 
 ### `features/dashboard`
 
-- `dashboard.quote.store.ts`: localized daily caching of motivational quotes.
+- Time-period greeting generation with primary/secondary message structure.
+- Theme-based secondary messaging (`study`, `motivational`, `minimal`).
+- Optional weather-aware enhancement using Open-Meteo weather code mapping.
 
-## Offline Data Flow
+## Key Flows
+
+### Offline Download Flow
 
 ```mermaid
 sequenceDiagram
-    participant UI as UI Store
-    participant QC as Queue Controller
+    participant UI as UI
+    participant Q as Download Queue
     participant API as Server API
     participant DR as Google Drive
-    participant DB as Local Storage (IDB/FS)
+    participant ST as Local Storage (IDB/FS)
 
-    UI->>QC: Trigger Download
-    QC->>API: Request File Stream
-    API->>DR: Fetch Binary
-    DR-->>API: Binary Stream
-    API-->>QC: Chunked Response
-    QC->>DB: Write Blob
-    DB-->>QC: Success
-    QC-->>UI: Update Progress
+    UI->>Q: Queue file
+    Q->>API: Request stream
+    API->>DR: Fetch binary
+    DR-->>API: Stream
+    API-->>Q: Stream response
+    Q->>ST: Persist blob + metadata
+    ST-->>Q: Success
+    Q-->>UI: Progress + completion state
 ```
 
-## Caching and Rate Limiting
+### Share/Zip Prepare Flow
 
-- Folder and metadata APIs use cache-first behavior when safe.
-- Redis is preferred in production; memory fallback keeps local/dev stable.
-- Request dedupe prevents thundering herd on repeated folder requests.
-- Per-IP rate limiting protects Google Drive project quota.
+```mermaid
+sequenceDiagram
+    participant UI as File Manager UI
+    participant PREP as Prepare Pipeline
+    participant ZIP as Zip Builder
+    participant SHR as Native Share / Download
 
-## Security Model
+    UI->>PREP: User taps Share or Zip
+    PREP-->>UI: Open prepare dialog immediately
+    PREP->>PREP: Resolve nested folders/files
+    PREP->>ZIP: Build archive when needed
+    ZIP-->>PREP: Blob + summary
+    PREP->>SHR: Trigger share/download
+    SHR-->>UI: Result + partial failure details
+```
 
-- Credentials are read from server env vars only.
-- No service account secrets are exposed in client bundles.
-- All dynamic route params are validated before service execution.
-- Client error payloads are intentionally generic for internal failures.
+## Product Documentation Surfaces
 
-## Scalability and Reliability
+- `/changelog`: release timeline and detailed highlights.
+- `/features`: curated feature catalog.
+- `/shortcuts`: keyboard and command-prefix hints.
+- Settings page links to these pages for in-context discoverability.
 
-- Streamed binary responses reduce memory pressure.
-- Bounded download concurrency avoids browser and network saturation.
-- Offline storage supports cleanup and invalidation workflows.
-- Schema validation and defensive key checks reduce data corruption risk.
+## Security and Reliability
+
+- Credentials never shipped to client bundles.
+- Strict typing and schema checks across settings, API params, and domain models.
+- Redis-first cache/rate-limit behavior with local fallback.
+- Defensive error messages and resilient fallback behavior for unsupported browser APIs.

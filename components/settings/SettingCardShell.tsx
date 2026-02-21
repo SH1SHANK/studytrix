@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { IconChevronRight } from "@tabler/icons-react";
 
 import { cn } from "@/lib/utils";
+import { useSettingsStore } from "@/features/settings/settings.store";
 
 interface SettingRowShellProps {
   label: string;
@@ -29,6 +30,10 @@ export function SettingRowShell({
   disabled,
 }: SettingRowShellProps) {
   const isDanger = tone === "danger";
+  const compactModeEnabled = useSettingsStore((state) => {
+    const candidate = state.values.compact_mode;
+    return typeof candidate === "boolean" ? candidate : false;
+  });
 
   const Component = onClick ? "button" : "div";
   const interactiveProps = onClick
@@ -47,31 +52,36 @@ export function SettingRowShell({
     <Component
       {...interactiveProps}
       className={cn(
-        "group flex w-full flex-row items-center justify-between gap-4 py-3 pl-3 pr-4 transition-colors relative",
+        "group flex w-full flex-row items-center justify-between gap-4 transition-colors relative",
+        compactModeEnabled ? "py-2.5 pl-2.5 pr-3" : "py-3 pl-3 pr-4",
         "bg-transparent hover:bg-muted/50",
         "border-b border-border/60 last:border-0",
+        disabled && "opacity-60",
         isDanger && "bg-rose-50/30 hover:bg-rose-50/50 dark:bg-rose-950/20 dark:hover:bg-rose-950/30",
         onClick && !disabled && "active:bg-muted/70",
         interactiveProps.className
       )}
     >
-      <div className="flex flex-row items-center gap-3 min-w-0 flex-1">
+      <div className={cn("flex flex-row items-center min-w-0 flex-1", compactModeEnabled ? "gap-2.5" : "gap-3")}>
         {icon && (
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent/50 text-muted-foreground group-hover:bg-accent group-hover:text-foreground transition-colors">
+          <div className={cn(
+            "flex shrink-0 items-center justify-center rounded-lg bg-accent/50 text-muted-foreground group-hover:bg-accent group-hover:text-foreground transition-colors",
+            compactModeEnabled ? "size-7" : "size-8",
+          )}>
             {icon}
           </div>
         )}
         <div className="flex flex-col min-w-0 space-y-0.5">
           <h3
             className={cn(
-              "text-[15px] leading-tight font-normal text-foreground",
+              compactModeEnabled ? "text-sm leading-tight font-normal text-foreground" : "text-[15px] leading-tight font-normal text-foreground",
               isDanger && "text-rose-700 dark:text-rose-300",
             )}
           >
             {label}
           </h3>
           {description ? (
-            <p className="text-[13px] leading-snug text-muted-foreground line-clamp-1">
+            <p className={cn("leading-snug text-muted-foreground line-clamp-1", compactModeEnabled ? "text-xs" : "text-[13px]")}>
               {description}
             </p>
           ) : null}

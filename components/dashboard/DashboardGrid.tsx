@@ -10,7 +10,6 @@ import {
   IconFilter,
   IconLayoutGrid,
   IconList,
-  IconSettings,
 } from "@tabler/icons-react";
 
 import { cn } from "@/lib/utils";
@@ -29,7 +28,8 @@ import { ListRow } from "@/components/folder/ListRow";
 import { useAcademicContext } from "@/components/layout/AcademicContext";
 import { useCatalog } from "@/features/catalog/catalog.hooks";
 import { useCatalogIndex } from "@/features/catalog/catalog.index";
-import { getDailyQuote } from "@/features/dashboard/quotes";
+import { generateGreetingMessage } from "@/features/dashboard/greeting";
+import { resolveGreetingPreferences } from "@/features/dashboard/greeting.preferences";
 import { type Course } from "@/features/catalog/catalog.types";
 import { useTagStore } from "@/features/tags/tag.store";
 import type { FilterMode, TagAssignment } from "@/features/tags/tag.types";
@@ -59,7 +59,6 @@ const SORT_LABELS: Record<SortKey, string> = {
   credits: "Credits",
 };
 
-const FALLBACK_QUOTE = "The only way to do great work is to love what you do.";
 const REAL_FOLDER_PATTERN = /^[a-zA-Z0-9_-]{10,}$/;
 
 
@@ -125,11 +124,30 @@ function matchesFilters(
   return activeFilters.some((tagId) => folderTagSet.has(tagId));
 }
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning ☀️";
-  if (hour < 17) return "Good afternoon 🌤️";
-  return "Good evening 🌙";
+function resolveCurrentUserFirstName(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const candidateKeys = [
+    "studytrix.user.firstName",
+    "studytrix.user.name",
+    "user_first_name",
+  ];
+
+  for (const key of candidateKeys) {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      continue;
+    }
+
+    const normalized = raw.trim().split(/\s+/)[0]?.trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -167,17 +185,24 @@ export function DashboardGrid() {
   );
 
   const [defaultSortValue] = useSetting("default_sort_order");
-  const [showQuoteValue] = useSetting("show_dashboard_quote");
   const [defaultDashboardView] = useSetting("dashboard_default_view");
   const [showDashboardTags] = useSetting("show_dashboard_tags");
+  const [defaultTagFilterMode] = useSetting("tag_filter_mode_default");
+  const [rawGreetingPreferences] = useSetting("greetingPreferences");
+  const appliedTagFilterModeRef = useRef<FilterMode | null>(null);
+  const greetingPreferences = useMemo(
+    () => resolveGreetingPreferences(rawGreetingPreferences),
+    [rawGreetingPreferences],
+  );
 
   const [viewMode, setViewMode] = useState<"grid" | "list">((defaultDashboardView as "grid" | "list") || "grid");
   const [sortKey, setSortKey] = useState<SortKey>((defaultSortValue as SortKey) || "recent");
   const [openRowId, setOpenRowId] = useState<string | null>(null);
-  // Local state for the dashboard quote
-  const [quote, setQuote] = useState<string | null>(null);
-  const [quoteAuthor, setQuoteAuthor] = useState<string | null>(null);
-  const [quoteLoading, setQuoteLoading] = useState(true);
+  const [greetingState, setGreetingState] = useState<{
+    primaryMessage: string;
+    secondaryMessage: string;
+  } | null>(null);
+  const [greetingLoading, setGreetingLoading] = useState(false);
 
   // Sync viewMode if the setting changes externally
   useEffect(() => {
@@ -192,6 +217,19 @@ export function DashboardGrid() {
       setSortKey(defaultSortValue as SortKey);
     }
   }, [defaultSortValue]);
+
+  // Apply default tag filter mode from settings when it changes.
+  useEffect(() => {
+    const nextMode: FilterMode =
+      defaultTagFilterMode === "AND" ? "AND" : "OR";
+
+    if (appliedTagFilterModeRef.current === nextMode) {
+      return;
+    }
+
+    setFilterMode(nextMode);
+    appliedTagFilterModeRef.current = nextMode;
+  }, [defaultTagFilterMode, setFilterMode]);
 
   const availableSemesters = useMemo(() => {
     const entry = availableDepts.find((d) => d.id === department);
@@ -238,13 +276,52 @@ export function DashboardGrid() {
     setSemester,
   ]);
 
-  // Set today's local quote
   useEffect(() => {
-    const q = getDailyQuote();
-    setQuote(q.text);
-    setQuoteAuthor(q.author);
-    setQuoteLoading(false);
-  }, []);
+    if (!greetingPreferences.enabled) {
+      setGreetingState(null);
+      setGreetingLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setGreetingLoading(true);
+
+    const resolvedUserName = greetingPreferences.useName
+      ? (resolveCurrentUserFirstName() ?? "there")
+      : "there";
+
+    void generateGreetingMessage(
+      resolvedUserName,
+      greetingPreferences.includeWeather,
+      greetingPreferences.greetingTheme,
+    )
+      .then((message) => {
+        if (cancelled) {
+          return;
+        }
+
+        setGreetingState(message);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setGreetingState({
+          primaryMessage: resolvedUserName === "there" ? "Good day! 👋" : `Good day, ${resolvedUserName}! 👋`,
+          secondaryMessage: "",
+        });
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setGreetingLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [greetingPreferences]);
 
   // ─── Derived data ───────────────────────────────────────────────────────
 
@@ -441,29 +518,27 @@ export function DashboardGrid() {
       </div>
 
       {/* ── Greeting Strip ──────────────────────────────────── */}
-      <div className="mt-4">
-        <h2 className="text-xl font-medium text-foreground sm:text-2xl">
-          {getGreeting()}, there
-        </h2>
-        {showQuoteValue !== false && (
-          <div className="mt-1 min-h-[20px]">
-            {quoteLoading ? (
-              <Skeleton className="h-4 w-3/4 rounded" />
-            ) : (
-              <div>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  &ldquo;{quote ?? FALLBACK_QUOTE}&rdquo;
+      {greetingPreferences.enabled ? (
+        <div className="mt-4">
+          {greetingLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-2/3 rounded-md sm:h-8" />
+              <Skeleton className="h-4 w-5/6 rounded" />
+            </div>
+          ) : (
+            <>
+              <h2 className="text-xl font-medium text-foreground sm:text-2xl">
+                {greetingState?.primaryMessage ?? "Good day! 👋"}
+              </h2>
+              {greetingState?.secondaryMessage.trim() ? (
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  {greetingState.secondaryMessage}
                 </p>
-                {quoteAuthor ? (
-                  <p className="mt-0.5 text-xs font-medium text-muted-foreground/80">
-                    — {quoteAuthor}
-                  </p>
-                ) : null}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
 
       {/* ── Toolbar Row ─────────────────────────────────────── */}
       <div className="mt-5 flex items-center justify-between gap-2">

@@ -95,7 +95,7 @@ export function StorageSetupSheet({
 
   const selectFolder = useStorageLocationStore((s) => s.selectFolder);
   const createFolder = useStorageLocationStore((s) => s.createFolder);
-  const useDefault = useStorageLocationStore((s) => s.useDefault);
+  const defaultStorageAction = useStorageLocationStore((s) => s.useDefault);
   const relinkFolder = useStorageLocationStore((s) => s.relinkFolder);
   const error = useStorageLocationStore((s) => s.error);
   const clearError = useStorageLocationStore((s) => s.clearError);
@@ -154,12 +154,12 @@ export function StorageSetupSheet({
   const handleUseDefault = useCallback(async () => {
     setLoading(true);
     try {
-      await useDefault();
+      await defaultStorageAction();
       close();
     } finally {
       setLoading(false);
     }
-  }, [useDefault, close]);
+  }, [defaultStorageAction, close]);
 
   const handleRelink = useCallback(async () => {
     setLoading(true);
@@ -176,12 +176,12 @@ export function StorageSetupSheet({
   const handleStartFresh = useCallback(async () => {
     setLoading(true);
     try {
-      await useDefault();
+      await defaultStorageAction();
       close();
     } finally {
       setLoading(false);
     }
-  }, [useDefault, close]);
+  }, [defaultStorageAction, close]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

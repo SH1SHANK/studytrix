@@ -1,140 +1,159 @@
 # Studytrix
 
-> **Note**: Studytrix is currently in beta and is actively being developed. You may experience occasional bugs or changes as we continue to improve the platform.
+> **Status**: Beta  
+> **Current app version**: `v0.8.2` (released on `2026-02-21`)
 
-Studytrix is a high-performance, offline-first academic workspace platform built with Next.js 16. It serves as a unified interface for academic resources, orchestrating course catalogs, Google Drive-backed study materials, and rich metadata enrichment into a resilient and searchable learning environment.
+Studytrix is an offline-first academic workspace built with Next.js 16, React 19, and TypeScript. It combines Drive-backed content browsing, local persistence, command-driven navigation, and mobile/PWA-aware workflows into a single high-performance interface.
 
-The platform is designed to provide seamless access to educational content regardless of network stability, leveraging modern web APIs to provide a "premium" study experience that bridges cloud storage and local persistence.
+## Product Goals
 
----
+- Provide reliable access to study material, even with unstable connectivity.
+- Keep cloud credentials and privileged access server-only.
+- Improve discovery with command scopes, tags, and contextual navigation.
+- Support fast, safe bulk actions for download, zip, and share workflows.
 
-## Project Purpose
+## In-App Guide Pages
 
-Studytrix was developed to solve the friction often associated with navigating fragmented academic storage systems. By providing a centralized, secure proxy to cloud-stored materials and augmenting them with intelligent local features, it enables students and educators to focus on learning rather than logistics.
+- `/changelog`: version history from `v0.1.0` to current.
+- `/features`: capability overview grouped by platform area.
+- `/shortcuts`: keyboard and command-prefix hints.
 
-Key objectives include:
-- Providing a secure and efficient gateway to cloud resources without exposing sensitive credentials.
-- Ensuring resource availability in low or no connectivity environments.
-- Enhancing discoverability through context-aware search and metadata enrichment.
-- Supporting batch operations for efficient resource management.
+These pages are linked from:
+- Settings menu (header)
+- File Manager top-right menu
+- Settings page quick links (`Guides & References`)
 
-## Maintenance and Sourcing
+## Shortcut Hints
 
-Studytrix is currently built and maintained by the **Attendrix Team**.
+Key command shortcuts:
 
-The academic resources accessible via this platform are sourced from the **LaunchPad Community Drive**, which is maintained by the **LaunchPad NITC Community**. We have received explicit permission from senior members of the LaunchPad community to access and proxy these drive files for the Studytrix academic workspace.
+- `Cmd+K` / `Ctrl+K`: open Command Center
+- `Esc`: close active layer or clear command state
+- `ArrowUp` / `ArrowDown`: navigate command results
+- `Enter`: run selected command
 
----
+Scope prefixes:
 
-## Core Systems and Features
+- `/`: folder scope
+- `#`: tag scope
+- `:`: academic/domain scope
+- `>`: actions scope
+- `@`: recents scope
 
-### Secure Drive Orchestration
-The platform implements a server-only Drive API integration using service account JWTs. Drive folder listings and file streaming are proxied through local API routes, ensuring that cloud credentials never reach the client bundle. This system includes request deduplication and per-IP rate limiting to protect API quotas.
+## Release Notes (Detailed)
 
-### Offline Persistence Engine
-Studytrix features a multi-provider storage abstraction that resolves to either the native FileSystem Access API or IndexedDB based on browser capabilities. This engine manages:
-- **Priority Queueing**: Concurrent download management with retry logic.
-- **Integrity Verification**: Checksum generation and verification for all local blobs.
-- **Sync Invalidation**: Automatic detection of modified remote files against local metadata.
-- **Automated Prefetching**: Heuristic-based preloading of sibling or nearby resources.
+### v0.8.2 - Greeting System Upgrade (`2026-02-21`)
 
-### Metadata Enrichment Layer
-Every file indexed by Studytrix undergoes an enrichment process. Beyond standard file metrics, the system extracts:
-- PDF page counts.
-- Presentation slide counts (PPTX).
-- High-resolution image dimensions.
-To ensure performance, enriched metadata is cached with configurable Time-To-Live (TTL) settings.
+- Replaced static quote header with a dynamic time-based greeting system on dashboard.
+- Added greeting generation with primary + secondary message structure and weather-aware nudges.
+- Added new Greeting settings section with:
+  - Show Greeting
+  - Weather Forecast (Open-Meteo)
+  - Use My Name
+  - Greeting Style (`study`, `motivational`, `minimal`)
+- Added `greetingPreferences` settings object for persistent greeting personalization.
+- Added Study Mode message pools for six time periods with focused study-specific guidance.
+- Added anonymous-name grammar handling so disabled name mode reads naturally (for example, `Good morning!`).
 
-### Intelligent Navigation and Search
-The application features a context-aware Command Center. Search results are filtered based on the user's current scope (Global vs. Local folder scope) to provide relevant navigation and action shortcuts. Furthermore, local text indexing allows for instant discovery of offline-stored materials.
+### v0.8.1 - Share Reliability Update (`2026-02-21`)
 
-### Bulk Operations
-Leveraging `fflate`, the platform supports client-side, memory-efficient ZIP archive generation. This allows users to bundle multiple resources for bulk download or sharing via the native Web Share API.
+- Stabilized zipping for single folders, multiple folders, and mixed file/folder selections.
+- Reworked prepare pipeline to resolve nested folder entries before zip/share.
+- Replaced plain toast-style progress with dialog-driven preparation/progress feedback.
+- Reduced share-start delay by showing preparation UI immediately after tap/click.
+- Added top-right page share action to share current route + active filters/query state.
+- Introduced custom version system and release banner with `View Changelog` + `Dismiss`.
 
----
+### v0.8.0 - Offline + Command Scope Expansion (`2026-02-20`)
 
-## Technical Architecture
+- Improved nested-scope command search behavior for local and global flows.
+- Improved offline coverage indicators for nested folder structures.
+- Refined command scope switching behavior for `/` and `#`.
+- Improved mobile responsiveness for command and storage surfaces.
 
-The application follows a service-oriented architecture with clear separation between the server-side proxy layer and the client-side reactive state.
+### v0.7.0 - Storage Location System (`2026-02-16`)
 
-For a comprehensive technical breakdown including Mermaid diagrams and data flow sequences, please refer to the **[Architecture Documentation](./ARCHITECTURE.md)**.
+- Added offline storage location setup and relink/migration support.
+- Added storage fallback handling for restricted browser/PWA environments.
+- Added storage diagnostics in settings and storage management views.
 
----
+### v0.6.0 - Theme + Settings Upgrade (`2026-02-12`)
+
+- Expanded theme and settings controls.
+- Improved settings navigation, structure, and consistency.
+
+### v0.5.0 - Offline Runtime Foundation (`2026-02-08`)
+
+- Added offline runtime sync/cache primitives and resiliency behavior.
+- Introduced stronger local-first access helpers.
+
+### v0.4.0 - Tagging and Selection (`2026-02-04`)
+
+- Added stronger multi-entity tag and selection workflows.
+- Improved file/folder contextual action coverage.
+
+### v0.3.0 - Downloads + Commands (`2026-01-31`)
+
+- Expanded download state handling and command result quality.
+- Improved grouped transfer tracking.
+
+### v0.2.0 - UI Platform Build-Out (`2026-01-24`)
+
+- Established reusable UI primitives, interaction patterns, and shared components.
+
+### v0.1.0 - Initial Release (`2026-01-18`)
+
+- Launched baseline app shell, routing, and core browsing experience.
 
 ## Technology Stack
 
 | Layer | Implementation |
 | :--- | :--- |
 | Framework | Next.js 16 (App Router), React 19, TypeScript |
-| Design System | Tailwind CSS v4, Framer Motion |
-| State Management | Zustand |
-| Persistence | IndexedDB, FileSystem Access API |
-| Cloud Integration | Google Drive API, API Ninjas (Quotes) |
-| Caching | Redis (High-performance caching), IDB (Local cache) |
-| Performance | Node.js Streams, Concurrent Priority Queues |
-
----
+| UI | Tailwind CSS v4, Framer Motion, Tabler Icons |
+| State | Zustand |
+| Persistence | IndexedDB, File System Access API |
+| Cloud | Google Drive API, Open-Meteo (greeting weather context) |
+| Caching | Redis + in-memory fallback |
+| Compression | `fflate` (client zip generation) |
 
 ## Getting Started
 
 ### Prerequisites
-- **Node.js**: Version 20.x or later.
-- **Redis**: Required for production-grade rate limiting and metadata caching.
-- **Google Cloud Access**: A service account with Viewer permissions for the target Drive folders.
 
-### Setup and Installation
+- Node.js 20+
+- Redis (recommended for production cache/rate-limit behavior)
+- Google Cloud service account with Drive read permissions
 
-1. **Clone and Install**:
+### Install
+
 ```bash
 git clone https://github.com/sh1shank/studytrix.git
 cd studytrix
 npm install
 ```
 
-2. **Configuration**:
-Create a `.env.local` file based on `.env.local.example`. Ensure the Google Drive private key preserves line breaks.
+### Configure
 
-3. **Development**:
+Create `.env.local` from `.env.local.example`. Keep Google private key line breaks intact.
+
+### Run
+
 ```bash
 npm run dev
 ```
-The application will be accessible at `http://localhost:3000`.
 
----
-
-## For Contributors
-
-We welcome contributions of all types. To maintain code quality and consistency:
-- **Consistency**: Follow the existing directory structure and naming conventions.
-- **Typing**: Strict TypeScript is enforced; avoid the use of `any` unless absolutely necessary for external API compatibility.
-- **Documentation**: Update the relevant `.md` files when introducing or modifying features.
-- **Testing**: Ensure that new features are accompanied by appropriate test cases.
-
----
-
-## Code of Conduct
-
-Studytrix is committed to fostering an open and welcoming environment. By participating in this project, you agree to:
-- Be respectful and inclusive of all participants.
-- Use welcoming and inclusive language.
-- Accept and constructively act on feedback.
-- Focus on what is best for the community.
-
-Unacceptable behavior includes harassment, public or private, and any form of exclusionary behavior.
-
----
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Documentation Index
 
-- [**Features**](./FEATURES.md): Detailed product and platform capabilities.
-- [**Architecture**](./ARCHITECTURE.md): System layers, module layouts, and data flow diagrams.
-- [**System Context**](./SYSTEM_CONTEXT.md): Runtime behavior and operational contracts.
-- [**Visual System**](./VISUAL_SYSTEM.md): Design language, interaction patterns, and motion guidelines.
-- [**Contributing**](./CONTRIBUTING.md): Guidelines for community contributions.
-- [**Security**](./SECURITY.md): Vulnerability reporting policy.
-
----
+- [Features](./FEATURES.md)
+- [Architecture](./ARCHITECTURE.md)
+- [System Context](./SYSTEM_CONTEXT.md)
+- [Visual System](./VISUAL_SYSTEM.md)
+- [Contributing](./CONTRIBUTING.md)
+- [Security](./SECURITY.md)
 
 ## License
 
-This project is licensed under the **MIT License**. See the [LICENSE.md](./LICENSE.md) file for details.
+Licensed under MIT. See [LICENSE.md](./LICENSE.md).

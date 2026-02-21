@@ -30,7 +30,6 @@ export function useCommandCenter({
   context,
   index,
   commands = SYSTEM_COMMANDS,
-  debounceMs = 40,
   limit = 50,
 }: UseCommandCenterOptions): UseCommandCenterResult {
   const [input, setInputState] = useState("");

@@ -90,7 +90,6 @@ export function useFuzzySearch<T>({
   getSearchText,
   getRankTexts,
   recentItems = [],
-  debounceMs = 250,
   limit = 40,
   minMatchCharLength = 2,
   threshold = 0.35,

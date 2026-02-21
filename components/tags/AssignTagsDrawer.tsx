@@ -8,7 +8,6 @@ import {
   IconLoader2,
   IconPlus,
   IconTag,
-  IconX,
 } from "@tabler/icons-react";
 
 import {
@@ -18,7 +17,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { useTagStore } from "@/features/tags/tag.store";
 import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { getTagChipTextColor } from "@/features/tags/tag.filter";

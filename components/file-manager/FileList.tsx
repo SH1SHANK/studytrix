@@ -31,6 +31,7 @@ import {
 } from "@/features/drive/drive.types";
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
 import { useSelectionStore } from "@/features/selection/selection.store";
+import { cn } from "@/lib/utils";
 
 type FileListProps = {
   driveFolderId: string | null;
@@ -159,6 +160,14 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
     const candidate = state.values.virtualized_lists;
     return typeof candidate === "boolean" ? candidate : true;
   });
+  const showFileMetadata = useSettingsStore((state) => {
+    const candidate = state.values.show_file_metadata;
+    return typeof candidate === "boolean" ? candidate : true;
+  });
+  const compactModeEnabled = useSettingsStore((state) => {
+    const candidate = state.values.compact_mode;
+    return typeof candidate === "boolean" ? candidate : false;
+  });
   const [visibleCount, setVisibleCount] = useState(120);
   const [offlineFolderIds, setOfflineFolderIds] = useState<Set<string>>(new Set());
   const [offlineLibraryFileIds, setOfflineLibraryFileIds] = useState<Set<string>>(new Set());
@@ -243,7 +252,9 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
       files.map((item): FileListRow => {
         const sizeLabel = formatFileSize(item.size);
         const mimeLabel = getMimeLabel(item.mimeType, item.name);
-        const subtitle = [sizeLabel, mimeLabel].filter(Boolean).join(" · ");
+        const subtitle = showFileMetadata
+          ? [sizeLabel, mimeLabel].filter(Boolean).join(" · ")
+          : "File";
 
         return {
           id: item.id,
@@ -256,7 +267,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           webViewLink: item.webViewLink,
         };
       }),
-    [files],
+    [files, showFileMetadata],
   );
 
   const allRows = useMemo<FileListRow[]>(() => [...folderRows, ...fileRows], [folderRows, fileRows]);
@@ -284,12 +295,9 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   }, [allRows, fileRows, folderRows, visibleCount, virtualizedListsEnabled]);
 
   const isGridView = viewMode === "grid";
-  // Apply data-compact via group modifier implicitly when layout wraps it, 
-  // or use basic CSS targeting depending on how Settings provider sets it on HTML. 
-  // We use Tailwind arbitrary variants targeting the data-attribute on :root
-  const rowContainerClass = isGridView 
-    ? "grid grid-cols-2 gap-3 data-[compact=true]:gap-2" 
-    : "flex flex-col gap-2 data-[compact=true]:gap-1";
+  const rowContainerClass = isGridView
+    ? cn("grid grid-cols-2", compactModeEnabled ? "gap-2" : "gap-3")
+    : cn("flex flex-col", compactModeEnabled ? "gap-1" : "gap-2");
   const pathSegments = useMemo(() => pathname.split("/").filter(Boolean), [pathname]);
   const departmentSegment = pathSegments[0];
   const semesterSegment = pathSegments[1];
@@ -478,7 +486,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
             <Skeleton className="h-3 w-16 rounded" />
             <Skeleton className="h-5 w-6 rounded-full" />
           </div>
-          <div className={isGridView ? "grid grid-cols-2 gap-3" : "space-y-2"}>
+          <div className={isGridView ? cn("grid grid-cols-2", compactModeEnabled ? "gap-2" : "gap-3") : cn(compactModeEnabled ? "space-y-1" : "space-y-2")}>
             {Array.from({ length: isGridView ? 4 : 3 }, (_, index) => (
               <SkeletonCard key={`sk-folder-${index}`} viewMode={viewMode} />
             ))}
@@ -493,7 +501,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
             <Skeleton className="h-3 w-12 rounded" />
             <Skeleton className="h-5 w-6 rounded-full" />
           </div>
-          <div className={isGridView ? "grid grid-cols-2 gap-3" : "space-y-2"}>
+          <div className={isGridView ? cn("grid grid-cols-2", compactModeEnabled ? "gap-2" : "gap-3") : cn(compactModeEnabled ? "space-y-1" : "space-y-2")}>
             {Array.from({ length: isGridView ? 4 : 3 }, (_, index) => (
               <SkeletonCard key={`sk-file-${index}`} viewMode={viewMode} />
             ))}
@@ -588,6 +596,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                             void handleRemoveOffline(item);
                           }}
                           animationIndex={index}
+                          compact={compactModeEnabled}
                         />
                       );
                     })}
@@ -645,6 +654,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                             void handleRemoveOffline(item);
                           }}
                           animationIndex={visibleRows.folders.length + index}
+                          compact={compactModeEnabled}
                         />
                       );
                     })}
@@ -681,6 +691,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                     void handleRemoveOffline(item);
                   }}
                   animationIndex={index}
+                  compact={compactModeEnabled}
                 />
               );
             })}

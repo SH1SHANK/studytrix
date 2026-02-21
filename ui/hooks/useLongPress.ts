@@ -47,7 +47,7 @@ export function useLongPress(
   }, []);
 
   const handlePointerDown = useCallback(
-    (_event: React.PointerEvent) => {
+    () => {
       firedRef.current = false;
       onStart?.();
 

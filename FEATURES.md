@@ -1,67 +1,99 @@
 # Features
 
+## Versioning and Release Visibility
+
+- Custom version declaration source at `features/version/version.ts`.
+- Curated release notes source at `features/changelog/changelog.catalog.ts`.
+- In-app version banner shown after a version bump with `View Changelog` and `Dismiss`.
+- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through `v0.8.2`.
+- Version label rendered in the app shell footer for quick reference.
+
 ## Dashboard and Navigation
 
-- Department and semester-scoped academic browsing.
+- Department- and semester-scoped academic browsing.
 - Folder-first file manager for course material discovery.
-- Command-centered interactions for quick navigation and actions (Global vs. Local scope filtering).
-- Dynamic "Quote of the Day" powered by API Ninjas with client-side daily caching.
-- Contextual entity actions via long-press and persistent grid menus.
-- Intelligently sorted lists (starred items pinned to top).
+- Command-centered interactions with global and local folder modes.
+- Time-based greeting panel with theme-based secondary message behavior.
+- Weather-aware greeting enhancement via Open-Meteo weather code mapping.
+- Contextual item actions via mobile-friendly menus and long-press support.
+- Sort modes and starred-priority presentation.
 
-## Catalog API Layer
+## Greeting Personalization
 
-- Static catalog resolver backed by `data/catalog.json`.
-- Hardened route validation for department and semester params.
-- Runtime schema validation for departments, semesters, and courses.
-- Deterministic error mapping (`400`, `404`, `500`) with safe messages.
+- Persistent `greetingPreferences` object in settings store:
+  - `enabled`
+  - `includeWeather`
+  - `useName`
+  - `greetingTheme` (`study` | `motivational` | `minimal`)
+- Greeting settings section with:
+  - `Show Greeting` master toggle
+  - `Weather Forecast` toggle
+  - `Use My Name` toggle
+  - `Greeting Style` segmented control
+- Study theme supports six time periods with study-specific secondary message pools.
+- Motivational theme provides generic encouragement alternatives.
+- Minimal theme suppresses secondary line and shows primary greeting only.
 
-## Drive Dynamic Fetch Layer
+## Command Center and Scope System
 
-- Server-only Drive API integration using service account JWT.
-- Folder child listing with pagination (`nextPageToken`).
-- Request deduplication to reduce repeated upstream calls.
-- Cache-first folder responses with Redis/memory fallback.
-- Per-IP rate limiting to protect Drive project quota.
+- Scope prefixes for fast intent switching:
+  - `/` for folder scope
+  - `#` for tag scope
+  - `:` for domain/academic scope
+  - `>` for actions scope
+  - `@` for recents scope
+- Nested folder-aware search resolution for both local and global search scopes.
+- Command suggestions aligned to active scope context.
+- Improved scope switching UX for quick mode transitions on desktop and mobile.
 
-## File Preview Metadata Layer
+## Offline and Storage Engine
 
-- Raw metadata fetch (`id`, `name`, `mimeType`, `size`, `modifiedTime`).
-- Metadata enrichment by MIME type:
-  - PDF page count
-  - PPTX slide count
-  - Image dimensions
-- Size/date normalization for display-ready metadata.
-- Enriched metadata caching with configurable TTL.
-- Binary streaming proxy endpoint with safe headers.
+- Dual-provider storage abstraction:
+  - File System Access API when available
+  - IndexedDB fallback for broader compatibility
+- Storage location configuration, migration, relink, and fallback handling.
+- Offline metadata/index updates with nested coverage visibility.
+- Integrity checks and stale-file invalidation workflows.
+- Offline diagnostics and storage health surfaces.
 
-## Offline Engine
+## Bulk Operations, Zip, and Share
 
-- IndexedDB and native FileSystem Access API abstractions for blob persistence.
-- Selective download rules (allow/exclude MIME, max size).
-- Priority download queue with concurrency control and retry.
-- Progressive download updates for UI progress tracking.
-- Auto-prefetch of nearby/sibling files.
-- Offline text indexing and local search.
-- Integrity checksum generation and verification.
-- Sync invalidation flow for modified remote files.
+- Reliable zip preparation for:
+  - single folders
+  - multiple folders
+  - mixed file/folder selections
+  - file-only selections
+- Explicit pre-flight resolution pipeline for nested folder expansion.
+- Dialog-based progress UX for zip/share preparation and execution.
+- Reduced perceived latency by opening preparation dialogs immediately.
+- Native share via Web Share API with graceful fallback behavior.
 
-## Bulk Operations & Sharing
+## Page-Level Sharing
 
-- Client-side ZIP archive generation (`fflate`) for bulk downloading/sharing.
-- Native device sharing via Web Share API fallback mechanism.
-- Selection toolbars for batch processing.
+- Header top-right share action for current page URL.
+- Share link preserves active filters and query customizations.
+- Copy-link fallback for platforms without native share support.
+- File Manager top-right menu includes contextual share/open utilities.
 
-## Reliability and Safety
+## Tags and Organization
 
-- Strict TypeScript typing across route, service, and domain layers.
-- No credential exposure to client code.
-- Generic internal error responses (no stack/path leakage).
-- Graceful fallback behavior when Redis or IndexedDB is unavailable.
+- Dedicated tags management page and tag-centric organization workflows.
+- Multi-entity assignment tools for files/folders.
+- Improved tag filtering and selection controls.
 
-## Performance Characteristics
+## Settings, Guides, and Discoverability
 
-- Streaming file responses to avoid large memory spikes.
-- Bounded queue concurrency for controlled download throughput.
-- Request deduplication and cache reuse for hot paths.
-- Search result limits and controlled indexing size.
+- Settings quick links section (`Guides & References`) for:
+  - Changelog
+  - Features
+  - Shortcut Hints
+- Shortcut hints page at `/shortcuts` with keyboard and prefix guidance.
+- Features overview page at `/features` with curated capability breakdowns.
+
+## API, Safety, and Performance
+
+- Server-only Google Drive access using service-account JWT credentials.
+- Request deduplication and cache-first behavior where safe.
+- Streaming file responses to reduce memory spikes.
+- Redis-first rate limit/cache design with local fallback support.
+- Strict TypeScript and defensive error normalization.

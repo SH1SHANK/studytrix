@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { SettingRowShell } from "./SettingCardShell";
+import { useSetting } from "@/ui/hooks/useSettings";
+import { isVersionTaggedFeatureEnabled } from "@/features/experiments/experiments.flags";
 import {
   clearOfflineFlagOverride,
   getOfflineFlagOverride,
@@ -18,6 +20,7 @@ import {
 } from "@/features/offline/offline.flags";
 
 const INTERNAL_DEBUG_KEY = "studytrix.internal_debug";
+const OFFLINE_DEBUG_PANEL_VERSION_TAG = "v0.9.0-experimental";
 
 type PanelState = {
   show: boolean;
@@ -60,6 +63,11 @@ function formatOverride(value: "0" | "1" | null): string {
 
 export function OfflineDebugPanel() {
   const [state, setState] = useState<PanelState>(() => readPanelState());
+  const [experimentalFeaturesOptIn] = useSetting("experimental_features_opt_in");
+  const isPanelEnabled = isVersionTaggedFeatureEnabled(
+    OFFLINE_DEBUG_PANEL_VERSION_TAG,
+    experimentalFeaturesOptIn === true,
+  );
 
   const syncState = useCallback(() => {
     setState(readPanelState());
@@ -84,7 +92,7 @@ export function OfflineDebugPanel() {
     };
   }, [syncState]);
 
-  if (!state.show) {
+  if (!state.show || !isPanelEnabled) {
     return null;
   }
 

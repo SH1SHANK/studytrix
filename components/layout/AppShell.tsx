@@ -3,10 +3,11 @@ import { Suspense, type ReactNode } from "react";
 import { CommandBar } from "@/components/command/CommandBar";
 import { ShareProgressDrawer } from "@/components/share/ShareProgressDrawer";
 import { AcademicProvider } from "@/components/layout/AcademicContext";
+import { AppRuntimeBanners } from "@/components/layout/AppRuntimeBanners";
 import { Header } from "@/components/layout/Header";
-import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
 import { GlobalStorageSetupSheet } from "@/components/offline/StorageSetupSheet";
 import { Toaster } from "@/components/ui/sonner";
+import { APP_VERSION, formatVersionLabel } from "@/features/version/version";
 
 type AppShellProps = {
   children: ReactNode;
@@ -21,6 +22,9 @@ function GlobalFooter() {
     <footer className="mt-8 border-t border-border/60 pb-28 pt-8 text-center text-[10px] leading-relaxed text-muted-foreground/80 border-border/60 text-muted-foreground/80">
       <p>Studytrix is built and maintained by the Attendrix Team.</p>
       <p className="mt-1">Study materials sourced from the LaunchPad Community Drive.</p>
+      <p className="mt-1.5 font-medium text-muted-foreground/70">
+        {formatVersionLabel(APP_VERSION)}
+      </p>
     </footer>
   );
 }
@@ -36,10 +40,12 @@ export function AppShell({
     <AcademicProvider>
       <div className="flex min-h-screen flex-col overflow-x-hidden">
         <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
-          {showHeader ? <Header title={headerTitle} hideFilters={hideHeaderFilters} /> : null}
+          <Suspense fallback={null}>
+            {showHeader ? <Header title={headerTitle} hideFilters={hideHeaderFilters} /> : null}
+          </Suspense>
           <main className="flex-1 overflow-y-auto scroll-smooth">
             <div className="px-4 pt-3 sm:px-5">
-              <ConnectivityBanner />
+              <AppRuntimeBanners />
             </div>
             {children}
             <GlobalFooter />

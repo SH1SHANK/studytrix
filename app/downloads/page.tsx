@@ -13,6 +13,8 @@ import { openLocalFirst } from "@/features/offline/offline.access";
 import type { StorageStats } from "@/features/offline/offline.types";
 import type { DownloadTask } from "@/features/download/download.types";
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
+import { useSetting } from "@/ui/hooks/useSettings";
+import { cn } from "@/lib/utils";
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) {
@@ -35,6 +37,8 @@ function formatBytes(bytes: number): string {
 }
 
 export default function DownloadsPage() {
+  const [compactMode] = useSetting("compact_mode");
+  const isCompact = compactMode === true;
   const {
     tasks,
     startDownload,
@@ -194,26 +198,26 @@ export default function DownloadsPage() {
 
   return (
     <AppShell headerTitle="Downloads" hideHeaderFilters={true}>
-      <div className="mx-auto w-full max-w-3xl px-4 py-4 pb-24 sm:px-5">
+      <div className={cn("mx-auto w-full max-w-3xl px-4 sm:px-5", isCompact ? "py-3 pb-20" : "py-4 pb-24")}>
         {/* ── Header ─────────────────────────────────────── */}
-        <header className="mb-6 space-y-4">
+        <header className={cn(isCompact ? "mb-5 space-y-3" : "mb-6 space-y-4")}>
           {/* Stats */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl border border-border bg-card p-3 border-border bg-card">
+            <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Active</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+              <p className={cn("mt-0.5 font-semibold tabular-nums text-foreground", isCompact ? "text-base" : "text-lg")}>
                 {downloadingCount + queuedCount}
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-card p-3 border-border bg-card">
+            <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Completed</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+              <p className={cn("mt-0.5 font-semibold tabular-nums text-foreground", isCompact ? "text-base" : "text-lg")}>
                 {completedCount}
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-card p-3 border-border bg-card">
+            <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Offline</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+              <p className={cn("mt-0.5 font-semibold tabular-nums text-foreground", isCompact ? "text-base" : "text-lg")}>
                 {formatBytes(stats?.totalBytes ?? 0)}
               </p>
             </div>
@@ -226,7 +230,7 @@ export default function DownloadsPage() {
               size="sm"
               variant="outline"
               onClick={clearCompleted}
-              className="h-8 gap-1.5 rounded-lg text-xs"
+              className={cn("gap-1.5 rounded-lg", isCompact ? "h-8 text-xs" : "h-9 text-sm")}
             >
               <IconTrash className="size-3.5" />
               Clear completed
@@ -236,7 +240,7 @@ export default function DownloadsPage() {
               size="sm"
               variant="outline"
               onClick={() => { void refreshStats(); }}
-              className="h-8 gap-1.5 rounded-lg text-xs"
+              className={cn("gap-1.5 rounded-lg", isCompact ? "h-8 text-xs" : "h-9 text-sm")}
             >
               <IconRefresh className="size-3.5" />
               Refresh
@@ -245,9 +249,9 @@ export default function DownloadsPage() {
         </header>
 
         {/* ── Downloads List ──────────────────────────────── */}
-        <main className="mt-6">
+        <main className={cn(isCompact ? "mt-5" : "mt-6")}>
           <div className="mb-4">
-            <OfflineRuntimeDiagnostics compact={true} />
+            <OfflineRuntimeDiagnostics compact={isCompact} />
           </div>
           <DownloadList
             tasks={list}

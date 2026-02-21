@@ -7,8 +7,6 @@ import {
   type StorageProvider,
   FileSystemAccessProvider,
   IndexedDBProvider,
-  clearConfig,
-  clearPersistedHandle,
   loadConfig,
   loadDirectoryHandle,
   migrateFiles,

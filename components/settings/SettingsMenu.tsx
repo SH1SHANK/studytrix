@@ -4,8 +4,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import {
+  IconBolt,
+  IconBook2,
   IconColorSwatch,
   IconDatabase,
+  IconHistory,
+  IconKeyboard,
   IconSettings,
   IconTag,
 } from "@tabler/icons-react";
@@ -111,6 +115,58 @@ export function SettingsMenu({ className }: SettingsMenuProps) {
               <div className="flex flex-col gap-1.5">
                 <span className="text-sm font-medium leading-none text-foreground">Manage Tags</span>
                 <span className="text-[10px] leading-none text-muted-foreground">Organize your files</span>
+              </div>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => router.push("/changelog")}
+              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
+            >
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
+                <IconHistory className="size-4 text-muted-foreground" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium leading-none text-foreground">Changelog</span>
+                <span className="text-[10px] leading-none text-muted-foreground">What changed in each release</span>
+              </div>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => router.push("/features")}
+              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
+            >
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
+                <IconBolt className="size-4 text-muted-foreground" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium leading-none text-foreground">Features</span>
+                <span className="text-[10px] leading-none text-muted-foreground">Platform capability overview</span>
+              </div>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => router.push("/shortcuts")}
+              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
+            >
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
+                <IconKeyboard className="size-4 text-muted-foreground" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium leading-none text-foreground">Shortcut Hints</span>
+                <span className="text-[10px] leading-none text-muted-foreground">Command and keyboard guide</span>
+              </div>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => router.push("/documentation")}
+              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
+            >
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
+                <IconBook2 className="size-4 text-muted-foreground" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium leading-none text-foreground">Documentation</span>
+                <span className="text-[10px] leading-none text-muted-foreground">Detailed product and technical reference</span>
               </div>
             </DropdownMenuItem>
           </div>
