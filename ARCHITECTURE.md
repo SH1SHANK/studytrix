@@ -81,12 +81,20 @@ graph TD
 
 - Multi-entity selection contracts and orchestration.
 - Zip + share prepare flows with folder expansion and mixed selection support.
+- Copy/download action support for file and folder entities.
 - UI feedback integrated with progress dialogs for preparation and execution stages.
 
 ### `features/share`
 
 - `share.page.ts` centralizes page-level sharing and copy-link fallback.
 - Preserves route/query filters to share current context.
+
+### `features/seo` and PWA metadata surfaces
+
+- Root metadata in `app/layout.tsx` defines global SEO/Open Graph/Twitter behavior.
+- Route metadata exports provide page-specific titles/descriptions/canonical URLs.
+- Manifest definitions are maintained in `app/manifest.ts` and `public/site.webmanifest`.
+- Favicon and launcher icon assets are aligned for browser/PWA install contexts.
 
 ### `features/version` and `features/changelog`
 
@@ -152,6 +160,7 @@ sequenceDiagram
 - `/changelog`: release timeline and detailed highlights.
 - `/features`: curated feature catalog.
 - `/shortcuts`: keyboard and command-prefix hints.
+- `/documentation`: detailed architecture, APIs, limitations, and future scope.
 - Settings page links to these pages for in-context discoverability.
 
 ## Security and Reliability

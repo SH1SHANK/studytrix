@@ -10,6 +10,25 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "0.8.3",
+    releasedOn: "2026-02-21",
+    title: "PWA + Discoverability Polish",
+    summary:
+      "Improved mobile/PWA interactions, added copy/download actions, and upgraded favicon/manifest/SEO coverage.",
+    highlights: [
+      "Added copy/download actions for files and folders, including mixed-selection support in file-manager flows.",
+      "Improved floating dock behavior for mobile and PWA usage with better responsiveness and interaction stability.",
+      "Fixed offline-library reliability by adding a static fallback (`/offline-library.html`) that opens cached files directly from IndexedDB when route chunks are unavailable offline.",
+      "Added offline-aware navigation routing so Offline Library actions resolve to the fallback page while disconnected and return to the full app route when reconnected.",
+      "Updated service worker shell caching to precache offline fallback pages and route `/offline-library` requests to offline-safe fallback content.",
+      "Wired new favicon assets across app metadata (`favicon`, `apple-touch-icon`, Android launcher icons).",
+      "Improved web manifest definitions with stronger install metadata and launcher shortcuts.",
+      "Expanded page-level SEO metadata (titles, descriptions, canonical URLs) across dashboard, settings, guides, and utility pages.",
+      "Improved dynamic folder and tag route metadata for better deep-link discoverability.",
+      "Included minor UX and reliability fixes discovered during release hardening.",
+    ],
+  },
+  {
     version: "0.8.2",
     releasedOn: "2026-02-21",
     title: "Greeting System Upgrade",

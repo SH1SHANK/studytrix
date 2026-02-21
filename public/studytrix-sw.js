@@ -5,13 +5,15 @@ const STATIC_CACHE = `studytrix-static-${version}`;
 const CACHE_PREFIXES = ["studytrix-shell-", "studytrix-static-"];
 const NAV_TIMEOUT_MS = 3000;
 const OFFLINE_FALLBACK_PATH = "/offline.html";
+const OFFLINE_LIBRARY_FALLBACK_PATH = "/offline-library.html";
+const OFFLINE_LIBRARY_ROUTE_PATH = "/offline-library";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       self.skipWaiting();
       const shell = await caches.open(SHELL_CACHE);
-      await shell.addAll([OFFLINE_FALLBACK_PATH]);
+      await shell.addAll([OFFLINE_FALLBACK_PATH, OFFLINE_LIBRARY_FALLBACK_PATH]);
     })(),
   );
 });
@@ -71,10 +73,12 @@ function isStaticAsset(requestUrl) {
     || requestUrl.pathname.endsWith(".woff")
     || requestUrl.pathname.endsWith(".ttf")
     || requestUrl.pathname === "/manifest.webmanifest"
+    || requestUrl.pathname === "/site.webmanifest"
   );
 }
 
 async function networkFirstNavigation(request) {
+  const requestUrl = new URL(request.url);
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort();
@@ -91,6 +95,16 @@ async function networkFirstNavigation(request) {
     const cached = await caches.match(request);
     if (cached) {
       return cached;
+    }
+
+    if (
+      requestUrl.pathname === OFFLINE_LIBRARY_ROUTE_PATH
+      || requestUrl.pathname === OFFLINE_LIBRARY_FALLBACK_PATH
+    ) {
+      const offlineLibrary = await caches.match(OFFLINE_LIBRARY_FALLBACK_PATH);
+      if (offlineLibrary) {
+        return offlineLibrary;
+      }
     }
 
     const fallback = await caches.match(OFFLINE_FALLBACK_PATH);

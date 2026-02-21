@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -5,6 +7,15 @@ type FeatureSection = {
   title: string;
   summary: string;
   points: string[];
+};
+
+export const metadata: Metadata = {
+  title: "Features",
+  description:
+    "Explore Studytrix features across scoped search, offline storage, sharing, copy/download actions, and mobile-first workflows.",
+  alternates: {
+    canonical: "/features",
+  },
 };
 
 const FEATURE_SECTIONS: FeatureSection[] = [
@@ -42,6 +53,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       "Managed download queue with progress and state transitions.",
       "Folder expansion and mixed selection resolution for batch operations.",
       "ZIP preparation for files/folders with share/download flows.",
+      "Dedicated copy/download actions for single and multi-entity file-manager workflows.",
     ],
   },
   {
@@ -60,6 +72,15 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       "Dedicated tag manager and tag-centric views.",
       "Assignment drawer for single and multi-entity tagging.",
       "Entity actions for star, offline, share, and tag operations.",
+    ],
+  },
+  {
+    title: "Mobile and PWA Polish",
+    summary: "Mobile-first responsiveness and install-ready PWA improvements.",
+    points: [
+      "Floating dock behavior tuned for touch ergonomics and better state transitions on mobile/PWA.",
+      "Updated favicon set across browser tabs, app install icons, and Apple touch icon usage.",
+      "Improved site manifest metadata for stronger install UX and launcher shortcuts.",
     ],
   },
 ];

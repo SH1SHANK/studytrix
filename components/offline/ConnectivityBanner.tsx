@@ -5,6 +5,7 @@ import { IconWifiOff, IconX } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 
 import { useOfflineConnectivityStore } from "@/features/offline/offline.connectivity.store";
+import { navigateToOfflineLibrary } from "@/features/offline/offline.routes";
 import { Button } from "@/components/ui/button";
 
 const DISMISS_KEY = "studytrix.offline.banner.dismissed";
@@ -96,7 +97,7 @@ export function ConnectivityBanner() {
             variant="outline"
             size="xs"
             className="border-amber-300/70 bg-amber-100/70 text-amber-900 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-900/20 dark:text-amber-100 dark:hover:bg-amber-900/40"
-            onClick={() => router.push("/offline-library")}
+            onClick={() => navigateToOfflineLibrary((route) => router.push(route))}
           >
             Offline Library
           </Button>
@@ -131,7 +132,7 @@ export function ConnectivityBanner() {
         variant="outline"
         size="xs"
         className="border-amber-300/60 bg-amber-50/80 text-amber-900 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-900/40"
-        onClick={() => router.push("/offline-library")}
+        onClick={() => navigateToOfflineLibrary((route) => router.push(route))}
       >
         Open Offline Library
       </Button>

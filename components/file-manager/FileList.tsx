@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { IconChevronDown, IconFolderOff } from "@tabler/icons-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { useFileManagerViewMode } from "@/components/file-manager/ControlsBar";
 import { FileRow } from "@/components/file-manager/FileRow";
@@ -31,6 +31,12 @@ import {
 } from "@/features/drive/drive.types";
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
 import { useSelectionStore } from "@/features/selection/selection.store";
+import {
+  buildFolderRouteHref,
+  parseFolderTrailParam,
+  FOLDER_TRAIL_IDS_QUERY_PARAM,
+  FOLDER_TRAIL_QUERY_PARAM,
+} from "@/features/navigation/folder-trail";
 import { cn } from "@/lib/utils";
 
 type FileListProps = {
@@ -144,6 +150,7 @@ function SkeletonCard({ viewMode }: { viewMode: "grid" | "list" }) {
 export function FileList({ driveFolderId, courseName }: FileListProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { viewMode, layoutMode } = useFileManagerViewMode();
   const [openRowId, setOpenRowId] = useState<string | null>(null);
   const [swipeEnabled, setSwipeEnabled] = useState(false);
@@ -301,6 +308,24 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const pathSegments = useMemo(() => pathname.split("/").filter(Boolean), [pathname]);
   const departmentSegment = pathSegments[0];
   const semesterSegment = pathSegments[1];
+  const currentTrailLabels = useMemo(() => {
+    const labels = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_QUERY_PARAM));
+    if (labels.length > 0) {
+      return labels;
+    }
+    const fallback = courseName.trim();
+    return fallback ? [fallback] : [];
+  }, [courseName, searchParams]);
+  const currentTrailIds = useMemo(() => {
+    const ids = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_IDS_QUERY_PARAM));
+    if (ids.length > 0) {
+      return ids;
+    }
+    if (driveFolderId && driveFolderId.trim().length > 0) {
+      return [driveFolderId];
+    }
+    return [];
+  }, [driveFolderId, searchParams]);
 
   const onToggleOpen = useCallback((id: string | null) => {
     setOpenRowId(id);
@@ -447,7 +472,14 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         }
 
         router.push(
-          `/${encodeURIComponent(departmentSegment)}/${encodeURIComponent(semesterSegment)}/${encodeURIComponent(item.id)}?name=${encodeURIComponent(item.title)}`,
+          buildFolderRouteHref({
+            departmentId: departmentSegment,
+            semesterId: semesterSegment,
+            folderId: item.id,
+            folderName: item.title,
+            trailLabels: [...currentTrailLabels, item.title],
+            trailIds: [...currentTrailIds, item.id],
+          }),
         );
         return;
       }
@@ -472,7 +504,16 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         window.open(item.webViewLink, "_blank", "noopener,noreferrer");
       }
     },
-    [autoPrefetchEnabled, departmentSegment, fileRows, getRowOfflineState, router, semesterSegment],
+    [
+      autoPrefetchEnabled,
+      currentTrailIds,
+      currentTrailLabels,
+      departmentSegment,
+      fileRows,
+      getRowOfflineState,
+      router,
+      semesterSegment,
+    ],
   );
 
   // Loading state — skeleton cards matching real card dimensions

@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Kbd } from "@/components/ui/kbd";
@@ -10,6 +12,15 @@ type ShortcutItem = {
 type ShortcutGroup = {
   title: string;
   items: ShortcutItem[];
+};
+
+export const metadata: Metadata = {
+  title: "Shortcut Hints",
+  description:
+    "Keyboard shortcuts and command scope prefixes for navigating Studytrix faster across desktop and mobile workflows.",
+  alternates: {
+    canonical: "/shortcuts",
+  },
 };
 
 const SHORTCUT_GROUPS: ShortcutGroup[] = [

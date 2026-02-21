@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -19,6 +20,15 @@ type ApiDoc = {
   success: string;
   errors: string[];
   notes: string[];
+};
+
+export const metadata: Metadata = {
+  title: "Documentation",
+  description:
+    "Detailed Studytrix documentation covering architecture, APIs, offline/storage behavior, command scope search, sharing, and platform limitations.",
+  alternates: {
+    canonical: "/documentation",
+  },
 };
 
 const GUIDE_LINKS = [
@@ -45,7 +55,7 @@ const CORE_FLOW: string[] = [
   "Command Center indexes files/folders and switches scopes using `/`, `#`, `:`, `>`, and `@`.",
   "Dashboard greeting runtime computes time-aware messages with optional weather-aware context.",
   "Offline actions persist file blobs using File System Access API or IndexedDB fallback.",
-  "Bulk download/share pipelines resolve nested folder selections before execution.",
+  "Bulk copy/download/share pipelines resolve nested folder selections before execution.",
   "Version and changelog modules inform users when a new build is available.",
 ];
 
@@ -90,6 +100,7 @@ const MODULE_SECTIONS: DocSection[] = [
     points: [
       "Primary strategy: File System Access API for explicit folder-backed storage where supported.",
       "Fallback strategy: IndexedDB persistence on unsupported/restricted platforms.",
+      "Offline Library includes a static fallback page (`/offline-library.html`) that can read cached files directly from IndexedDB when route bundles are unavailable offline.",
       "Offline index and metadata are updated from local persistence operations.",
       "Storage location configuration supports setup, relink, and migration workflows.",
       "Offline search and availability indicators are derived from locally indexed content.",
@@ -113,8 +124,20 @@ const MODULE_SECTIONS: DocSection[] = [
       "Selection preparation resolves folders into nested file entries before zip/share.",
       "Supported selection types include files-only, folder-only, and mixed file/folder sets.",
       "ZIP generation is client-side and optimized for predictable feedback during preparation.",
+      "Copy/download actions are available for both files and folders with local-first fallbacks.",
       "Share flows use native Web Share where available with fallback paths when unavailable.",
       "Partial failures are surfaced explicitly instead of silently skipped.",
+    ],
+  },
+  {
+    title: "PWA, Metadata, and Discovery",
+    summary: "Installability and SEO improvements for web and mobile entry points.",
+    points: [
+      "App metadata includes richer Open Graph, Twitter card, robots, and canonical values.",
+      "Route-level page metadata improves discoverability for features, docs, changelog, settings, and tags.",
+      "Manifest files include launcher shortcuts, refined descriptions, and updated app icon assets.",
+      "Favicon set is aligned across browser tabs, installed PWA icons, and Apple touch surfaces.",
+      "Service worker shell cache includes offline fallback pages and redirects `/offline-library` navigation to offline-safe fallback content when requests fail.",
     ],
   },
   {

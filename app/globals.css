@@ -352,6 +352,8 @@
   }
   html {
     font-family: var(--font-primary);
+    background-color: var(--background);
+    transition: background-color 250ms ease;
   }
   body {
     @apply bg-background text-foreground transition-colors;

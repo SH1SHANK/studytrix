@@ -5,12 +5,15 @@ import {
   IconArrowUpRight,
   IconCircleCheck,
   IconCloudDown,
+  IconCopy,
   IconDeviceFloppy,
+  IconDownload,
   IconDotsVertical,
   IconShare,
   IconStar,
   IconTag,
 } from "@tabler/icons-react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@/lib/utils";
@@ -22,8 +25,14 @@ import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { expandFolders } from "@/features/bulk/bulk.service";
 import { makeFilesOffline } from "@/features/bulk/bulk.offline";
 import { toast } from "sonner";
-import { shareAsZip } from "@/features/bulk/bulk.share";
+import { downloadAsZip, shareAsZip } from "@/features/bulk/bulk.share";
 import { useShareStore } from "@/features/share/share.store";
+import {
+  buildFolderRouteHref,
+  parseFolderTrailParam,
+  FOLDER_TRAIL_IDS_QUERY_PARAM,
+  FOLDER_TRAIL_QUERY_PARAM,
+} from "@/features/navigation/folder-trail";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,6 +73,60 @@ function sanitizeZipPrefix(value: string): string {
     .toLowerCase() || "folder";
 }
 
+function sanitizeDownloadFileName(value: string): string {
+  return value.trim().replace(/[<>:\"/\\|?*\x00-\x1f]/g, "_") || "download";
+}
+
+function toAbsoluteUrl(pathOrUrl: string): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return new URL(pathOrUrl, window.location.origin).toString();
+  } catch {
+    return null;
+  }
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+function triggerFileDownload(path: string, fileName: string): void {
+  const anchor = document.createElement("a");
+  anchor.href = path;
+  anchor.download = sanitizeDownloadFileName(fileName);
+  anchor.rel = "noopener noreferrer";
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function summarizeFailedFiles(summary: { failedFiles: string[] }, fallback: string): string | null {
+  if (summary.failedFiles.length === 0) {
+    return null;
+  }
+
+  const preview = summary.failedFiles.slice(0, 3).join(", ");
+  const remainder = summary.failedFiles.length - Math.min(summary.failedFiles.length, 3);
+  if (remainder > 0) {
+    return `${summary.failedFiles.length} files could not be included (${preview} and ${remainder} more).`;
+  }
+
+  return `${summary.failedFiles.length} files could not be included (${preview || fallback}).`;
+}
+
 export function EntityActionsMenu({
   entityId,
   entityType,
@@ -78,6 +141,8 @@ export function EntityActionsMenu({
   isOffline = false,
   isDownloading = false,
 }: EntityActionsMenuProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const hydrationRequestedRef = useRef(false);
   const {
     assignments,
@@ -113,6 +178,132 @@ export function EntityActionsMenu({
     triggerHaptic();
     void toggleStar(entityId).catch(() => undefined);
   }, [entityId, toggleStar]);
+  const pathSegments = pathname.split("/").filter(Boolean);
+  const pathDepartment = pathSegments[0]?.trim().toUpperCase() ?? "";
+  const pathSemester = pathSegments[1]?.trim() ?? "";
+  const pathFolderId = pathSegments[2]?.trim() ?? "";
+  const isAcademicRoute = pathDepartment.length > 0 && pathSemester.length > 0;
+  const currentTrailLabels = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_QUERY_PARAM));
+  const currentTrailIds = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_IDS_QUERY_PARAM));
+
+  const fileStreamPath = `/api/file/${encodeURIComponent(entityId)}/stream`;
+  const fileCopyLink = toAbsoluteUrl(fileStreamPath);
+  const folderRoutePath = entityType === "folder"
+    ? (() => {
+      if (isAcademicRoute) {
+        const fallbackLabel = (searchParams.get("name") ?? "").trim();
+        const trailLabels = currentTrailLabels.length > 0
+          ? currentTrailLabels
+          : (fallbackLabel ? [fallbackLabel] : []);
+        const trailIds = currentTrailIds.length > 0
+          ? currentTrailIds
+          : (pathFolderId ? [pathFolderId] : []);
+
+        return buildFolderRouteHref({
+          departmentId: pathDepartment,
+          semesterId: pathSemester,
+          folderId: entityId,
+          folderName: title,
+          trailLabels: [...trailLabels, title],
+          trailIds: [...trailIds, entityId],
+        });
+      }
+
+      const queryDepartment = (searchParams.get("department") ?? "").trim().toUpperCase();
+      const querySemester = (searchParams.get("semester") ?? "").trim();
+      if (queryDepartment && querySemester) {
+        return buildFolderRouteHref({
+          departmentId: queryDepartment,
+          semesterId: querySemester,
+          folderId: entityId,
+          folderName: title,
+          trailLabels: [title],
+          trailIds: [entityId],
+        });
+      }
+
+      return null;
+    })()
+    : null;
+  const folderCopyLink = folderRoutePath ? toAbsoluteUrl(folderRoutePath) : null;
+
+  const handleCopyLink = useCallback(() => {
+    const linkToCopy = entityType === "folder" ? folderCopyLink : fileCopyLink;
+    if (!linkToCopy) {
+      toast.error("Could not prepare link for this item.");
+      return;
+    }
+
+    triggerHaptic(6);
+    void copyToClipboard(linkToCopy).then((copied) => {
+      if (copied) {
+        toast.success(entityType === "folder" ? "Folder link copied." : "File link copied.");
+        return;
+      }
+
+      toast.error("Clipboard is not available in this browser.");
+    });
+  }, [entityType, fileCopyLink, folderCopyLink]);
+
+  const handleDownload = useCallback(() => {
+    triggerHaptic();
+
+    if (entityType === "folder") {
+      void (async () => {
+        const shareStore = useShareStore.getState();
+
+        try {
+          shareStore.startShare(title, 1, {
+            unit: "items",
+            title: "Preparing Folder Files",
+          });
+
+          const files = await expandFolders(
+            [{ id: entityId, name: title }],
+            {
+              onProgress: (done, total) => {
+                shareStore.updateProgress(done, total);
+              },
+            },
+          );
+
+          if (files.length === 0) {
+            throw new Error("Folder is empty");
+          }
+
+          shareStore.startShare(`${title}.zip`, files.length, {
+            unit: "items",
+            title: "Preparing Folder Download",
+          });
+
+          const summary = await downloadAsZip(
+            files,
+            (done, total) => {
+              shareStore.updateProgress(done, total);
+            },
+            `${sanitizeZipPrefix(title)}-download.zip`,
+          );
+          const failureMessage = summarizeFailedFiles(summary, title);
+          if (failureMessage) {
+            shareStore.setError(failureMessage);
+            return;
+          }
+
+          shareStore.endShare();
+        } catch (error) {
+          shareStore.setError(
+            error instanceof Error
+              ? error.message
+              : `Failed to download "${title}"`,
+          );
+        }
+      })();
+      return;
+    }
+
+    triggerFileDownload(fileStreamPath, title);
+    toast.success(`Downloading "${title}"`);
+  }, [entityId, entityType, fileStreamPath, title]);
 
   return (
     <>
@@ -302,6 +493,38 @@ export function EntityActionsMenu({
                 <span>{entityType === "folder" ? "Share Folder" : "Share File"}</span>
                 <span className="text-[11px] font-normal text-muted-foreground">
                   {entityType === "folder" ? "Send as a ZIP archive" : "Send to people, apps, or AI chatbots"}
+                </span>
+              </div>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-sky-50 focus:text-sky-700 disabled:opacity-45 dark:focus:bg-sky-500/20 dark:focus:text-sky-200"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleDownload();
+              }}
+            >
+              <IconDownload className="size-4 text-sky-500 dark:text-sky-300" />
+              <div className="flex flex-col gap-0.5">
+                <span>{entityType === "folder" ? "Download Folder ZIP" : "Download File"}</span>
+                <span className="text-[11px] font-normal text-muted-foreground">
+                  {entityType === "folder" ? "Create and save a ZIP archive" : "Save a local copy to this device"}
+                </span>
+              </div>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              className="min-h-11 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-slate-100 focus:text-slate-800 dark:focus:bg-slate-800 dark:focus:text-slate-100"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleCopyLink();
+              }}
+            >
+              <IconCopy className="size-4 text-slate-500 dark:text-slate-300" />
+              <div className="flex flex-col gap-0.5">
+                <span>{entityType === "folder" ? "Copy Folder Link" : "Copy File Link"}</span>
+                <span className="text-[11px] font-normal text-muted-foreground">
+                  Paste into notes, chat, or browser
                 </span>
               </div>
             </DropdownMenuItem>

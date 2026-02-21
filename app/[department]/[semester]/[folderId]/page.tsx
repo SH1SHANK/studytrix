@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -8,6 +9,12 @@ import {
 import { FileList } from "@/components/file-manager/FileList";
 import { StickyHeader } from "@/components/file-manager/StickyHeader";
 import { type CatalogResponse, type Course } from "@/features/catalog/catalog.types";
+import {
+  buildFolderRouteHref,
+  parseFolderTrailParam,
+  FOLDER_TRAIL_IDS_QUERY_PARAM,
+  FOLDER_TRAIL_QUERY_PARAM,
+} from "@/features/navigation/folder-trail";
 import { getDepartmentName } from "@/lib/academic";
 
 type FileManagerPageProps = {
@@ -18,6 +25,8 @@ type FileManagerPageProps = {
   }>;
   searchParams: Promise<{
     name?: string;
+    trail?: string;
+    trailIds?: string;
   }>;
 };
 
@@ -48,6 +57,30 @@ type CourseInfo = {
   courseName: string;
   driveFolderId: string;
 };
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: FileManagerPageProps): Promise<Metadata> {
+  const { department, semester, folderId } = await params;
+  const query = await searchParams;
+
+  const departmentId = decodeURIComponent(department).trim().toUpperCase();
+  const departmentLabel = getDepartmentName(departmentId);
+  const semesterLabel = formatSemester(semester);
+  const routeFolderId = decodeURIComponent(folderId).trim();
+  const folderName = decodeOptionalText(query.name) ?? routeFolderId;
+  const canonicalPath = `/${encodeURIComponent(department)}/${encodeURIComponent(semester)}/${encodeURIComponent(routeFolderId)}`;
+
+  return {
+    title: `${folderName} · ${departmentLabel} ${semesterLabel}`,
+    description:
+      `Browse ${folderName} in ${departmentLabel} ${semesterLabel}. Use scoped search to find nested files, folders, and tagged study resources faster.`,
+    alternates: {
+      canonical: canonicalPath,
+    },
+  };
+}
 
 async function fetchCourseInfo(
   origin: string,
@@ -99,6 +132,8 @@ export default async function Page({
   const semesterLabel = formatSemester(semester);
   const routeFolderId = decodeURIComponent(folderId).trim();
   const folderNameFromQuery = decodeOptionalText(query.name);
+  const trailLabelsFromQuery = parseFolderTrailParam(query[FOLDER_TRAIL_QUERY_PARAM]);
+  const trailIdsFromQuery = parseFolderTrailParam(query[FOLDER_TRAIL_IDS_QUERY_PARAM]);
   const semesterNumber = parseSemesterNumber(semester);
   const shouldResolveCourseInfo =
     origin !== null && semesterNumber !== null && !folderNameFromQuery;
@@ -108,12 +143,24 @@ export default async function Page({
     : null;
   const folderName = courseInfo?.courseName ?? folderNameFromQuery ?? routeFolderId;
   const driveFolderId = courseInfo?.driveFolderId ?? routeFolderId;
+  const breadcrumbTrailLabels = trailLabelsFromQuery.length > 0
+    ? [...trailLabelsFromQuery]
+    : [folderName];
+  const breadcrumbTrailIds = trailIdsFromQuery.length > 0
+    ? [...trailIdsFromQuery]
+    : [routeFolderId];
+
+  if (breadcrumbTrailLabels[breadcrumbTrailLabels.length - 1] !== folderName) {
+    breadcrumbTrailLabels.push(folderName);
+  }
+  if (breadcrumbTrailIds[breadcrumbTrailIds.length - 1] !== routeFolderId) {
+    breadcrumbTrailIds.push(routeFolderId);
+  }
   const semesterForLink = semesterNumber ?? Number.parseInt(semester, 10);
   const rootQueryBase = `department=${encodeURIComponent(departmentId)}`;
   const rootQueryWithSemester = Number.isInteger(semesterForLink)
     ? `${rootQueryBase}&semester=${encodeURIComponent(String(semesterForLink))}`
     : rootQueryBase;
-  const currentFolderHref = `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semester)}/${encodeURIComponent(routeFolderId)}?name=${encodeURIComponent(folderName)}`;
   const breadcrumbSegments = [
     {
       label: departmentLabel,
@@ -123,16 +170,33 @@ export default async function Page({
       label: semesterLabel,
       href: `/?${rootQueryWithSemester}`,
     },
-    {
-      label: folderName,
-      href: currentFolderHref,
-    },
+    ...breadcrumbTrailLabels.map((label, index) => {
+      const folderIdForSegment =
+        breadcrumbTrailIds[index]
+        ?? (index === breadcrumbTrailLabels.length - 1 ? routeFolderId : null);
+      const trailLabelsForSegment = breadcrumbTrailLabels.slice(0, index + 1);
+      const trailIdsForSegment = breadcrumbTrailIds.slice(0, index + 1);
+
+      return {
+        label,
+        href: folderIdForSegment
+          ? buildFolderRouteHref({
+            departmentId,
+            semesterId: semester,
+            folderId: folderIdForSegment,
+            folderName: label,
+            trailLabels: trailLabelsForSegment,
+            trailIds: trailIdsForSegment,
+          })
+          : "#",
+      };
+    }),
   ];
 
   return (
     <AppShell
       showHeader={false}
-      commandPlaceholder={`Search in ${folderName}...`}
+      commandPlaceholder={`Search in ${folderName}`}
     >
       <div className="min-h-full bg-background">
         <StickyHeader

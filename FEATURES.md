@@ -5,7 +5,7 @@
 - Custom version declaration source at `features/version/version.ts`.
 - Curated release notes source at `features/changelog/changelog.catalog.ts`.
 - In-app version banner shown after a version bump with `View Changelog` and `Dismiss`.
-- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through `v0.8.2`.
+- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through `v0.8.3`.
 - Version label rendered in the app shell footer for quick reference.
 
 ## Dashboard and Navigation
@@ -55,6 +55,8 @@
 - Offline metadata/index updates with nested coverage visibility.
 - Integrity checks and stale-file invalidation workflows.
 - Offline diagnostics and storage health surfaces.
+- Offline Library static fallback (`/offline-library.html`) for guaranteed offline access when app route bundles are unavailable.
+- Offline-aware navigation handoff between fallback and full app route when connectivity changes.
 
 ## Bulk Operations, Zip, and Share
 
@@ -67,6 +69,7 @@
 - Dialog-based progress UX for zip/share preparation and execution.
 - Reduced perceived latency by opening preparation dialogs immediately.
 - Native share via Web Share API with graceful fallback behavior.
+- Copy/download actions for files and folders with local-first behavior.
 
 ## Page-Level Sharing
 
@@ -74,6 +77,13 @@
 - Share link preserves active filters and query customizations.
 - Copy-link fallback for platforms without native share support.
 - File Manager top-right menu includes contextual share/open utilities.
+
+## Mobile, PWA, and SEO
+
+- Floating dock behavior tuned for better mobile/PWA touch interactions.
+- Updated favicon set wired for browser tabs, PWA install, and Apple touch icon.
+- Improved manifest metadata with richer install fields and shortcut entries.
+- Expanded page-level metadata (title, description, canonical) for better discoverability.
 
 ## Tags and Organization
 

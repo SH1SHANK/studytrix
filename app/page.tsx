@@ -1,6 +1,16 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
 import { AppShell } from "@/components/layout/AppShell";
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+  description:
+    "Open your Studytrix dashboard to browse courses, continue study sessions, and access scoped command search quickly.",
+  alternates: {
+    canonical: "/",
+  },
+};
 
 export default function Page() {
   return (

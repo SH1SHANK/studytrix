@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CommandShortcut } from "@/components/ui/command";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface FloatingDockProps {
   isPaletteOpen: boolean;
@@ -22,6 +22,9 @@ interface FloatingDockProps {
 
 const SCOPE_SUMMARY_STORAGE_KEY = "studytrix.command.scopeSummary.v1";
 const SCOPE_SUMMARY_EVENT = "studytrix:command-scope-summary";
+const KEYBOARD_HIDE_THRESHOLD_PX = 110;
+const HIDE_ON_SCROLL_DELTA_PX = 18;
+const SHOW_ON_SCROLL_DELTA_PX = -12;
 
 export function FloatingDock({
   isPaletteOpen,
@@ -33,6 +36,12 @@ export function FloatingDock({
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [scopeSummary, setScopeSummary] = useState("");
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  const [isStandaloneDisplay, setIsStandaloneDisplay] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [isScrollHidden, setIsScrollHidden] = useState(false);
+  const scrollYRef = useRef(0);
+  const frameRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -61,17 +70,98 @@ export function FloatingDock({
     window.addEventListener(SCOPE_SUMMARY_EVENT, onScopeSummary);
     window.addEventListener("focus", syncFromStorage);
 
-    const mql = window.matchMedia("(pointer: coarse)");
-    const onPointerChange = () => setIsCoarsePointer(mql.matches);
-    onPointerChange();
-    mql.addEventListener("change", onPointerChange);
+    const pointerMql = window.matchMedia("(pointer: coarse)");
+    const standaloneMql = window.matchMedia("(display-mode: standalone)");
+    const visualViewport = window.visualViewport;
+
+    const updatePointer = () => setIsCoarsePointer(pointerMql.matches);
+    const updateStandalone = () => {
+      const nav = window.navigator as Navigator & { standalone?: boolean };
+      setIsStandaloneDisplay(standaloneMql.matches || nav.standalone === true);
+    };
+    const updateViewport = () => {
+      const width = Math.round(visualViewport?.width ?? window.innerWidth);
+      const height = visualViewport?.height ?? window.innerHeight;
+      const offsetTop = visualViewport?.offsetTop ?? 0;
+      const inset = Math.max(0, Math.round(window.innerHeight - height - offsetTop));
+      setViewportWidth(width);
+      setIsKeyboardOpen(inset >= KEYBOARD_HIDE_THRESHOLD_PX);
+    };
+
+    updatePointer();
+    updateStandalone();
+    updateViewport();
+
+    pointerMql.addEventListener("change", updatePointer);
+    standaloneMql.addEventListener("change", updateStandalone);
+    visualViewport?.addEventListener("resize", updateViewport);
+    visualViewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("resize", updateViewport);
 
     return () => {
       window.removeEventListener(SCOPE_SUMMARY_EVENT, onScopeSummary);
       window.removeEventListener("focus", syncFromStorage);
-      mql.removeEventListener("change", onPointerChange);
+      pointerMql.removeEventListener("change", updatePointer);
+      standaloneMql.removeEventListener("change", updateStandalone);
+      visualViewport?.removeEventListener("resize", updateViewport);
+      visualViewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("resize", updateViewport);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    setIsScrollHidden(false);
+    scrollYRef.current = window.scrollY;
+
+    const applyScrollState = () => {
+      const nextY = window.scrollY;
+      const delta = nextY - scrollYRef.current;
+      scrollYRef.current = nextY;
+
+      if (!isCoarsePointer || isPaletteOpen || isKeyboardOpen) {
+        setIsScrollHidden(false);
+        return;
+      }
+
+      if (nextY <= 20) {
+        setIsScrollHidden(false);
+        return;
+      }
+
+      if (delta >= HIDE_ON_SCROLL_DELTA_PX) {
+        setIsScrollHidden(true);
+        return;
+      }
+
+      if (delta <= SHOW_ON_SCROLL_DELTA_PX) {
+        setIsScrollHidden(false);
+      }
+    };
+
+    const onScroll = () => {
+      if (frameRef.current !== null) {
+        return;
+      }
+
+      frameRef.current = window.requestAnimationFrame(() => {
+        frameRef.current = null;
+        applyScrollState();
+      });
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+    };
+  }, [isCoarsePointer, isKeyboardOpen, isPaletteOpen, pathname]);
 
   const searchTitle = useMemo(
     () =>
@@ -80,6 +170,28 @@ export function FloatingDock({
         : "Search command palette",
     [scopeSummary],
   );
+  const dockBottomOffsetPx = useMemo(() => {
+    if (!isCoarsePointer) {
+      return 20;
+    }
+
+    return isStandaloneDisplay ? 12 : 8;
+  }, [isCoarsePointer, isStandaloneDisplay]);
+  const shouldHideDock = isPaletteOpen || (isCoarsePointer && (isKeyboardOpen || isScrollHidden));
+  const searchButtonWidthClass = useMemo(() => {
+    if (!isCoarsePointer) {
+      return "w-12 justify-center sm:justify-between";
+    }
+
+    if (viewportWidth > 0 && viewportWidth < 360) {
+      return "w-[min(60vw,200px)] justify-between";
+    }
+    if (viewportWidth > 0 && viewportWidth < 440) {
+      return "w-[min(58vw,228px)] justify-between";
+    }
+
+    return "w-[min(54vw,240px)] justify-between";
+  }, [isCoarsePointer, viewportWidth]);
 
   const navItems = [
     { id: "home", title: "Home", icon: IconHome, path: "/", match: (p: string) => p === "/" },
@@ -110,12 +222,17 @@ export function FloatingDock({
   return (
     <div
       className={cn(
-        "fixed bottom-[max(env(safe-area-inset-bottom),0.75rem)] left-0 right-0 z-40 mx-auto flex w-full max-w-fit items-center justify-center transition-all duration-500 sm:bottom-5",
-        isPaletteOpen ? "pointer-events-none translate-y-12 opacity-0" : "translate-y-0 opacity-100",
+        "fixed left-0 right-0 z-40 mx-auto flex w-full max-w-fit items-center justify-center transition-all duration-300 ease-out",
+        shouldHideDock ? "pointer-events-none translate-y-20 opacity-0" : "translate-y-0 opacity-100",
       )}
+      style={{ bottom: `calc(env(safe-area-inset-bottom) + ${dockBottomOffsetPx}px)` }}
+      aria-hidden={shouldHideDock ? true : undefined}
     >
       <motion.div
-        className="relative flex h-14 sm:h-16 items-center gap-1 sm:gap-2 rounded-full border border-border/80 bg-background/80 p-1.5 sm:p-2 shadow-xl backdrop-blur-xl"
+        className={cn(
+          "relative flex h-14 sm:h-16 items-center gap-1 sm:gap-2 rounded-full border border-border/80 bg-background/80 p-1.5 sm:p-2 shadow-xl backdrop-blur-xl",
+          isCoarsePointer ? "mx-2 max-w-[calc(100vw-0.75rem)]" : undefined,
+        )}
         onMouseLeave={() => setHoveredIdx(null)}
         layout
       >
@@ -130,14 +247,14 @@ export function FloatingDock({
                     layout // w-48 was too big for small screens, adjusted to w-32 or w-40, then sm:w-48
                     className={cn(
                       "group flex h-10 items-center justify-between gap-1 rounded-full bg-primary/10 px-2 font-normal text-primary shadow-sm ring-1 ring-primary/20 transition-all hover:bg-primary/15 hover:shadow-md active:scale-95 sm:h-11 sm:w-48 sm:gap-2 sm:px-4 sm:justify-between xl:w-56",
-                      isCoarsePointer ? "w-[min(52vw,220px)] justify-between" : "w-12 justify-center sm:justify-between",
+                      searchButtonWidthClass,
                     )}
                     title={searchTitle}
                   >
                     <div className="flex items-center gap-2">
                       <IconSearch className="size-5 sm:size-[18px] text-primary transition-colors group-hover:text-primary" />
-                      <span className={cn("max-w-28 truncate", isCoarsePointer ? "block" : "hidden sm:block")}>
-                        {scopeSummary || `${placeholder.split(" ")[0]}...`}
+                      <span className={cn("max-w-32 truncate", isCoarsePointer ? "block" : "hidden sm:block")}>
+                        {scopeSummary || placeholder}
                       </span>
                     </div>
                     {scopeSummary ? (

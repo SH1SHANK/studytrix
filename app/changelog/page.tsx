@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +8,15 @@ import {
   IS_VERSION_DECLARATION_SYNCED,
 } from "@/features/changelog/changelog.catalog";
 import { APP_VERSION, formatVersionLabel } from "@/features/version/version";
+
+export const metadata: Metadata = {
+  title: "Changelog",
+  description:
+    "Track Studytrix release notes from v0.1.0 onward, including offline, command, sharing, and UX improvements.",
+  alternates: {
+    canonical: "/changelog",
+  },
+};
 
 export default function ChangelogPage() {
   return (

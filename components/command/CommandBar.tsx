@@ -75,6 +75,11 @@ import {
 } from "@/features/drive/drive.types";
 import { openLocalFirst } from "@/features/offline/offline.access";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
+import {
+  isOfflineLibraryRoute,
+  navigateToOfflineLibrary,
+  resolveOfflineLibraryRoute,
+} from "@/features/offline/offline.routes";
 import { useTagStore } from "@/features/tags/tag.store";
 import { useDownloadStore } from "@/features/download/download.store";
 import {
@@ -82,6 +87,12 @@ import {
   type OfflineLibrarySnapshot,
 } from "@/features/offline/offline.library";
 import { buildNestedRootSignature } from "@/features/offline/offline.query-cache.keys";
+import {
+  buildFolderRouteHref,
+  parseFolderTrailParam,
+  FOLDER_TRAIL_IDS_QUERY_PARAM,
+  FOLDER_TRAIL_QUERY_PARAM,
+} from "@/features/navigation/folder-trail";
 import { useSetting } from "@/ui/hooks/useSettings";
 
 type CommandBarProps = {
@@ -209,6 +220,38 @@ const GLOBAL_SCOPE: SearchScope = {
   tag: null,
   domain: null,
 };
+
+function resolveScopeSelectorDescriptor(mode: ScopeSelectorMode | null): {
+  label: string;
+  prefix: "/" | "#" | ":";
+  icon: ComponentType<{ className?: string }>;
+} | null {
+  if (mode === "folders") {
+    return {
+      label: "Folder Scope",
+      prefix: "/",
+      icon: IconFolder,
+    };
+  }
+
+  if (mode === "tags") {
+    return {
+      label: "Tag Scope",
+      prefix: "#",
+      icon: IconTag,
+    };
+  }
+
+  if (mode === "domains") {
+    return {
+      label: "Domain Scope",
+      prefix: ":",
+      icon: IconDatabase,
+    };
+  }
+
+  return null;
+}
 
 function isScopeEmpty(scope: SearchScope): boolean {
   return (
@@ -352,6 +395,18 @@ function parseNestedFileEntries(payload: unknown): NestedCommandFileEntry[] {
 }
 
 function getCommandIcon(item: EngineCommandItem): ComponentType<{ className?: string }> {
+  if (item.id.startsWith("scope-folder-")) {
+    return IconFolder;
+  }
+
+  if (item.id.startsWith("scope-tag-")) {
+    return IconTag;
+  }
+
+  if (item.id.startsWith("scope-domain-")) {
+    return IconDatabase;
+  }
+
   if (item.group === "folders") {
     return IconFolder;
   }
@@ -388,6 +443,14 @@ function getCommandIcon(item: EngineCommandItem): ComponentType<{ className?: st
 }
 
 function getCommandIconTone(item: EngineCommandItem): string {
+  if (
+    item.id.startsWith("scope-folder-")
+    || item.id.startsWith("scope-tag-")
+    || item.id.startsWith("scope-domain-")
+  ) {
+    return "text-primary";
+  }
+
   if (item.group === "folders") {
     return "text-primary";
   }
@@ -932,6 +995,31 @@ export function CommandBar({
 
     return course?.driveFolderId ?? folderId;
   }, [catalogCourses, folderId]);
+  const activeTrailLabels = useMemo(() => {
+    const labels = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_QUERY_PARAM));
+    if (labels.length > 0) {
+      return labels;
+    }
+
+    const fallbackLabel = parseString(searchParams.get("name"));
+    if (fallbackLabel) {
+      return [fallbackLabel];
+    }
+
+    return [];
+  }, [searchParams]);
+  const activeTrailIds = useMemo(() => {
+    const ids = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_IDS_QUERY_PARAM));
+    if (ids.length > 0) {
+      return ids;
+    }
+
+    if (activeDriveFolderId) {
+      return [activeDriveFolderId];
+    }
+
+    return [];
+  }, [activeDriveFolderId, searchParams]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1222,8 +1310,14 @@ export function CommandBar({
         scope: "folder",
         entityId: item.id,
         payload: {
-          route:
-            `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(item.id)}?name=${encodeURIComponent(item.name)}`,
+          route: buildFolderRouteHref({
+            departmentId,
+            semesterId,
+            folderId: item.id,
+            folderName: item.name,
+            trailLabels: [...activeTrailLabels, item.name],
+            trailIds: [...activeTrailIds, item.id],
+          }),
           ancestorFolderIds: [activeDriveFolderId ?? folderId ?? null].filter(Boolean),
           departmentId,
           semesterId,
@@ -1238,8 +1332,14 @@ export function CommandBar({
         scope: "global",
         entityId: course.driveFolderId,
         payload: {
-          route:
-            `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(course.driveFolderId)}?name=${encodeURIComponent(course.courseName)}`,
+          route: buildFolderRouteHref({
+            departmentId,
+            semesterId,
+            folderId: course.driveFolderId,
+            folderName: course.courseName,
+            trailLabels: [course.courseName],
+            trailIds: [course.driveFolderId],
+          }),
           departmentId,
           semesterId,
         },
@@ -1304,8 +1404,17 @@ export function CommandBar({
         scope: "global",
         entityId: option.folderId,
         payload: {
-          route:
-            `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(option.folderId)}?name=${encodeURIComponent(option.label)}`,
+          route: buildFolderRouteHref({
+            departmentId,
+            semesterId,
+            folderId: option.folderId,
+            folderName: option.label,
+            trailLabels: option.path
+              .split(" / ")
+              .map((value) => value.trim())
+              .filter((value) => value.length > 0),
+            trailIds: option.ancestorFolderIds,
+          }),
           ancestorFolderIds: option.ancestorFolderIds,
           departmentId,
           semesterId,
@@ -1333,6 +1442,8 @@ export function CommandBar({
     return ordered;
   }, [
     activeDriveFolderId,
+    activeTrailIds,
+    activeTrailLabels,
     catalogCourses,
     departmentId,
     driveItems,
@@ -1440,8 +1551,14 @@ export function CommandBar({
         .filter(Boolean)
         .join(" · ");
 
-      const route =
-        `/${encodeURIComponent(departmentId)}/${encodeURIComponent(semesterId)}/${encodeURIComponent(entry.parentFolderId)}?name=${encodeURIComponent(entry.parentFolderName)}`;
+      const route = buildFolderRouteHref({
+        departmentId,
+        semesterId,
+        folderId: entry.parentFolderId,
+        folderName: entry.parentFolderName,
+        trailLabels: entry.ancestorFolderNames,
+        trailIds: entry.ancestorFolderIds,
+      });
 
       return {
         id: `file-${entry.id}`,
@@ -1539,6 +1656,7 @@ export function CommandBar({
     return Array.from(merged.values());
   }, [activeFolderFileCommands, departmentId, nestedFileCommands, offlineLibrary.files, semesterId]);
   const trimmedDeferredQuery = debouncedQuery.trim();
+  const effectiveVisualQuery = scopeSelectorMode ? query.trim() : trimmedDeferredQuery;
 
   const taggedEntityIds = useMemo(() => {
     if (!searchScope.tag) {
@@ -1628,7 +1746,7 @@ export function CommandBar({
       return [];
     }
 
-    const needle = trimmedDeferredQuery.toLowerCase();
+    const needle = query.trim().toLowerCase();
     if (scopeSelectorMode === "folders") {
       const rankedOptions = folderScopeOptions
         .filter((option) => {
@@ -1729,9 +1847,9 @@ export function CommandBar({
     currentTagScopeSuggestion,
     domainScopeOptions,
     folderScopeOptions,
+    query,
     scopeSelectorMode,
     tags,
-    trimmedDeferredQuery,
   ]);
 
   const folderCommandById = useMemo(
@@ -1812,7 +1930,9 @@ export function CommandBar({
     registry.register("go-back", () => router.back());
     registry.register("open-settings", () => router.push("/settings"));
     registry.register("open-storage", () => router.push("/storage"));
-    registry.register("open-offline-library", () => router.push("/offline-library"));
+    registry.register("open-offline-library", () => {
+      navigateToOfflineLibrary((route) => router.push(route));
+    });
     registry.register("toggle-view", () => undefined);
     registry.register("mark-offline", (item) => {
       if (!item.entityId) {
@@ -2153,7 +2273,16 @@ export function CommandBar({
 
       const route = item.payload?.route;
       if (typeof route === "string") {
-        router.push(route);
+        if (isOfflineLibraryRoute(route) && typeof navigator !== "undefined" && navigator.onLine === false) {
+          navigateToOfflineLibrary(undefined, route);
+          setOpen(false);
+          return;
+        }
+
+        const nextRoute = isOfflineLibraryRoute(route)
+          ? resolveOfflineLibraryRoute(route)
+          : route;
+        router.push(nextRoute);
         setOpen(false);
         return;
       }
@@ -2408,7 +2537,7 @@ export function CommandBar({
     : Math.max(12, viewportMetrics.keyboardInset + 12);
   const listBottomInset = Math.max(isMobilePalette ? 14 : 18, viewportMetrics.keyboardInset + (isMobilePalette ? 16 : 12));
   const inputCenterOffset = useMemo(() => {
-    if (!isCoarsePointer || trimmedDeferredQuery.length === 0) {
+    if (!isCoarsePointer || effectiveVisualQuery.length === 0) {
       return 0;
     }
 
@@ -2434,9 +2563,9 @@ export function CommandBar({
     const rawOffset = base * ratio - keyboardCompensation;
     return Math.max(minOffset, Math.min(maxOffset, rawOffset));
   }, [
+    effectiveVisualQuery.length,
     isCoarsePointer,
     panelHeight,
-    trimmedDeferredQuery.length,
     viewportMetrics.keyboardInset,
     viewportMetrics.width,
   ]);
@@ -2487,6 +2616,22 @@ export function CommandBar({
 
     return pills;
   }, [applyScope, searchScope]);
+  const scopeSelectorDescriptor = useMemo(
+    () => resolveScopeSelectorDescriptor(scopeSelectorMode),
+    [scopeSelectorMode],
+  );
+  const commandInputPlaceholder = useMemo(() => {
+    if (scopeSelectorMode === "folders") {
+      return "Choose a folder scope...";
+    }
+    if (scopeSelectorMode === "tags") {
+      return "Choose a tag scope...";
+    }
+    if (scopeSelectorMode === "domains") {
+      return "Choose a department/semester scope...";
+    }
+    return scopePills.length > 0 ? "Search..." : placeholder;
+  }, [placeholder, scopePills.length, scopeSelectorMode]);
 
   const activeScopeLabel = useMemo(() => {
     if (scopePills.length === 0) {
@@ -2494,6 +2639,9 @@ export function CommandBar({
     }
     return scopePills.map((pill) => pill.label).join(" + ");
   }, [scopePills]);
+  const footerScopeLabel = scopeSelectorDescriptor
+    ? `${scopeSelectorDescriptor.label} (${scopeSelectorDescriptor.prefix})`
+    : activeScopeLabel;
 
   useEffect(() => {
     if (scopePills.length === 0) {
@@ -2733,7 +2881,7 @@ export function CommandBar({
                 <motion.div
                   initial={false}
                   animate={{
-                    scale: trimmedDeferredQuery ? 1.02 : 1,
+                    scale: effectiveVisualQuery ? 1.02 : 1,
                     marginTop: inputCenterOffset,
                   }}
                   transition={{ type: "spring", ...motionTokens.spring }}
@@ -2742,14 +2890,26 @@ export function CommandBar({
                   <CommandInput
                     value={query}
                     onValueChange={handleQueryChange}
-                    placeholder={scopePills.length > 0 ? "Search..." : placeholder}
+                    placeholder={commandInputPlaceholder}
                     autoFocus
                     className={cn(
-                      trimmedDeferredQuery ? "pr-10" : undefined,
+                      effectiveVisualQuery ? "pr-10" : undefined,
                     )}
                     prefixNode={
-                      scopePills.length > 0 ? (
+                      scopePills.length > 0 || scopeSelectorDescriptor ? (
                         <div className="flex max-w-[55vw] shrink-0 items-center gap-1.5 overflow-x-auto no-scrollbar pl-1.5 py-1 sm:max-w-80">
+                          {scopeSelectorDescriptor ? (() => {
+                            const ScopeSelectorIcon = scopeSelectorDescriptor.icon;
+                            return (
+                              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/25 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary">
+                                <ScopeSelectorIcon className="size-3.5 shrink-0" />
+                                <span>{scopeSelectorDescriptor.label}</span>
+                                <span className="rounded border border-primary/25 bg-primary/10 px-1 py-px text-[9px]">
+                                  {scopeSelectorDescriptor.prefix}
+                                </span>
+                              </div>
+                            );
+                          })() : null}
                           <AnimatePresence mode="popLayout">
                             {scopePills.map((pill) => (
                               <motion.div
@@ -2788,7 +2948,7 @@ export function CommandBar({
                       ) : null
                     }
                   />
-                  {trimmedDeferredQuery ? (
+                  {effectiveVisualQuery ? (
                     <Button
                       type="button"
                       variant="ghost"
@@ -2913,10 +3073,10 @@ export function CommandBar({
                           <IconSearch className="size-4 text-muted-foreground/80" />
                           <p className="text-xs font-medium text-foreground/80 text-muted-foreground">
                             {scopeSelectorMode
-                              ? `No ${scopeSelectorMode === "folders" ? "folders" : scopeSelectorMode === "tags" ? "tags" : "scope options"} for "${trimmedDeferredQuery || "..."}"`
+                              ? `No ${scopeSelectorMode === "folders" ? "folders" : scopeSelectorMode === "tags" ? "tags" : "scope options"} for "${effectiveVisualQuery || "..."}"`
                               : hasAnyScope
-                                ? `No files in ${activeScopeLabel} match "${trimmedDeferredQuery || "..."}"`
-                                : `No results for "${trimmedDeferredQuery || "..."}"`}
+                                ? `No files in ${activeScopeLabel} match "${effectiveVisualQuery || "..."}"`
+                                : `No results for "${effectiveVisualQuery || "..."}"`}
                           </p>
                           {!scopeSelectorMode ? (
                             <p className="text-[11px] text-muted-foreground">
@@ -2938,7 +3098,32 @@ export function CommandBar({
                       </CommandEmpty>
 
                       {groupedResults.map((group) => {
-                        const meta = GROUP_META[group.group];
+                        const meta = scopeSelectorMode
+                          ? (() => {
+                            if (scopeSelectorMode === "folders") {
+                              return {
+                                label: "Folder Scope",
+                                icon: IconFolder,
+                                tone: "bg-primary/12",
+                                iconTone: "text-primary",
+                              };
+                            }
+                            if (scopeSelectorMode === "tags") {
+                              return {
+                                label: "Tag Scope",
+                                icon: IconTag,
+                                tone: "bg-primary/12",
+                                iconTone: "text-primary",
+                              };
+                            }
+                            return {
+                              label: "Domain Scope",
+                              icon: IconDatabase,
+                              tone: "bg-primary/12",
+                              iconTone: "text-primary",
+                            };
+                          })()
+                          : GROUP_META[group.group];
                         const GroupIcon = meta.icon;
 
                         return (
@@ -3000,13 +3185,13 @@ export function CommandBar({
 
                                   <div className="min-w-0 flex-1">
                                     <div className="truncate font-medium">
-                                      <HighlightedText text={item.title} query={trimmedDeferredQuery} />
+                                      <HighlightedText text={item.title} query={effectiveVisualQuery} />
                                     </div>
                                     {item.subtitle ? (
                                       <div className="truncate text-[11px] text-muted-foreground">
                                         <HighlightedText
                                           text={item.subtitle}
-                                          query={trimmedDeferredQuery}
+                                          query={effectiveVisualQuery}
                                         />
                                       </div>
                                     ) : null}
@@ -3043,7 +3228,7 @@ export function CommandBar({
                 <div className="mt-1 flex items-center justify-between rounded-md border border-border/70 px-2 py-1 text-[10px] text-muted-foreground border-border/70 text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <span className="rounded border border-border/80 px-1 py-px text-[9px] border-border">
-                      {activeScopeLabel}
+                      {footerScopeLabel}
                     </span>
                     {showLoadingSkeleton
                       ? "Preparing context index..."

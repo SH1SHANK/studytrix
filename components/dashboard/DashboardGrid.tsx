@@ -31,6 +31,7 @@ import { useCatalogIndex } from "@/features/catalog/catalog.index";
 import { generateGreetingMessage } from "@/features/dashboard/greeting";
 import { resolveGreetingPreferences } from "@/features/dashboard/greeting.preferences";
 import { resolveUserProfileSettings } from "@/features/profile/user-profile";
+import { buildFolderRouteHref } from "@/features/navigation/folder-trail";
 import { type Course } from "@/features/catalog/catalog.types";
 import { useTagStore } from "@/features/tags/tag.store";
 import type { FilterMode, TagAssignment } from "@/features/tags/tag.types";
@@ -415,7 +416,14 @@ export function DashboardGrid() {
   const handleOpenFolder = useCallback(
     (driveFolderId: string, courseName: string) => {
       router.push(
-        `/${encodeURIComponent(department)}/${encodeURIComponent(String(semester))}/${encodeURIComponent(driveFolderId)}?name=${encodeURIComponent(courseName)}`,
+        buildFolderRouteHref({
+          departmentId: department,
+          semesterId: String(semester),
+          folderId: driveFolderId,
+          folderName: courseName,
+          trailLabels: [courseName],
+          trailIds: [driveFolderId],
+        }),
       );
     },
     [department, semester, router],

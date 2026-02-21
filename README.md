@@ -1,7 +1,7 @@
 # Studytrix
 
 > **Status**: Beta  
-> **Current app version**: `v0.8.2` (released on `2026-02-21`)
+> **Current app version**: `v0.8.3` (released on `2026-02-21`)
 
 Studytrix is an offline-first academic workspace built with Next.js 16, React 19, and TypeScript. It combines Drive-backed content browsing, local persistence, command-driven navigation, and mobile/PWA-aware workflows into a single high-performance interface.
 
@@ -17,6 +17,7 @@ Studytrix is an offline-first academic workspace built with Next.js 16, React 19
 - `/changelog`: version history from `v0.1.0` to current.
 - `/features`: capability overview grouped by platform area.
 - `/shortcuts`: keyboard and command-prefix hints.
+- `/documentation`: detailed architecture, API, and operations reference.
 
 These pages are linked from:
 - Settings menu (header)
@@ -41,6 +42,19 @@ Scope prefixes:
 - `@`: recents scope
 
 ## Release Notes (Detailed)
+
+### v0.8.3 - PWA + Discoverability Polish (`2026-02-21`)
+
+- Added copy/download actions for files and folders, including mixed-selection flows.
+- Improved floating dock behavior for mobile/PWA ergonomics and responsiveness.
+- Fixed Offline Library availability while fully offline by adding a static fallback page (`/offline-library.html`) that reads cached files directly from local storage.
+- Added offline-aware routing so Offline Library actions open fallback content during disconnect and return to app route behavior after reconnect.
+- Updated service worker shell cache behavior to precache offline fallback pages and resolve `/offline-library` to offline-safe content when network requests fail.
+- Updated favicon wiring across browser, Apple touch, and Android launcher contexts.
+- Improved site manifest metadata and install shortcuts for better PWA install UX.
+- Added richer page-level metadata (titles, descriptions, canonical URLs) across key routes.
+- Improved deep-link metadata for dynamic folder and tag pages.
+- Included minor release-hardening fixes and cleanup.
 
 ### v0.8.2 - Greeting System Upgrade (`2026-02-21`)
 

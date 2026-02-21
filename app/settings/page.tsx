@@ -1,5 +1,16 @@
+import type { Metadata } from "next";
+
 import { AppShell } from "@/components/layout/AppShell";
 import { SettingsLayout } from "@/components/settings/SettingsLayout";
+
+export const metadata: Metadata = {
+  title: "Settings",
+  description:
+    "Manage Studytrix preferences for profile, greeting behavior, storage, command experience, accessibility, and guide links.",
+  alternates: {
+    canonical: "/settings",
+  },
+};
 
 export default function SettingsPage() {
   return (

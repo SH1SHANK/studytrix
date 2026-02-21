@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>Studytrix Offline Library</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0f172a;
+          color: #e2e8f0;
+        }
+      }
+
+      .wrap {
+        margin: 0 auto;
+        width: min(960px, 100%);
+        padding: 20px 16px 80px;
+      }
+
+      .header {
+        margin-bottom: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.85);
+        padding: 16px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .header {
+          background: rgba(15, 23, 42, 0.85);
+          border-color: rgba(148, 163, 184, 0.24);
+        }
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.2;
+      }
+
+      p {
+        margin: 6px 0 0;
+        color: #475569;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        p {
+          color: #94a3b8;
+        }
+      }
+
+      .toolbar {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .input {
+        flex: 1 1 280px;
+        min-height: 40px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        border-radius: 10px;
+        padding: 0 12px;
+        background: rgba(255, 255, 255, 0.95);
+        color: inherit;
+        font: inherit;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .input {
+          border-color: rgba(148, 163, 184, 0.3);
+          background: rgba(15, 23, 42, 0.6);
+        }
+      }
+
+      .btn {
+        min-height: 40px;
+        border: 1px solid rgba(100, 116, 139, 0.45);
+        border-radius: 10px;
+        padding: 8px 12px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      .btn-primary {
+        border-color: transparent;
+        background: #2563eb;
+        color: #ffffff;
+      }
+
+      .stats {
+        margin: 12px 0 0;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .stat {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 10px;
+      }
+
+      .stat-label {
+        margin: 0;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #64748b;
+      }
+
+      .stat-value {
+        margin: 4px 0 0;
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      @media (max-width: 600px) {
+        .stats {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .stat {
+          border-color: rgba(148, 163, 184, 0.24);
+          background: rgba(15, 23, 42, 0.75);
+        }
+
+        .stat-label {
+          color: #94a3b8;
+        }
+      }
+
+      .notice {
+        margin-top: 10px;
+        font-size: 13px;
+        color: #64748b;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .notice {
+          color: #94a3b8;
+        }
+      }
+
+      .list {
+        margin-top: 14px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .item {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.82);
+        padding: 12px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .item {
+          border-color: rgba(148, 163, 184, 0.24);
+          background: rgba(15, 23, 42, 0.76);
+        }
+      }
+
+      .title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+
+      .meta {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: #64748b;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .meta {
+          color: #94a3b8;
+        }
+      }
+
+      .actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .small {
+        min-height: 34px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      .status {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        background: rgba(255, 255, 255, 0.8);
+        font-size: 13px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .status {
+          border-color: rgba(148, 163, 184, 0.24);
+          background: rgba(15, 23, 42, 0.76);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="header">
+        <h1>Offline Library</h1>
+        <p>Open locally downloaded files while you are offline.</p>
+
+        <div class="toolbar">
+          <input id="search-input" class="input" type="search" placeholder="Search offline files..." />
+          <button id="refresh-btn" class="btn" type="button">Refresh</button>
+          <button id="open-app-btn" class="btn" type="button">Open App View</button>
+          <a class="btn" href="/">Back to App</a>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <p class="stat-label">Files</p>
+            <p id="stat-files" class="stat-value">0</p>
+          </div>
+          <div class="stat">
+            <p class="stat-label">Visible</p>
+            <p id="stat-visible" class="stat-value">0</p>
+          </div>
+          <div class="stat">
+            <p class="stat-label">Total Size</p>
+            <p id="stat-size" class="stat-value">0 B</p>
+          </div>
+        </div>
+        <p class="notice">
+          If a file does not open in this view, reconnect and open it once from the app to refresh its cache.
+        </p>
+      </section>
+
+      <div id="status" class="status">Loading offline files...</div>
+      <section id="file-list" class="list" aria-live="polite"></section>
+    </main>
+
+    <script>
+      (function () {
+        const DB_NAME = "studytrix_offline";
+        const DB_VERSION = 1;
+        const FILES_STORE = "files";
+        const METADATA_STORE = "metadata";
+        const DOWNLOAD_META_PREFIX = "download-meta:";
+        const STORAGE_META_PREFIX = "storage-meta:";
+
+        const listNode = document.getElementById("file-list");
+        const statusNode = document.getElementById("status");
+        const searchNode = document.getElementById("search-input");
+        const refreshNode = document.getElementById("refresh-btn");
+        const openAppNode = document.getElementById("open-app-btn");
+        const statFiles = document.getElementById("stat-files");
+        const statVisible = document.getElementById("stat-visible");
+        const statSize = document.getElementById("stat-size");
+        const APP_OFFLINE_LIBRARY_ROUTE = "/offline-library";
+
+        let records = [];
+        let autoSwitchTimer = null;
+
+        function formatBytes(bytes) {
+          const value = Number(bytes);
+          if (!Number.isFinite(value) || value <= 0) {
+            return "0 B";
+          }
+          if (value < 1024) {
+            return Math.round(value) + " B";
+          }
+          if (value < 1024 * 1024) {
+            return (value / 1024).toFixed(1) + " KB";
+          }
+          if (value < 1024 * 1024 * 1024) {
+            return (value / (1024 * 1024)).toFixed(1) + " MB";
+          }
+          return (value / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+        }
+
+        function formatDate(timestamp) {
+          const value = Number(timestamp);
+          if (!Number.isFinite(value) || value <= 0) {
+            return "Unknown time";
+          }
+          try {
+            return new Date(value).toLocaleString();
+          } catch (_error) {
+            return "Unknown time";
+          }
+        }
+
+        function parseJson(value) {
+          if (typeof value !== "string" || value.trim().length === 0) {
+            return {};
+          }
+          try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === "object" ? parsed : {};
+          } catch (_error) {
+            return {};
+          }
+        }
+
+        function openDb() {
+          return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onerror = () => reject(request.error || new Error("Failed to open offline DB."));
+            request.onblocked = () => reject(new Error("Offline DB is blocked by another tab."));
+            request.onsuccess = () => resolve(request.result);
+          });
+        }
+
+        function readAll(db, storeName) {
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, "readonly");
+            const store = tx.objectStore(storeName);
+            const request = store.getAll();
+            request.onerror = () => reject(request.error || new Error("Failed to read store " + storeName));
+            request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
+          });
+        }
+
+        function setStatus(message) {
+          statusNode.textContent = message;
+        }
+
+        function navigateToAppView() {
+          const query = window.location.search || "";
+          window.location.assign(APP_OFFLINE_LIBRARY_ROUTE + query);
+        }
+
+        function updateOpenAppButton() {
+          if (!openAppNode) {
+            return;
+          }
+
+          const online = navigator.onLine !== false;
+          openAppNode.disabled = !online;
+          openAppNode.textContent = online ? "Open App View" : "Open App View (Offline)";
+          openAppNode.title = online
+            ? "Open full app route with all interactions."
+            : "Reconnect to open full app view.";
+        }
+
+        function fileNameFromMeta(fileId, downloadMeta) {
+          if (downloadMeta && typeof downloadMeta.name === "string" && downloadMeta.name.trim().length > 0) {
+            return downloadMeta.name.trim();
+          }
+          return fileId;
+        }
+
+        function buildRecords(files, metadata) {
+          const downloadMetaById = new Map();
+          const storageMetaById = new Map();
+
+          for (const entry of metadata) {
+            if (!entry || typeof entry !== "object") {
+              continue;
+            }
+            const key = typeof entry.key === "string" ? entry.key : "";
+            const value = parseJson(entry.value);
+            if (key.startsWith(DOWNLOAD_META_PREFIX)) {
+              downloadMetaById.set(key.slice(DOWNLOAD_META_PREFIX.length), value);
+              continue;
+            }
+            if (key.startsWith(STORAGE_META_PREFIX)) {
+              storageMetaById.set(key.slice(STORAGE_META_PREFIX.length), value);
+            }
+          }
+
+          const next = [];
+          for (const file of files) {
+            if (!file || typeof file !== "object" || typeof file.fileId !== "string") {
+              continue;
+            }
+            const fileId = file.fileId.trim();
+            if (!fileId) {
+              continue;
+            }
+
+            const downloadMeta = downloadMetaById.get(fileId) || {};
+            const storageMeta = storageMetaById.get(fileId) || {};
+            const blob = file.blob instanceof Blob ? file.blob : null;
+            const size = Number.isFinite(file.size) ? file.size : (blob ? blob.size : 0);
+            const mimeType =
+              typeof file.mimeType === "string" && file.mimeType.trim().length > 0
+                ? file.mimeType.trim()
+                : (blob && blob.type ? blob.type : "application/octet-stream");
+            const cachedAt = Number.isFinite(file.cachedAt)
+              ? file.cachedAt
+              : (Number.isFinite(downloadMeta.updatedAt) ? downloadMeta.updatedAt : 0);
+            const courseCode =
+              typeof storageMeta.courseCode === "string" && storageMeta.courseCode.trim().length > 0
+                ? storageMeta.courseCode.trim()
+                : "GENERAL";
+
+            next.push({
+              fileId,
+              name: fileNameFromMeta(fileId, downloadMeta),
+              size,
+              mimeType,
+              cachedAt,
+              courseCode,
+              blob,
+            });
+          }
+
+          next.sort((left, right) => {
+            if (left.cachedAt !== right.cachedAt) {
+              return right.cachedAt - left.cachedAt;
+            }
+            return left.name.localeCompare(right.name);
+          });
+
+          return next;
+        }
+
+        function render(items, query) {
+          const normalizedQuery = (query || "").trim().toLowerCase();
+          const filtered = normalizedQuery.length === 0
+            ? items
+            : items.filter((item) => {
+              return (
+                item.name.toLowerCase().includes(normalizedQuery)
+                || item.fileId.toLowerCase().includes(normalizedQuery)
+                || item.courseCode.toLowerCase().includes(normalizedQuery)
+                || item.mimeType.toLowerCase().includes(normalizedQuery)
+              );
+            });
+
+          statFiles.textContent = String(items.length);
+          statVisible.textContent = String(filtered.length);
+          statSize.textContent = formatBytes(
+            items.reduce((sum, item) => sum + (Number(item.size) || 0), 0),
+          );
+
+          listNode.innerHTML = "";
+          if (filtered.length === 0) {
+            setStatus(items.length === 0
+              ? "No offline files found in local storage."
+              : "No files match your current search.");
+            return;
+          }
+
+          setStatus("Loaded " + filtered.length + " offline file" + (filtered.length === 1 ? "" : "s") + ".");
+          for (const item of filtered) {
+            const wrapper = document.createElement("article");
+            wrapper.className = "item";
+
+            const info = document.createElement("div");
+            const title = document.createElement("p");
+            title.className = "title";
+            title.textContent = item.name;
+            info.appendChild(title);
+
+            const line1 = document.createElement("p");
+            line1.className = "meta";
+            line1.textContent = [
+              item.courseCode,
+              formatBytes(item.size),
+              item.mimeType,
+            ].join(" · ");
+            info.appendChild(line1);
+
+            const line2 = document.createElement("p");
+            line2.className = "meta";
+            line2.textContent = "Cached " + formatDate(item.cachedAt) + " · ID " + item.fileId;
+            info.appendChild(line2);
+
+            const actions = document.createElement("div");
+            actions.className = "actions";
+
+            const openBtn = document.createElement("button");
+            openBtn.type = "button";
+            openBtn.className = "btn small btn-primary";
+            openBtn.textContent = "Open";
+            openBtn.addEventListener("click", () => {
+              if (!(item.blob instanceof Blob)) {
+                setStatus("File is missing local blob data: " + item.name);
+                return;
+              }
+              const objectUrl = URL.createObjectURL(item.blob);
+              const popup = window.open(objectUrl, "_blank", "noopener,noreferrer");
+              if (!popup) {
+                setStatus("Popup blocked while opening " + item.name + ".");
+              }
+              window.setTimeout(() => {
+                URL.revokeObjectURL(objectUrl);
+              }, 60000);
+            });
+            actions.appendChild(openBtn);
+
+            const downloadBtn = document.createElement("button");
+            downloadBtn.type = "button";
+            downloadBtn.className = "btn small";
+            downloadBtn.textContent = "Download";
+            downloadBtn.addEventListener("click", () => {
+              if (!(item.blob instanceof Blob)) {
+                setStatus("File is missing local blob data: " + item.name);
+                return;
+              }
+              const objectUrl = URL.createObjectURL(item.blob);
+              const anchor = document.createElement("a");
+              anchor.href = objectUrl;
+              anchor.download = item.name;
+              anchor.click();
+              window.setTimeout(() => {
+                URL.revokeObjectURL(objectUrl);
+              }, 20000);
+            });
+            actions.appendChild(downloadBtn);
+
+            wrapper.appendChild(info);
+            wrapper.appendChild(actions);
+            listNode.appendChild(wrapper);
+          }
+        }
+
+        async function load() {
+          if (!("indexedDB" in window)) {
+            setStatus("IndexedDB is not available in this browser session.");
+            statFiles.textContent = "0";
+            statVisible.textContent = "0";
+            statSize.textContent = "0 B";
+            listNode.innerHTML = "";
+            return;
+          }
+
+          setStatus("Loading offline files...");
+          try {
+            const db = await openDb();
+            const [files, metadata] = await Promise.all([
+              readAll(db, FILES_STORE),
+              readAll(db, METADATA_STORE),
+            ]);
+            records = buildRecords(files, metadata);
+            render(records, searchNode.value);
+            db.close();
+          } catch (error) {
+            const message = error && typeof error.message === "string"
+              ? error.message
+              : "Failed to load offline files.";
+            setStatus(message);
+            listNode.innerHTML = "";
+            statFiles.textContent = "0";
+            statVisible.textContent = "0";
+            statSize.textContent = "0 B";
+          }
+        }
+
+        searchNode.addEventListener("input", () => {
+          render(records, searchNode.value);
+        });
+
+        refreshNode.addEventListener("click", () => {
+          load();
+        });
+
+        if (openAppNode) {
+          openAppNode.addEventListener("click", () => {
+            if (navigator.onLine === false) {
+              setStatus("Reconnect to open full app view.");
+              return;
+            }
+            navigateToAppView();
+          });
+        }
+
+        window.addEventListener("online", () => {
+          updateOpenAppButton();
+          setStatus("Connection restored. Opening full app view...");
+          if (autoSwitchTimer !== null) {
+            window.clearTimeout(autoSwitchTimer);
+          }
+          autoSwitchTimer = window.setTimeout(() => {
+            navigateToAppView();
+          }, 1000);
+        });
+
+        window.addEventListener("offline", () => {
+          updateOpenAppButton();
+          if (autoSwitchTimer !== null) {
+            window.clearTimeout(autoSwitchTimer);
+            autoSwitchTimer = null;
+          }
+        });
+
+        updateOpenAppButton();
+        load();
+      })();
+    </script>
+  </body>
+</html>

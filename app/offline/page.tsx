@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { IconWifiOff, IconFolderOpen } from "@tabler/icons-react";
 import { motion } from "framer-motion";
 
@@ -46,13 +45,13 @@ export default function OfflinePage() {
             It looks like you've lost your internet connection. Reconnect to access live content, or browse your downloaded files.
           </p>
 
-          <Link
-            href="/offline-library"
+          <a
+            href="/offline-library.html"
             className="group relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-xl bg-foreground px-4 py-3.5 text-[15px] font-semibold text-background transition-all hover:scale-[1.02] hover:bg-foreground/90 active:scale-[0.98]"
           >
             <IconFolderOpen className="size-5 transition-transform group-hover:-translate-y-0.5" />
             <span>Go to Offline Library</span>
-          </Link>
+          </a>
           
           <div className="mt-6 flex items-center justify-center space-x-2 text-[13px] font-medium text-muted-foreground/80">
             <span className="flex size-2 min-w-2 items-center justify-center">
