@@ -24,6 +24,7 @@ import { openLocalFirst } from "@/features/offline/offline.access";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
 import { loadOfflineLibrarySnapshot } from "@/features/offline/offline.library";
 import { autoPrefetch } from "@/features/offline/offline.prefetch";
+import { useIntelligenceStore } from "@/features/intelligence/intelligence.store";
 import { useSettingsStore } from "@/features/settings/settings.store";
 import {
   formatFileSize,
@@ -179,6 +180,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const [visibleCount, setVisibleCount] = useState(120);
   const [offlineFolderIds, setOfflineFolderIds] = useState<Set<string>>(new Set());
   const [offlineLibraryFileIds, setOfflineLibraryFileIds] = useState<Set<string>>(new Set());
+  const duplicates = useIntelligenceStore((state) => state.duplicates);
   const { tasks: downloadTasks, startDownload, animateDownload } = useDownloadManager();
   const gateDownloadRisk = useDownloadRiskGate();
   const setContextItems = useSelectionStore((state) => state.setContextItems);
@@ -536,6 +538,16 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
     ],
   );
 
+  const handleCompareDuplicate = useCallback((primaryFileId: string, duplicateFileId: string) => {
+    const primaryUrl = `/api/file/${encodeURIComponent(primaryFileId)}/stream`;
+    const duplicateUrl = `/api/file/${encodeURIComponent(duplicateFileId)}/stream`;
+
+    void openLocalFirst(primaryFileId, primaryUrl);
+    window.setTimeout(() => {
+      void openLocalFirst(duplicateFileId, duplicateUrl);
+    }, 80);
+  }, []);
+
   // Loading state — skeleton cards matching real card dimensions
   if (isLoading) {
     return (
@@ -716,6 +728,10 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                           onRemoveOffline={() => {
                             void handleRemoveOffline(item);
                           }}
+                          duplicateOf={item.type === "file" ? (duplicates.get(item.id) ?? null) : null}
+                          onCompareDuplicate={(duplicateOf) => {
+                            handleCompareDuplicate(item.id, duplicateOf);
+                          }}
                           animationIndex={visibleRows.folders.length + index}
                           compact={compactModeEnabled}
                         />
@@ -753,6 +769,10 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                   }}
                   onRemoveOffline={() => {
                     void handleRemoveOffline(item);
+                  }}
+                  duplicateOf={item.type === "file" ? (duplicates.get(item.id) ?? null) : null}
+                  onCompareDuplicate={(duplicateOf) => {
+                    handleCompareDuplicate(item.id, duplicateOf);
                   }}
                   animationIndex={index}
                   compact={compactModeEnabled}

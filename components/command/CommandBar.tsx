@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import {
   usePathname,
   useRouter,
@@ -27,6 +28,7 @@ import {
   IconTag,
   IconX,
 } from "@tabler/icons-react";
+import { Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
@@ -105,6 +107,16 @@ import {
   shouldShowEssentialScopeBar,
 } from "@/features/command/command.scope-ui";
 import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
+import { SmartSearchIndicator } from "@/components/intelligence/SmartSearchIndicator";
+import { getIntelligenceClient, buildIntelligenceSnapshotKey, fetchIntelligenceModelCatalog } from "@/features/intelligence/intelligence.client";
+import { buildSemanticDocuments, buildSemanticSignature, mapSemanticHitsById } from "@/features/intelligence/intelligence.command";
+import { mergeSemanticKeywordResults } from "@/features/intelligence/intelligence.merge";
+import { expandSemanticQuery } from "@/features/intelligence/intelligence.synonyms";
+import { useIntelligenceStore } from "@/features/intelligence/intelligence.store";
+import { shouldMergeSemanticResults, shouldRunSemanticQuery, shouldSuppressDuplicateDetection } from "@/features/intelligence/intelligence.fallbacks";
+import { INTELLIGENCE_SETTINGS_IDS, INTELLIGENCE_QUERY_DEBOUNCE_MS, INTELLIGENCE_QUERY_TIMEOUT_MS } from "@/features/intelligence/intelligence.constants";
+import { readDeviceClassHints, resolveAutoModelId } from "@/features/intelligence/intelligence.model-selector";
+import type { IntelligenceSearchHit, IntelligenceWorkerStats } from "@/features/intelligence/intelligence.types";
 
 type CommandBarProps = {
   placeholder?: string;
@@ -949,6 +961,12 @@ export function CommandBar({
   const [fuzzySearchEnabledSetting] = useSetting("fuzzy_search_enabled");
   const [resultLimitSetting] = useSetting("result_limit");
   const [debugCommandScoringSetting] = useSetting("debug_command_scoring");
+  const [smartSearchEnabledSetting] = useSetting(INTELLIGENCE_SETTINGS_IDS.smartSearchEnabled);
+  const [intelligenceOcrEnabledSetting] = useSetting(INTELLIGENCE_SETTINGS_IDS.ocrEnabled);
+  const [intelligenceDuplicateDetectionEnabledSetting] = useSetting(INTELLIGENCE_SETTINGS_IDS.duplicateDetectionEnabled);
+  const [intelligenceModelModeSetting] = useSetting(INTELLIGENCE_SETTINGS_IDS.modelMode);
+  const [intelligenceModelIdSetting, setIntelligenceModelIdSetting] = useSetting(INTELLIGENCE_SETTINGS_IDS.modelId);
+  const [intelligenceSemanticWeightSetting] = useSetting(INTELLIGENCE_SETTINGS_IDS.semanticWeight);
   const searchDebounceMs = useMemo(() => {
     const raw = typeof searchDebounceSetting === "number" ? searchDebounceSetting : 40;
     return Math.max(20, Math.min(250, Math.round(raw)));
@@ -962,7 +980,64 @@ export function CommandBar({
     return 50;
   }, [resultLimitSetting]);
   const debugCommandScoring = debugCommandScoringSetting === true;
+  const intelligenceSmartSearchSettingEnabled = smartSearchEnabledSetting === true;
+  // Session-only override for the CommandCenter sparkle toggle. This intentionally
+  // does not persist to settings, so app-level settings apply again on next app boot.
+  const [sessionSmartSearchOverride, setSessionSmartSearchOverride] = useState<boolean | null>(null);
+  const intelligenceSmartSearchEnabled =
+    sessionSmartSearchOverride ?? intelligenceSmartSearchSettingEnabled;
+  const intelligenceModelMode = intelligenceModelModeSetting === "manual" ? "manual" : "auto";
+  const intelligenceOcrEnabled = intelligenceOcrEnabledSetting === true;
+  const intelligenceDuplicateDetectionEnabled = intelligenceDuplicateDetectionEnabledSetting === true;
+  const intelligenceManualModelId =
+    typeof intelligenceModelIdSetting === "string" && intelligenceModelIdSetting.trim().length > 0
+      ? intelligenceModelIdSetting
+      : "Xenova/all-MiniLM-L6-v2";
+  const intelligenceSemanticWeight = useMemo(() => {
+    const raw = typeof intelligenceSemanticWeightSetting === "number"
+      ? intelligenceSemanticWeightSetting
+      : 60;
+    return Math.max(0, Math.min(100, Math.round(raw)));
+  }, [intelligenceSemanticWeightSetting]);
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [semanticQueryInput, setSemanticQueryInput] = useState("");
+  const [semanticHitScores, setSemanticHitScores] = useState<Map<string, number>>(new Map());
+  const [semanticQueryPending, setSemanticQueryPending] = useState(false);
+  const [semanticQueryTimedOut, setSemanticQueryTimedOut] = useState(false);
+  const [semanticQueryError, setSemanticQueryError] = useState<string | null>(null);
+  const [sparkleTooltipText, setSparkleTooltipText] = useState<string | null>(null);
+  const sparkleTooltipTimerRef = useRef<number | null>(null);
+  const [showExperimentalNotice, setShowExperimentalNotice] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    try {
+      return window.localStorage.getItem("studytrix.smartsearch.noticeDismissed") !== "1";
+    } catch {
+      return true;
+    }
+  });
+  const [hasActivatedSmartSearchSession, setHasActivatedSmartSearchSession] = useState(false);
+  const [indexingProgress, setIndexingProgress] = useState<{ processed: number; total: number } | null>(null);
+  const [modelDownloadProgress, setModelDownloadProgress] = useState<{ remainingMb: number; totalMb: number } | null>(null);
+  const [newlyAppearedSemanticIds, setNewlyAppearedSemanticIds] = useState<Set<string>>(new Set());
+  const previousSemanticIdsRef = useRef<Set<string>>(new Set());
+  const semanticEnterTimerRef = useRef<number | null>(null);
+  const duplicateDetectionRunRef = useRef("");
+  const intelligenceClientRef = useRef(getIntelligenceClient());
+  const semanticQuerySeqRef = useRef(0);
+  const setIntelligenceEnabled = useIntelligenceStore((state) => state.setEnabled);
+  const setIntelligenceRuntimeStatus = useIntelligenceStore((state) => state.setRuntimeStatus);
+  const setIntelligenceCatalog = useIntelligenceStore((state) => state.setCatalog);
+  const setIntelligenceModel = useIntelligenceStore((state) => state.setModel);
+  const setIntelligenceIndexStats = useIntelligenceStore((state) => state.setIndexStats);
+  const setIntelligenceIndexing = useIntelligenceStore((state) => state.setIndexing);
+  const setIntelligenceDuplicates = useIntelligenceStore((state) => state.setDuplicates);
+  const clearIntelligenceDuplicates = useIntelligenceStore((state) => state.clearDuplicates);
+  const intelligenceRuntimeStatus = useIntelligenceStore((state) => state.runtimeStatus);
+  const intelligenceIndexing = useIntelligenceStore((state) => state.indexing);
+  const intelligenceIndexedDocs = useIntelligenceStore((state) => state.indexedDocs);
+  const intelligenceCatalog = useIntelligenceStore((state) => state.catalog);
 
   const pathSegments = useMemo(
     () => pathname.split("/").filter(Boolean),
@@ -1057,6 +1132,51 @@ export function CommandBar({
       window.clearTimeout(timer);
     };
   }, [query, searchDebounceMs]);
+
+  useEffect(() => {
+    if (!intelligenceSmartSearchEnabled) {
+      setSemanticQueryInput("");
+      setSemanticHitScores(new Map());
+      setSemanticQueryPending(false);
+      setSemanticQueryTimedOut(false);
+      setSemanticQueryError(null);
+      setIndexingProgress(null);
+      return;
+    }
+
+    const normalized = debouncedQuery.trim();
+    if (!normalized) {
+      setSemanticQueryInput("");
+      setSemanticHitScores(new Map());
+      setSemanticQueryPending(false);
+      setSemanticQueryTimedOut(false);
+      setSemanticQueryError(null);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSemanticQueryInput(normalized);
+    }, INTELLIGENCE_QUERY_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [debouncedQuery, intelligenceSmartSearchEnabled]);
+
+  useEffect(() => {
+    if (intelligenceSmartSearchEnabled) {
+      setHasActivatedSmartSearchSession(true);
+    }
+  }, [intelligenceSmartSearchEnabled]);
+
+  useEffect(() => () => {
+    if (sparkleTooltipTimerRef.current !== null) {
+      window.clearTimeout(sparkleTooltipTimerRef.current);
+    }
+    if (semanticEnterTimerRef.current !== null) {
+      window.clearTimeout(semanticEnterTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isFolderScope || !activeDriveFolderId) {
@@ -1598,6 +1718,10 @@ export function CommandBar({
         scope: "folder",
         entityId: item.id,
         payload: {
+          fileId: item.id,
+          mimeType: item.mimeType,
+          fullPath: `${activeTrailLabels.join(" / ") || activeTrailIds.join(" / ") || "Current folder"} / ${item.name}`,
+          tags: [],
           url: item.webViewLink,
           parentFolderId: activeDriveFolderId ?? folderId ?? null,
           ancestorFolderIds: [activeDriveFolderId ?? folderId ?? null].filter(Boolean),
@@ -1605,7 +1729,7 @@ export function CommandBar({
           semesterId,
         },
       }));
-  }, [activeDriveFolderId, departmentId, driveItems, folderId, isFolderScope, semesterId]);
+  }, [activeDriveFolderId, activeTrailIds, activeTrailLabels, departmentId, driveItems, folderId, isFolderScope, semesterId]);
 
   const nestedFileCommands = useMemo<EngineCommandItem[]>(() => {
     return nestedFileEntries.map((entry) => {
@@ -1645,6 +1769,10 @@ export function CommandBar({
         scope: "global",
         entityId: entry.id,
         payload: {
+          fileId: entry.id,
+          mimeType: entry.mimeType,
+          fullPath: `${entry.path} / ${entry.name}`,
+          tags: [],
           url: entry.webViewLink,
           route,
           rootFolderId: entry.rootFolderId,
@@ -1708,6 +1836,10 @@ export function CommandBar({
         scope: "global",
         entityId: file.fileId,
         payload: {
+          fileId: file.fileId,
+          mimeType: file.mimeType,
+          fullPath: `${file.folderPath} / ${file.name}`,
+          tags: [],
           route: `/offline-library?folder=${encodeURIComponent(file.folderId)}`,
           url: `/api/file/${encodeURIComponent(file.fileId)}/stream`,
           ancestorFolderIds: file.ancestorFolderIds,
@@ -1722,6 +1854,428 @@ export function CommandBar({
 
     return Array.from(merged.values());
   }, [activeFolderFileCommands, departmentId, nestedFileCommands, offlineLibrary.files, semesterId]);
+  const semanticCommands = useMemo<EngineCommandItem[]>(
+    () => [...folderCommands, ...fileCommands].filter((item) => item.group === "folders" || item.group === "files"),
+    [fileCommands, folderCommands],
+  );
+  const semanticDocuments = useMemo(
+    () => buildSemanticDocuments(semanticCommands),
+    [semanticCommands],
+  );
+  const semanticCorpusSignature = useMemo(
+    () => buildSemanticSignature(nestedScopeKey, semanticCommands.map((item) => item.id)),
+    [nestedScopeKey, semanticCommands],
+  );
+  const resolvedIntelligenceModelId = useMemo(() => {
+    if (!intelligenceCatalog) {
+      return intelligenceModelMode === "manual" ? intelligenceManualModelId : null;
+    }
+
+    if (intelligenceModelMode === "manual") {
+      return intelligenceManualModelId;
+    }
+
+    return resolveAutoModelId(intelligenceCatalog, readDeviceClassHints());
+  }, [
+    intelligenceCatalog,
+    intelligenceManualModelId,
+    intelligenceModelMode,
+  ]);
+  const intelligenceSnapshotKey = useMemo(
+    () => resolvedIntelligenceModelId
+      ? buildIntelligenceSnapshotKey(nestedScopeKey, resolvedIntelligenceModelId)
+      : null,
+    [nestedScopeKey, resolvedIntelligenceModelId],
+  );
+
+  useEffect(() => {
+    if (intelligenceModelMode !== "auto" || !resolvedIntelligenceModelId) {
+      return;
+    }
+
+    if (intelligenceManualModelId === resolvedIntelligenceModelId) {
+      return;
+    }
+
+    setIntelligenceModelIdSetting(resolvedIntelligenceModelId);
+  }, [
+    intelligenceManualModelId,
+    intelligenceModelMode,
+    resolvedIntelligenceModelId,
+    setIntelligenceModelIdSetting,
+  ]);
+
+  useEffect(() => {
+    setIntelligenceEnabled(intelligenceSmartSearchEnabled);
+
+    if (!intelligenceSmartSearchEnabled) {
+      intelligenceClientRef.current.dispose();
+      semanticQuerySeqRef.current += 1;
+      duplicateDetectionRunRef.current = "";
+      setIntelligenceRuntimeStatus("idle");
+      setIntelligenceModel({ activeModelId: null, resolvedAutoModelId: null, usingHashedFallback: false });
+      setIntelligenceIndexing(false);
+      clearIntelligenceDuplicates();
+      setSemanticHitScores(new Map());
+      setSemanticQueryError(null);
+      setSemanticQueryPending(false);
+      setSemanticQueryTimedOut(false);
+      return;
+    }
+
+    if (intelligenceCatalog) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setIntelligenceRuntimeStatus("loading");
+
+    void fetchIntelligenceModelCatalog(controller.signal)
+      .then((catalog) => {
+        setIntelligenceCatalog(catalog);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setIntelligenceRuntimeStatus(
+          "error",
+          error instanceof Error ? error.message : "Failed to load intelligence model catalog",
+        );
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    intelligenceCatalog,
+    intelligenceSmartSearchEnabled,
+    setIntelligenceCatalog,
+    setIntelligenceEnabled,
+    clearIntelligenceDuplicates,
+    setIntelligenceIndexing,
+    setIntelligenceModel,
+    setIntelligenceRuntimeStatus,
+  ]);
+
+  useEffect(() => {
+    if (!intelligenceSmartSearchEnabled || !resolvedIntelligenceModelId || !intelligenceSnapshotKey) {
+      return;
+    }
+
+    let cancelled = false;
+    setIntelligenceRuntimeStatus("loading");
+
+    void (async () => {
+      try {
+        const stats = await intelligenceClientRef.current.init({
+          modelId: resolvedIntelligenceModelId,
+          snapshotKey: intelligenceSnapshotKey,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        setIntelligenceModel({
+          activeModelId: stats.modelId,
+          resolvedAutoModelId: intelligenceModelMode === "auto" ? resolvedIntelligenceModelId : undefined,
+          usingHashedFallback: stats.usingHashedFallback,
+        });
+        setIntelligenceIndexStats({
+          indexedDocs: stats.indexSize,
+          lastIndexedAt: stats.updatedAt,
+        });
+        setIntelligenceRuntimeStatus("ready");
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setIntelligenceRuntimeStatus(
+          "error",
+          error instanceof Error ? error.message : "Failed to initialize semantic search runtime",
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    intelligenceModelMode,
+    intelligenceSmartSearchEnabled,
+    intelligenceSnapshotKey,
+    resolvedIntelligenceModelId,
+    setIntelligenceIndexStats,
+    setIntelligenceModel,
+    setIntelligenceRuntimeStatus,
+  ]);
+
+  useEffect(() => {
+    if (
+      !intelligenceSmartSearchEnabled
+      || intelligenceRuntimeStatus !== "ready"
+      || !resolvedIntelligenceModelId
+      || !intelligenceSnapshotKey
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setIntelligenceIndexing(true);
+    setIndexingProgress({
+      processed: 0,
+      total: semanticDocuments.length,
+    });
+
+    void intelligenceClientRef.current.indexDocs({
+      docs: semanticDocuments,
+      signature: semanticCorpusSignature,
+      snapshotKey: intelligenceSnapshotKey,
+      enableOCR: intelligenceOcrEnabled,
+      onProgress: (progress) => {
+        if (cancelled) {
+          return;
+        }
+        setIndexingProgress(progress);
+      },
+    })
+      .then((stats: IntelligenceWorkerStats) => {
+        if (cancelled) {
+          return;
+        }
+
+        setIntelligenceIndexStats({
+          indexedDocs: stats.indexSize,
+          lastIndexedAt: stats.updatedAt,
+        });
+        setIntelligenceModel({
+          activeModelId: stats.modelId,
+          usingHashedFallback: stats.usingHashedFallback,
+        });
+        setIndexingProgress((current) => {
+          if (!current) {
+            return current;
+          }
+
+          return {
+            processed: current.total,
+            total: current.total,
+          };
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIntelligenceRuntimeStatus("error", "Semantic indexing failed");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIntelligenceIndexing(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    intelligenceRuntimeStatus,
+    intelligenceSmartSearchEnabled,
+    intelligenceOcrEnabled,
+    intelligenceSnapshotKey,
+    resolvedIntelligenceModelId,
+    semanticCorpusSignature,
+    semanticDocuments,
+    setIndexingProgress,
+    setIntelligenceIndexStats,
+    setIntelligenceIndexing,
+    setIntelligenceModel,
+    setIntelligenceRuntimeStatus,
+  ]);
+
+  useEffect(() => {
+    if (!intelligenceSmartSearchEnabled || !intelligenceSnapshotKey) {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "hidden") {
+        return;
+      }
+
+      void intelligenceClientRef.current.persist(intelligenceSnapshotKey).catch(() => undefined);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [intelligenceSmartSearchEnabled, intelligenceSnapshotKey]);
+
+  useEffect(() => intelligenceClientRef.current.subscribeEvents((event) => {
+    if (event.type === "DUPLICATES_FOUND") {
+      setIntelligenceDuplicates(event.pairs);
+      return;
+    }
+
+    if (event.type === "MODEL_DOWNLOAD_PROGRESS" && event.pipeline === "embedding") {
+      if (
+        typeof event.totalBytes === "number"
+        && Number.isFinite(event.totalBytes)
+        && event.totalBytes > 0
+        && typeof event.loadedBytes === "number"
+        && Number.isFinite(event.loadedBytes)
+      ) {
+        const totalMb = event.totalBytes / (1024 * 1024);
+        const loadedMb = event.loadedBytes / (1024 * 1024);
+        setModelDownloadProgress({
+          totalMb,
+          remainingMb: Math.max(0, totalMb - loadedMb),
+        });
+      } else {
+        setModelDownloadProgress(null);
+      }
+      return;
+    }
+
+    if (
+      event.type === "MODEL_PIPELINE_STATUS"
+      && event.pipeline === "embedding"
+      && event.status !== "loading"
+    ) {
+      setModelDownloadProgress(null);
+    }
+  }), [setIntelligenceDuplicates]);
+
+  useEffect(() => {
+    if (
+      !intelligenceSmartSearchEnabled
+      || !intelligenceDuplicateDetectionEnabled
+      || intelligenceRuntimeStatus !== "ready"
+      || intelligenceIndexing
+      || shouldSuppressDuplicateDetection()
+    ) {
+      return;
+    }
+
+    const runKey = `${intelligenceSnapshotKey ?? "none"}::${semanticCorpusSignature}::${semanticDocuments.length}`;
+    if (duplicateDetectionRunRef.current === runKey) {
+      return;
+    }
+    duplicateDetectionRunRef.current = runKey;
+
+    let cancelled = false;
+    let idleHandle = -1;
+    const schedule = () => {
+      if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+        idleHandle = window.requestIdleCallback(() => {
+          void intelligenceClientRef.current.detectDuplicates()
+            .then((result) => {
+              if (!cancelled) {
+                setIntelligenceDuplicates(result.pairs);
+              }
+            })
+            .catch(() => undefined);
+        }, { timeout: 1000 });
+        return;
+      }
+
+      idleHandle = window.setTimeout(() => {
+        void intelligenceClientRef.current.detectDuplicates()
+          .then((result) => {
+            if (!cancelled) {
+              setIntelligenceDuplicates(result.pairs);
+            }
+          })
+          .catch(() => undefined);
+      }, 100);
+    };
+
+    schedule();
+
+    return () => {
+      cancelled = true;
+      if (idleHandle >= 0) {
+        if (typeof window !== "undefined" && typeof window.cancelIdleCallback === "function") {
+          window.cancelIdleCallback(idleHandle);
+        } else {
+          window.clearTimeout(idleHandle);
+        }
+      }
+    };
+  }, [
+    intelligenceDuplicateDetectionEnabled,
+    intelligenceIndexing,
+    intelligenceRuntimeStatus,
+    intelligenceSmartSearchEnabled,
+    intelligenceSnapshotKey,
+    semanticCorpusSignature,
+    semanticDocuments.length,
+    setIntelligenceDuplicates,
+  ]);
+
+  useEffect(() => {
+    if (!shouldRunSemanticQuery({
+      enabled: intelligenceSmartSearchEnabled,
+      runtimeStatus: intelligenceRuntimeStatus,
+      query: semanticQueryInput,
+    })) {
+      return;
+    }
+
+    const sequenceId = semanticQuerySeqRef.current + 1;
+    semanticQuerySeqRef.current = sequenceId;
+    setSemanticQueryPending(true);
+    setSemanticQueryTimedOut(false);
+    setSemanticQueryError(null);
+    setSemanticHitScores(new Map());
+
+    void intelligenceClientRef.current.query({
+      query: expandSemanticQuery(semanticQueryInput),
+      limit: Math.max(resultLimit, 20),
+      scopeSignature: semanticCorpusSignature,
+      timeoutMs: INTELLIGENCE_QUERY_TIMEOUT_MS,
+    })
+      .then((response) => {
+        if (semanticQuerySeqRef.current !== sequenceId) {
+          return;
+        }
+
+        const mapped = mapSemanticHitsById(response.hits as IntelligenceSearchHit[]);
+        setSemanticHitScores(mapped);
+      })
+      .catch((error) => {
+        if (semanticQuerySeqRef.current !== sequenceId) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "Semantic query failed";
+        setSemanticQueryError(message);
+        if (message.toLowerCase().includes("timeout")) {
+          setSemanticQueryTimedOut(true);
+        }
+      })
+      .finally(() => {
+        if (semanticQuerySeqRef.current === sequenceId) {
+          setSemanticQueryPending(false);
+        }
+      });
+  }, [
+    intelligenceRuntimeStatus,
+    intelligenceSmartSearchEnabled,
+    resultLimit,
+    semanticCorpusSignature,
+    semanticQueryInput,
+  ]);
+
+  useEffect(() => {
+    if (intelligenceRuntimeStatus !== "loading") {
+      setModelDownloadProgress(null);
+    }
+  }, [intelligenceRuntimeStatus]);
+
   const trimmedDeferredQuery = debouncedQuery.trim();
   const effectiveVisualQuery = scopeSelectorMode ? query.trim() : trimmedDeferredQuery;
 
@@ -2173,7 +2727,7 @@ export function CommandBar({
   }, [commandContext, commandService, matchesScopedFilters, resultLimit, searchScope]);
 
   const showingFallbackResults =
-    trimmedDeferredQuery.length > 0 && exactResults.length === 0;
+    trimmedDeferredQuery.length > 0 && exactResults.length === 0 && semanticHitScores.size === 0;
   const shouldApplyRecencyBias =
     trimmedDeferredQuery.length > 0 && trimmedDeferredQuery.length <= 2;
   const recentCommandRank = useMemo(() => {
@@ -2215,11 +2769,107 @@ export function CommandBar({
     shouldApplyRecencyBias,
     showingFallbackResults,
   ]);
+  const semanticCommandById = useMemo(
+    () => new Map(semanticCommands.map((item) => [item.id, item])),
+    [semanticCommands],
+  );
+  const semanticReadyForMerge = shouldMergeSemanticResults({
+    enabled: intelligenceSmartSearchEnabled,
+    runtimeStatus: intelligenceRuntimeStatus,
+    query: trimmedDeferredQuery,
+    semanticHitCount: semanticHitScores.size,
+  });
+  const semanticMergedResults = useMemo(() => {
+    if (!semanticReadyForMerge) {
+      return results;
+    }
+
+    const mergedInputs: Array<{
+      item: EngineCommandItem;
+      keywordScore: number;
+      semanticScore: number;
+      dedupeKey: string;
+      semanticOnly: boolean;
+    }> = [];
+
+    const pushMerged = (
+      item: EngineCommandItem,
+      keywordScore: number,
+      semanticScore: number,
+      semanticOnly: boolean,
+    ) => {
+      const dedupeKey = item.entityId ? `entity:${item.entityId}` : `id:${item.id}`;
+      mergedInputs.push({
+        item,
+        keywordScore,
+        semanticScore,
+        dedupeKey,
+        semanticOnly,
+      });
+    };
+
+    for (const item of results) {
+      pushMerged(item, item.score ?? 0, semanticHitScores.get(item.id) ?? 0, false);
+    }
+
+    for (const [semanticId, semanticScore] of semanticHitScores.entries()) {
+      const item = semanticCommandById.get(semanticId);
+      if (!item) {
+        continue;
+      }
+
+      const existsInKeywordResults = results.some((candidate) => candidate.id === item.id);
+      pushMerged(item, existsInKeywordResults ? (item.score ?? 0) : 0, semanticScore, !existsInKeywordResults);
+    }
+
+    const merged = mergeSemanticKeywordResults({
+      items: mergedInputs,
+      semanticWeightPercent: intelligenceSemanticWeight,
+      limit: resultLimit,
+      sortTieBreaker: (left, right) => {
+        const titleDiff = left.title.localeCompare(right.title);
+        if (titleDiff !== 0) {
+          return titleDiff;
+        }
+
+        return left.id.localeCompare(right.id);
+      },
+    });
+
+    return merged.map((entry) => ({
+      ...entry.item,
+      score: Math.round(entry.finalScore * 200),
+      payload: {
+        ...(entry.item.payload ?? {}),
+        semanticOnly: entry.semanticOnly,
+      },
+    }));
+  }, [
+    intelligenceSemanticWeight,
+    resultLimit,
+    results,
+    semanticCommandById,
+    semanticHitScores,
+    semanticReadyForMerge,
+  ]);
 
   const displayResults = useMemo(
-    () => (scopeSelectorMode ? scopeSelectorItems : results),
-    [results, scopeSelectorItems, scopeSelectorMode],
+    () => (scopeSelectorMode ? scopeSelectorItems : semanticMergedResults),
+    [scopeSelectorItems, scopeSelectorMode, semanticMergedResults],
   );
+  const semanticEnterOrder = useMemo(() => {
+    const order = new Map<string, number>();
+    let index = 0;
+
+    for (const item of displayResults) {
+      if (newlyAppearedSemanticIds.has(item.id)) {
+        order.set(item.id, index);
+        index += 1;
+      }
+    }
+
+    return order;
+  }, [displayResults, newlyAppearedSemanticIds]);
   const hasAnyScope = useMemo(() => !isScopeEmpty(searchScope), [searchScope]);
 
   const groupedResults = useMemo(() => {
@@ -2241,17 +2891,91 @@ export function CommandBar({
   }, [displayResults]);
 
   useEffect(() => {
+    if (!open || scopeSelectorMode) {
+      previousSemanticIdsRef.current = new Set();
+      setNewlyAppearedSemanticIds(new Set());
+      return;
+    }
+
+    const currentSemanticIds = new Set<string>();
+    for (const item of displayResults) {
+      if (item.payload?.semanticOnly === true) {
+        currentSemanticIds.add(item.id);
+      }
+    }
+
+    const previous = previousSemanticIdsRef.current;
+    const entering = new Set<string>();
+
+    for (const id of currentSemanticIds) {
+      if (!previous.has(id)) {
+        entering.add(id);
+      }
+    }
+
+    previousSemanticIdsRef.current = currentSemanticIds;
+    setNewlyAppearedSemanticIds(entering);
+
+    if (semanticEnterTimerRef.current !== null) {
+      window.clearTimeout(semanticEnterTimerRef.current);
+      semanticEnterTimerRef.current = null;
+    }
+
+    if (entering.size > 0) {
+      semanticEnterTimerRef.current = window.setTimeout(() => {
+        setNewlyAppearedSemanticIds(new Set());
+        semanticEnterTimerRef.current = null;
+      }, 900);
+    }
+  }, [displayResults, open, scopeSelectorMode]);
+
+  useEffect(() => {
     if (!open) {
       return;
     }
 
     for (const item of displayResults.slice(0, 6)) {
-      const route = item.payload?.route;
+      const route = (item.payload as Record<string, unknown> | undefined)?.route;
       if (typeof route === "string" && route.length > 0) {
         void router.prefetch(route);
       }
     }
   }, [displayResults, open, router]);
+
+  const showSparkleTooltip = useCallback((message: string) => {
+    setSparkleTooltipText(message);
+    if (sparkleTooltipTimerRef.current !== null) {
+      window.clearTimeout(sparkleTooltipTimerRef.current);
+    }
+
+    sparkleTooltipTimerRef.current = window.setTimeout(() => {
+      setSparkleTooltipText(null);
+      sparkleTooltipTimerRef.current = null;
+    }, 1500);
+  }, []);
+
+  const handleToggleSessionSmartSearch = useCallback(() => {
+    vibrate(6);
+
+    setSessionSmartSearchOverride((current) => {
+      const effectiveCurrent = current ?? intelligenceSmartSearchSettingEnabled;
+      const nextEnabled = !effectiveCurrent;
+
+      if (!nextEnabled) {
+        showSparkleTooltip("Smart search off");
+      } else if (intelligenceRuntimeStatus === "ready") {
+        showSparkleTooltip("Smart search on");
+      } else {
+        showSparkleTooltip("Warming up…");
+      }
+
+      return nextEnabled;
+    });
+  }, [
+    intelligenceRuntimeStatus,
+    intelligenceSmartSearchSettingEnabled,
+    showSparkleTooltip,
+  ]);
 
   const handleOpenPalette = useCallback(() => {
     vibrate(8);
@@ -2666,7 +3390,47 @@ export function CommandBar({
       isCatalogLoading
       || (isFolderScope && isDriveLoading)
       || (isNestedIndexing && nestedFileEntries.length === 0)
+      || (intelligenceSmartSearchEnabled && intelligenceRuntimeStatus === "loading")
     );
+  const smartSearchStatusText = intelligenceSmartSearchEnabled
+    ? intelligenceRuntimeStatus === "loading"
+      ? "Warming up"
+      : intelligenceRuntimeStatus === "ready"
+        ? semanticQueryPending
+          ? "Searching"
+          : semanticQueryTimedOut
+            ? "Partial results"
+            : semanticQueryError
+              ? "Keyword fallback"
+              : intelligenceIndexing
+                ? "Learning your files"
+                : "Smart search active"
+        : intelligenceRuntimeStatus === "error"
+          ? "Unavailable"
+        : ""
+    : "";
+  const showModelSetupProgress =
+    open
+    && intelligenceSmartSearchEnabled
+    && intelligenceRuntimeStatus === "loading";
+  const indexingTotal = indexingProgress?.total ?? semanticDocuments.length;
+  const indexingProcessed = indexingProgress
+    ? Math.min(indexingProgress.processed, indexingTotal)
+    : Math.min(intelligenceIndexedDocs, indexingTotal);
+  const indexingPercent = indexingTotal > 0
+    ? Math.max(0, Math.min(100, (indexingProcessed / indexingTotal) * 100))
+    : 0;
+  const showIndexingProgress =
+    open
+    && intelligenceSmartSearchEnabled
+    && intelligenceRuntimeStatus === "ready"
+    && intelligenceIndexing
+    && indexingTotal > 0;
+  const showInlineProgress = showModelSetupProgress || showIndexingProgress;
+  const showExperimentalNoticeLine =
+    hasActivatedSmartSearchSession
+    && intelligenceSmartSearchEnabled
+    && showExperimentalNotice;
   const isMobilePalette = isCoarsePointer || (viewportMetrics.width > 0 && viewportMetrics.width <= 820);
   const panelHeight = Math.min(
     isMobilePalette ? 920 : 880,
@@ -2924,6 +3688,11 @@ export function CommandBar({
             >
               <div className="mb-2 flex items-center justify-between px-1">
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <SmartSearchIndicator
+                    enabled={intelligenceSmartSearchEnabled}
+                    status={intelligenceRuntimeStatus}
+                    indexing={intelligenceIndexing}
+                  />
                   <IconSparkles className="size-3.5" />
                   <span>
                     {showLoadingSkeleton
@@ -2933,10 +3702,10 @@ export function CommandBar({
                           scopeSelectorMode === "folders"
                             ? "folder"
                             : scopeSelectorMode === "tags"
-                              ? "tag"
+                            ? "tag"
                               : "scope"
                         } option${displayResults.length === 1 ? "" : "s"}`
-                        : `${exactResults.length} result${exactResults.length === 1 ? "" : "s"} · ${searchDurationMs < 10 ? searchDurationMs.toFixed(2) : searchDurationMs.toFixed(1)} ms${shouldApplyRecencyBias ? " · recency boost" : ""}${isNestedIndexing ? " · refreshing nested index" : ""}`}
+                        : `${displayResults.length} result${displayResults.length === 1 ? "" : "s"} · ${searchDurationMs < 10 ? searchDurationMs.toFixed(2) : searchDurationMs.toFixed(1)} ms${shouldApplyRecencyBias ? " · recency boost" : ""}${isNestedIndexing ? " · refreshing nested index" : ""}${intelligenceSmartSearchEnabled ? ` · ${smartSearchStatusText}` : ""}`}
                   </span>
                 </div>
                 <Button
@@ -3121,24 +3890,136 @@ export function CommandBar({
                     className={cn(
                       "pr-1",
                     )}
-                    endAction={effectiveVisualQuery ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="size-7 rounded-md"
-                        onClick={() => {
-                          vibrate(6);
-                          setQuery("");
-                          setScopeHistoryCursor(-1);
-                        }}
-                      >
-                        <IconX className="size-3.5" />
-                        <span className="sr-only">Clear query</span>
-                      </Button>
-                    ) : null}
+                    endAction={(
+                      <div className="relative flex items-center gap-1">
+                        <motion.button
+                          type="button"
+                          aria-label="Toggle smart search"
+                          aria-pressed={intelligenceSmartSearchEnabled}
+                          onClick={handleToggleSessionSmartSearch}
+                          className={cn(
+                            "inline-flex size-7 items-center justify-center rounded-md transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                            intelligenceSmartSearchEnabled
+                              ? "text-primary"
+                              : "text-muted-foreground opacity-70",
+                          )}
+                          animate={intelligenceSmartSearchEnabled
+                            ? { scale: [1, 1.12, 1] }
+                            : { scale: 1 }}
+                          transition={intelligenceSmartSearchEnabled
+                            ? { duration: 2.5, repeat: Infinity, ease: "easeInOut" }
+                            : { duration: 0.2, ease: "easeOut" }}
+                        >
+                          <Sparkles className="size-3.5" />
+                        </motion.button>
+
+                        {effectiveVisualQuery ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="size-7 rounded-md"
+                            onClick={() => {
+                              vibrate(6);
+                              setQuery("");
+                              setScopeHistoryCursor(-1);
+                            }}
+                          >
+                            <IconX className="size-3.5" />
+                            <span className="sr-only">Clear query</span>
+                          </Button>
+                        ) : null}
+
+                        <AnimatePresence>
+                          {sparkleTooltipText ? (
+                            <motion.span
+                              initial={{ opacity: 0, y: -2 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -2 }}
+                              transition={{ duration: 0.18, ease: "easeOut" }}
+                              className="pointer-events-none absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded-md border border-border/70 bg-card px-2 py-1 text-[10px] text-muted-foreground shadow-sm"
+                            >
+                              {sparkleTooltipText}
+                            </motion.span>
+                          ) : null}
+                        </AnimatePresence>
+                      </div>
+                    )}
                   />
                 </motion.div>
+
+                <AnimatePresence initial={false}>
+                  {showExperimentalNoticeLine ? (
+                    <motion.div
+                      key="experimental-notice"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="overflow-hidden px-2 pb-1"
+                    >
+                      <div className="flex items-center gap-2 overflow-hidden text-[11px] text-muted-foreground">
+                        <span className="truncate">{"\u2697\ufe0f"} Smart Search is experimental</span>
+                        <span aria-hidden="true">\u00b7</span>
+                        <Link
+                          href="/blog/how-semantic-search-works"
+                          className="shrink-0 underline underline-offset-2 transition-colors hover:text-foreground"
+                        >
+                          Learn more
+                        </Link>
+                        <span aria-hidden="true">\u00b7</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowExperimentalNotice(false);
+                            try { window.localStorage.setItem("studytrix.smartsearch.noticeDismissed", "1"); } catch { /* ignore */ }
+                          }}
+                          className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors hover:bg-muted/70 hover:text-foreground"
+                          aria-label="Dismiss smart search notice"
+                        >
+                          <IconX className="size-3" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+
+                <AnimatePresence initial={false} mode="wait">
+                  {showInlineProgress ? (
+                    <motion.div
+                      key={showIndexingProgress ? "indexing-progress" : "download-progress"}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className="px-2 pb-1 pt-1"
+                    >
+                      <div className="mb-1 text-[11px] text-muted-foreground">
+                        {showIndexingProgress
+                          ? `Indexing your library \u2014 ${indexingProcessed} of ${indexingTotal} files`
+                          : modelDownloadProgress
+                            ? `Setting up smart search \u2014 ${modelDownloadProgress.remainingMb.toFixed(1)}MB of ${modelDownloadProgress.totalMb.toFixed(1)}MB remaining`
+                            : "Setting up smart search \u2014 downloading once (~34MB)"}
+                      </div>
+                      <div className="relative h-1 w-full overflow-hidden rounded-full bg-primary/15">
+                        {showIndexingProgress ? (
+                          <motion.div
+                            className="h-full rounded-full bg-primary"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${indexingPercent}%` }}
+                            transition={{ type: "spring", stiffness: 220, damping: 26, mass: 0.7 }}
+                          />
+                        ) : (
+                          <motion.div
+                            className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-gradient-to-r from-primary/15 via-primary to-primary/15"
+                            animate={{ x: ["-140%", "240%"] }}
+                            transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
+                          />
+                        )}
+                      </div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
 
                 {showEssentialScopeBar ? (
                   <div className="px-2 pb-1 pt-2">
@@ -3178,57 +4059,64 @@ export function CommandBar({
                   </div>
                 ) : null}
 
-                <CommandList
-                  ref={listRef}
-                  className="min-h-0 max-h-none flex-1 rounded-lg border border-transparent p-1"
-                  style={{ paddingBottom: listBottomInset }}
+                <motion.div
+                  layout
+                  initial={false}
+                  animate={{ opacity: 1, y: showInlineProgress ? 2 : 0 }}
+                  transition={{ type: "spring", stiffness: 320, damping: 30, mass: 0.8 }}
+                  className="flex min-h-0 flex-1"
                 >
-                  {showLoadingSkeleton ? (
-                    <div className="space-y-2 px-1 py-2">
-                      {Array.from({ length: 6 }).map((_, index) => (
-                        <div key={`command-skeleton-${index}`} className="space-y-1.5 rounded-lg border border-border/60 p-2 border-border/70">
-                          <Skeleton className="h-3 w-1/2" />
-                          <Skeleton className="h-2.5 w-2/3" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <>
-                      {showingFallbackResults && !scopeSelectorMode ? (
-                        <div className="mx-1 mb-2 rounded-lg border border-border/70 bg-muted/70 px-3 py-2 text-[11px] text-muted-foreground">
-                          No exact matches. Showing top commands instead.
-                        </div>
-                      ) : null}
-                      <CommandEmpty>
-                        <div className="flex flex-col items-center gap-2 py-6 text-center">
-                          <IconSearch className="size-4 text-muted-foreground/80" />
-                          <p className="text-xs font-medium text-muted-foreground">
-                            {scopeSelectorMode
-                              ? `No ${scopeSelectorMode === "folders" ? "folders" : scopeSelectorMode === "tags" ? "tags" : "scope options"} for "${effectiveVisualQuery || "..."}"`
-                              : hasAnyScope
-                                ? `No files in ${activeScopeLabel} match "${effectiveVisualQuery || "..."}"`
-                                : `No results for "${effectiveVisualQuery || "..."}"`}
-                          </p>
-                          {!scopeSelectorMode ? (
-                            <p className="text-[11px] text-muted-foreground">
-                              Try: <span className="font-medium">settings</span>, <span className="font-medium">storage</span>, <span className="font-medium">tag</span>
+                  <CommandList
+                    ref={listRef}
+                    className="min-h-0 max-h-none flex-1 rounded-lg border border-transparent p-1"
+                    style={{ paddingBottom: listBottomInset }}
+                  >
+                    {showLoadingSkeleton ? (
+                      <div className="space-y-2 px-1 py-2">
+                        {Array.from({ length: 6 }).map((_, index) => (
+                          <div key={`command-skeleton-${index}`} className="space-y-1.5 rounded-lg border border-border/60 p-2 border-border/70">
+                            <Skeleton className="h-3 w-1/2" />
+                            <Skeleton className="h-2.5 w-2/3" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <>
+                        {showingFallbackResults && !scopeSelectorMode ? (
+                          <div className="mx-1 mb-2 rounded-lg border border-border/70 bg-muted/70 px-3 py-2 text-[11px] text-muted-foreground">
+                            No exact matches. Showing top commands instead.
+                          </div>
+                        ) : null}
+                        <CommandEmpty>
+                          <div className="flex flex-col items-center gap-2 py-6 text-center">
+                            <IconSearch className="size-4 text-muted-foreground/80" />
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {scopeSelectorMode
+                                ? `No ${scopeSelectorMode === "folders" ? "folders" : scopeSelectorMode === "tags" ? "tags" : "scope options"} for "${effectiveVisualQuery || "..."}"`
+                                : hasAnyScope
+                                  ? `No files in ${activeScopeLabel} match "${effectiveVisualQuery || "..."}"`
+                                  : `No results for "${effectiveVisualQuery || "..."}"`}
                             </p>
-                          ) : null}
-                          {!scopeSelectorMode && hasAnyScope ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-7 rounded-full text-[11px]"
-                              onClick={() => applyScope(GLOBAL_SCOPE)}
-                            >
-                              Expand to global search
-                            </Button>
-                          ) : null}
-                        </div>
-                      </CommandEmpty>
+                            {!scopeSelectorMode ? (
+                              <p className="text-[11px] text-muted-foreground">
+                                Try: <span className="font-medium">settings</span>, <span className="font-medium">storage</span>, <span className="font-medium">tag</span>
+                              </p>
+                            ) : null}
+                            {!scopeSelectorMode && hasAnyScope ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 rounded-full text-[11px]"
+                                onClick={() => applyScope(GLOBAL_SCOPE)}
+                              >
+                                Expand to global search
+                              </Button>
+                            ) : null}
+                          </div>
+                        </CommandEmpty>
 
-                      {groupedResults.map((group) => {
+                        {groupedResults.map((group) => {
                         const meta = scopeSelectorMode
                           ? (() => {
                             if (scopeSelectorMode === "folders") {
@@ -3281,27 +4169,40 @@ export function CommandBar({
                             {group.items.map((item) => {
                               const ItemIcon = getCommandIcon(item);
                               const itemIconTone = getCommandIconTone(item);
+                              const isSemanticOnly = item.payload?.semanticOnly === true;
                               const isOfflineFile =
                                 item.group === "files"
                                 && Boolean(item.entityId)
                                 && (item.payload?.offlineOnly === true || Boolean(item.entityId && offlineFiles[item.entityId]));
                               const contentBadge = getContentBadge(item);
-                              const flatIndex = displayResults.indexOf(item);
+                              const flatIndex = displayResults.findIndex((candidate) => candidate.id === item.id);
                               const isActive = flatIndex === activeIndex;
+                              const semanticEntryOrder = semanticEnterOrder.get(item.id) ?? -1;
+                              const shouldAnimateSemanticEntry =
+                                isSemanticOnly
+                                && semanticEntryOrder >= 0
+                                && motionTokens.scale > 0;
 
                               return (
                                 <motion.div
                                   key={item.id}
-                                  initial={false}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ duration: 0.12, ease: "easeOut" }}
+                                  initial={shouldAnimateSemanticEntry ? { opacity: 0, y: 4 } : false}
+                                  animate={{ opacity: 1, x: 0, y: 0 }}
+                                  transition={shouldAnimateSemanticEntry
+                                    ? {
+                                      duration: 0.15,
+                                      ease: "easeOut",
+                                      delay: semanticEntryOrder * 0.04,
+                                    }
+                                    : { duration: 0.12, ease: "easeOut" }}
                                   ref={isActive ? activeItemRef : undefined}
                                 >
                                 <CommandItem
                                   value={item.id}
                                   className={cn(
                                     isMobilePalette ? "min-h-[54px]" : "min-h-12",
-                                    "rounded-lg transition-all duration-150",
+                                    "rounded-lg border-l-[3px] transition-all duration-150",
+                                    isSemanticOnly ? "border-l-primary/60" : "border-l-transparent",
                                     isActive
                                       ? "bg-primary/10 ring-1 ring-ring/40"
                                       : "data-[selected=true]:translate-x-0.5",
@@ -3316,7 +4217,10 @@ export function CommandBar({
 
                                   <div className="min-w-0 flex-1">
                                     <div className="truncate font-medium">
-                                      <HighlightedText text={item.title} query={effectiveVisualQuery} />
+                                      <HighlightedText
+                                        text={item.title}
+                                        query={effectiveVisualQuery}
+                                      />
                                     </div>
                                     {item.subtitle ? (
                                       <div className="truncate text-[11px] text-muted-foreground">
@@ -3352,10 +4256,11 @@ export function CommandBar({
                             </motion.div>
                           </CommandGroup>
                         );
-                      })}
-                    </>
-                  )}
-                </CommandList>
+                        })}
+                      </>
+                    )}
+                  </CommandList>
+                </motion.div>
                 <div className="mt-1 flex items-center justify-between rounded-md border border-border/70 px-2 py-1 text-[10px] text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <span className="rounded border border-border/80 px-1 py-px text-[9px] border-border">
@@ -3363,7 +4268,7 @@ export function CommandBar({
                     </span>
                     {showLoadingSkeleton
                       ? "Preparing context index..."
-                      : `${displayResults.length} result${displayResults.length === 1 ? "" : "s"}`}
+                      : `${displayResults.length} result${displayResults.length === 1 ? "" : "s"}${intelligenceSmartSearchEnabled ? ` · ${smartSearchStatusText}` : ""}`}
                   </span>
                   <span className="hidden sm:inline">↑↓ Navigate · Enter Open · Esc Layered Cancel · Alt+1 Folder · Alt+2 Tag · Alt+3 Actions</span>
                   <span className="sm:hidden">↑↓ · Enter · Esc</span>

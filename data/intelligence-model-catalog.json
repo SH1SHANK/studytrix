@@ -1,0 +1,36 @@
+{
+  "version": "2026-02-23",
+  "models": [
+    {
+      "id": "Xenova/all-MiniLM-L6-v2",
+      "label": "all-MiniLM-L6-v2",
+      "sizeMb": 23,
+      "embeddingDim": 384,
+      "tier": "small",
+      "recommendedFor": "low_end",
+      "status": "active"
+    },
+    {
+      "id": "Xenova/bge-small-en-v1.5",
+      "label": "bge-small-en-v1.5",
+      "sizeMb": 34,
+      "embeddingDim": 384,
+      "tier": "balanced",
+      "recommendedFor": "balanced",
+      "status": "active"
+    },
+    {
+      "id": "Xenova/all-MiniLM-L12-v2",
+      "label": "all-MiniLM-L12-v2",
+      "sizeMb": 45,
+      "embeddingDim": 384,
+      "tier": "quality",
+      "recommendedFor": "high_end",
+      "status": "active"
+    }
+  ],
+  "defaults": {
+    "autoLowEnd": "Xenova/all-MiniLM-L6-v2",
+    "autoBalanced": "Xenova/bge-small-en-v1.5"
+  }
+}

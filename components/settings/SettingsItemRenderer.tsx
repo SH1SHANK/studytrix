@@ -12,6 +12,7 @@ import { SettingToggle } from "./SettingToggle";
 import { SettingStorageLocation } from "./SettingStorageLocation";
 import { SettingGreetingPreferences } from "./SettingGreetingPreferences";
 import { SettingUserProfile } from "./SettingUserProfile";
+import { IntelligenceSettingsSection } from "@/components/intelligence/IntelligenceSettingsSection";
 import { getSettingIcon } from "./setting-icons";
 import type { SettingItem } from "@/features/settings/settings.types";
 
@@ -34,6 +35,20 @@ function SettingsItemRendererComponent({
   }
   if (setting.id === "greetingPreferences") {
     return <SettingGreetingPreferences setting={setting} />;
+  }
+  if (setting.id === "intelligence_smart_search_enabled") {
+    return <IntelligenceSettingsSection onDangerAction={onDangerAction} />;
+  }
+  if (
+    setting.id === "intelligence_ocr_enabled"
+    || setting.id === "intelligence_duplicate_detection_enabled"
+    || setting.id === "intelligence_model_mode"
+    || setting.id === "intelligence_model_id"
+    || setting.id === "intelligence_cleanup_model_id"
+    || setting.id === "intelligence_semantic_weight"
+    || setting.id === "intelligence_clear_index"
+  ) {
+    return null;
   }
 
   if (setting.type === "toggle") {

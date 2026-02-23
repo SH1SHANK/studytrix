@@ -32,6 +32,8 @@ import {
   IconWifi,
   IconShare2,
   IconLink,
+  IconScan,
+  IconCopy,
   IconFlask2,
   IconSunHigh,
   IconUser,
@@ -70,6 +72,22 @@ export function getSettingIcon(id: string): ReactNode {
       return <IconZoomInArea {...props} />;
     case "result_limit":
       return <IconListNumbers {...props} />;
+    case "intelligence_smart_search_enabled":
+      return <IconFlask2 {...props} />;
+    case "intelligence_ocr_enabled":
+      return <IconScan {...props} />;
+    case "intelligence_duplicate_detection_enabled":
+      return <IconCopy {...props} />;
+    case "intelligence_model_mode":
+      return <IconSettings {...props} />;
+    case "intelligence_model_id":
+      return <IconDatabase {...props} />;
+    case "intelligence_cleanup_model_id":
+      return <IconWand {...props} />;
+    case "intelligence_semantic_weight":
+      return <IconWand {...props} />;
+    case "intelligence_clear_index":
+      return <IconTrash className="size-[18px] text-rose-500 dark:text-rose-400 shrink-0" />;
     case "auto_prefetch":
       return <IconDownload {...props} />;
     case "storage_location":

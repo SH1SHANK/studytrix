@@ -276,6 +276,29 @@ export function SettingsLayout() {
   }, []);
 
   const handleDangerAction = useCallback(async (id: string) => {
+    if (id === "intelligence_clear_index") {
+      try {
+        const intelligenceDb = await import("@/features/intelligence/intelligence.db");
+        const intelligenceClient = await import("@/features/intelligence/intelligence.client");
+        const intelligenceStore = await import("@/features/intelligence/intelligence.store");
+
+        await intelligenceDb.clearAllEmbeddings();
+        await intelligenceClient.getIntelligenceClient().clearIndex().catch(() => undefined);
+        intelligenceStore.useIntelligenceStore.getState().setIndexStats({
+          indexedDocs: 0,
+          lastIndexedAt: null,
+        });
+        intelligenceStore.useIntelligenceStore.getState().clearDuplicates();
+
+        setStatus("Semantic search index cleared");
+        setError(null);
+      } catch {
+        setError("Failed to clear semantic search index");
+        setStatus(null);
+      }
+      return;
+    }
+
     if (id !== "reset_all_settings") {
       return;
     }

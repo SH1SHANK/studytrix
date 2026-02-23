@@ -7,6 +7,7 @@ import {
   IconDeviceFloppy,
   IconDownload,
   IconDotsVertical,
+  IconFileText,
   IconInfoCircle,
   IconShare,
   IconStar,
@@ -22,11 +23,16 @@ import { shareNativeFile } from "@/features/share/share.service";
 import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { expandFolders } from "@/features/bulk/bulk.service";
 import { makeFilesOffline } from "@/features/bulk/bulk.offline";
+import { extractFullFileContent, isExtractableMimeType } from "@/features/intelligence/extractors/content.extractor";
+import { cleanTextForClipboard } from "@/features/intelligence/intelligence.cleanup.client";
 import { toast } from "sonner";
 import { downloadAsZip, shareAsZip } from "@/features/bulk/bulk.share";
 import { useShareStore } from "@/features/share/share.store";
 import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
+import { useSetting } from "@/ui/hooks/useSettings";
 import { formatFileSize, getMimeLabel } from "@/features/drive/drive.types";
+import { INTELLIGENCE_SETTINGS_IDS } from "@/features/intelligence/intelligence.constants";
+import { resolveCleanupModelId } from "@/features/intelligence/intelligence.cleanup.utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -373,6 +379,7 @@ export function EntityActionsMenu({
 }: EntityActionsMenuProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [cleanupModelSetting] = useSetting(INTELLIGENCE_SETTINGS_IDS.cleanupModelId);
   const gateDownloadRisk = useDownloadRiskGate();
   const hydrationRequestedRef = useRef(false);
   const {
@@ -447,6 +454,75 @@ export function EntityActionsMenu({
       toast.error("Clipboard is not available in this browser.");
     });
   }, [closeMenu, entityDetails?.webViewLink, entityId, entityType]);
+
+  const canCopyContents = entityType === "file" && isExtractableMimeType(entityDetails?.mimeType);
+  const [isCopyingContents, setIsCopyingContents] = useState(false);
+
+  const handleCopyContents = useCallback(() => {
+    if (isCopyingContents) {
+      return;
+    }
+
+    triggerHaptic(6);
+    closeMenu();
+    setIsCopyingContents(true);
+
+    const toastId = toast.loading("Extracting content\u2026");
+
+    void (async () => {
+      try {
+        const result = await extractFullFileContent(
+          entityId,
+          entityDetails?.mimeType ?? "",
+        );
+
+        let textToCopy = result.text;
+        let usedCleanupFallback = false;
+
+        if (result.isOcrResult && result.text.trim().length > 0) {
+          toast.loading("Cleaning OCR text\u2026", { id: toastId });
+          const preferredCleanupModel = typeof cleanupModelSetting === "string"
+            ? resolveCleanupModelId(cleanupModelSetting)
+            : undefined;
+          const cleanupResult = await cleanTextForClipboard(result.text, preferredCleanupModel);
+          textToCopy = cleanupResult.text;
+          usedCleanupFallback = cleanupResult.usedFallback;
+        }
+
+        const copied = await copyToClipboard(textToCopy);
+        if (!copied) {
+          toast.error("Clipboard is not available in this browser.", { id: toastId });
+          return;
+        }
+
+        if (usedCleanupFallback) {
+          toast.success(
+            "Copied original OCR text (cleanup fallback applied)",
+            { id: toastId, duration: 5000 },
+          );
+          return;
+        }
+
+        if (result.isOcrResult && result.confidence < 70) {
+          toast.success(
+            "Content copied — some parts may be inaccurate (scanned document)",
+            { id: toastId, duration: 5000 },
+          );
+        } else {
+          toast.success("Content copied to clipboard!", { id: toastId });
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not extract text from this file.",
+          { id: toastId },
+        );
+      } finally {
+        setIsCopyingContents(false);
+      }
+    })();
+  }, [cleanupModelSetting, closeMenu, entityDetails?.mimeType, entityId, isCopyingContents]);
 
   const handleShare = useCallback(() => {
     triggerHaptic();
@@ -868,6 +944,18 @@ export function EntityActionsMenu({
                 disabled={isDownloading}
               />
             </section>
+
+            {canCopyContents ? (
+              <section className="rounded-xl border border-border/70 bg-card/80 p-1">
+                <MenuActionRow
+                  icon={<IconFileText className="size-4 text-teal-500 dark:text-teal-300" />}
+                  label="Copy Contents"
+                  description="Extract and copy all text from this file"
+                  onSelect={handleCopyContents}
+                  disabled={isCopyingContents}
+                />
+              </section>
+            ) : null}
 
             <section className="rounded-xl border border-border/75 bg-muted/35 px-2.5 pb-2.5 pt-2">
               <p className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.11em] text-muted-foreground/90">

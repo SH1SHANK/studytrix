@@ -11,7 +11,7 @@
 
 "use client";
 
-import { memo, useCallback, useMemo, useRef, type CSSProperties } from "react";
+import { memo, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import {
   animate,
   AnimatePresence,
@@ -42,6 +42,7 @@ import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { useSelectionStore } from "@/features/selection/selection.store";
 import { Button } from "@/components/ui/button";
 import { EntityActionsMenu } from "@/components/file-manager/EntityActionsMenu";
+import { DuplicateBadge } from "@/components/intelligence/DuplicateBadge";
 
 type FileRowProps = {
   id: string;
@@ -61,6 +62,8 @@ type FileRowProps = {
   onOpen?: () => void;
   onMakeOffline?: (sourceElement?: HTMLElement) => void;
   onRemoveOffline?: () => void;
+  duplicateOf?: string | null;
+  onCompareDuplicate?: (duplicateOf: string) => void;
   /** Stagger index for entrance animation */
   animationIndex?: number;
   compact?: boolean;
@@ -161,6 +164,8 @@ function FileRowComponent({
   onOpen,
   onMakeOffline,
   onRemoveOffline,
+  duplicateOf = null,
+  onCompareDuplicate,
   animationIndex = 0,
   compact = false,
 }: FileRowProps) {
@@ -308,24 +313,40 @@ function FileRowComponent({
     );
   };
 
-  const renderStatusBadge = () => {
+  const renderStatusBadge = (): ReactNode => {
+    const badges: ReactNode[] = [];
+
     if (isOffline) {
-      return (
-        <span className="inline-flex shrink-0 items-center rounded-full border border-primary/35 bg-primary/12 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+      badges.push(
+        <span key="offline" className="inline-flex shrink-0 items-center rounded-full border border-primary/35 bg-primary/12 px-1.5 py-0.5 text-[10px] font-medium text-primary">
           Offline
-        </span>
+        </span>,
       );
     }
 
     if (isDownloading) {
-      return (
-        <span className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+      badges.push(
+        <span key="syncing" className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           Syncing
-        </span>
+        </span>,
       );
     }
 
-    return null;
+    if (!isFolder && duplicateOf) {
+      badges.push(
+        <DuplicateBadge
+          key="duplicate"
+          duplicateOf={duplicateOf}
+          onCompare={onCompareDuplicate}
+        />,
+      );
+    }
+
+    if (badges.length === 0) {
+      return null;
+    }
+
+    return <span className="inline-flex items-center gap-1">{badges}</span>;
   };
 
   // Motion values for swipe
