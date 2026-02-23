@@ -20,7 +20,7 @@ import {
 } from "@/features/offline/offline.flags";
 
 const INTERNAL_DEBUG_KEY = "studytrix.internal_debug";
-const OFFLINE_DEBUG_PANEL_VERSION_TAG = "v0.9.0-experimental";
+const OFFLINE_DEBUG_PANEL_VERSION_TAG = "v0.9.1-experimental";
 
 type PanelState = {
   show: boolean;

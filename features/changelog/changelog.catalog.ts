@@ -10,6 +10,23 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "0.9.1",
+    releasedOn: "2026-02-23",
+    title: "Shortcut Streaming Fix + Mobile Command and Dock Refinements",
+    summary:
+      "Fixed Google Drive shortcut download failures and streamlined core mobile interactions across breadcrumb, item actions, CommandCenter, and floating dock layouts.",
+    highlights: [
+      "Fixed file streaming for Google Drive shortcuts by resolving shortcut targets before media/export requests and strengthening shortcut error handling.",
+      "Added shortcut-focused service and route regression coverage for target resolution, missing targets, and access-denied/not-found mappings.",
+      "Improved file-manager breadcrumb behavior by auto-scrolling the active breadcrumb segment into view after navigation and responsive layout changes.",
+      "Reworked file/folder action menu hierarchy into context, organization, and docked primary-action sections for faster scanning and lower interaction cost.",
+      "Updated Copy Link behavior to use true Google Drive share URLs derived from item IDs (with `webViewLink` preference when available).",
+      "Improved CommandCenter search-input ergonomics by separating scope pills from the input field, refining placeholder behavior, and fixing mobile list sizing when keyboard is closed.",
+      "Fixed floating dock clipping on mobile and tuned dock sizing, safe-area offsets, and search placeholder text for stable rendering across narrow screens.",
+      "Removed redundant action-menu and command-input plumbing no longer needed after the UX refactor.",
+    ],
+  },
+  {
     version: "0.9.0",
     releasedOn: "2026-02-21",
     title: "Robust Download Pipeline + Prefix-First Command UX",

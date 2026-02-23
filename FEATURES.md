@@ -5,7 +5,7 @@
 - Custom version declaration source at `features/version/version.ts`.
 - Curated release notes source at `features/changelog/changelog.catalog.ts`.
 - In-app version banner shown after a version bump with `View Changelog` and `Dismiss`.
-- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through `v0.9.0`.
+- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through `v0.9.1`.
 - Version label rendered in the app shell footer for quick reference.
 
 ## Dashboard and Navigation

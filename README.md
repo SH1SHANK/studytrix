@@ -1,7 +1,7 @@
 # Studytrix
 
 > **Status**: Beta  
-> **Current app version**: `v0.9.0` (released on `2026-02-21`)
+> **Current app version**: `v0.9.1` (released on `2026-02-23`)
 
 Studytrix is an offline-first academic workspace built with Next.js 16, React 19, and TypeScript. It combines Drive-backed content browsing, local persistence, command-driven navigation, and mobile/PWA-aware workflows into a single high-performance interface.
 
@@ -42,6 +42,21 @@ Scope prefixes:
 - `@`: recents scope
 
 ## Release Notes (Detailed)
+
+### v0.9.1 - Shortcut Streaming Fix + Mobile Command and Dock Refinements (`2026-02-23`)
+
+- Fixed Google Drive shortcut downloads by resolving shortcut targets before stream/export and improving error mapping for inaccessible/missing targets.
+- Added focused regression tests for shortcut metadata/stream paths to prevent 500s on shortcut-backed files.
+- Improved breadcrumb UX by auto-scrolling the active folder segment into view after folder navigation and responsive layout changes.
+- Reworked file/folder action menus into a clearer hierarchy with:
+  - metadata context section
+  - organization actions section
+  - bottom dock for primary actions
+- Updated `Copy Link` to copy actual Google Drive share links derived from file/folder IDs (preferring Drive `webViewLink` when available).
+- Improved CommandCenter search input area by separating scope chips from the input field and refining scoped placeholder behavior.
+- Fixed mobile CommandCenter empty-space behavior when keyboard is closed by removing restrictive list-height caps.
+- Fixed floating dock clipping/rendering on mobile with tighter width handling, safer bottom offsets, and clearer search placeholder text.
+- Removed redundant action-menu and command-input plumbing introduced by previous UI iterations.
 
 ### v0.9.0 - Robust Download Pipeline + Prefix-First Command UX (`2026-02-21`)
 
