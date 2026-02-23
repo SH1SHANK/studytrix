@@ -1,15 +1,16 @@
 # Studytrix
 
-> **Status**: Beta  
-> **Current app version**: `v0.9.1` (released on `2026-02-23`)
+> **Status**: Beta / Experimental
+> **Current app version**: `v0.9.3-experimental` (released on `2026-02-23`)
 
-Studytrix is an offline-first academic workspace built with Next.js 16, React 19, and TypeScript. It combines Drive-backed content browsing, local persistence, command-driven navigation, and mobile/PWA-aware workflows into a single high-performance interface.
+Studytrix is an offline-first academic workspace built with Next.js 16, React 19, and TypeScript. It combines Drive-backed content browsing, local persistence, on-device AI for semantic search and OCR denoising, command-driven navigation, and mobile/PWA-aware workflows into a single high-performance interface.
 
 ## Product Goals
 
-- Provide reliable access to study material, even with unstable connectivity.
-- Keep cloud credentials and privileged access server-only.
-- Improve discovery with command scopes, tags, and contextual navigation.
+- Provide reliable, offline-first access to study material, even with unstable connectivity.
+- Keep cloud credentials and privileged access server-side to ensure maximum security.
+- Improve content discovery with command scopes, tags, semantic embedding search, and contextual navigation.
+- Empower learning through completely local, privacy-first AI text cleanup and extraction.
 - Support fast, safe bulk actions for download, zip, and share workflows.
 
 ## In-App Guide Pages
@@ -160,6 +161,7 @@ Scope prefixes:
 | UI | Tailwind CSS v4, Framer Motion, Tabler Icons |
 | State | Zustand |
 | Persistence | IndexedDB, File System Access API |
+| Local AI | `@huggingface/transformers` (Web Worker + WebAssembly/WebGPU) |
 | Cloud | Google Drive API, Open-Meteo (greeting weather context) |
 | Caching | Redis + in-memory fallback |
 | Compression | `fflate` (client zip generation) |
@@ -198,6 +200,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - [Architecture](./ARCHITECTURE.md)
 - [System Context](./SYSTEM_CONTEXT.md)
 - [Visual System](./VISUAL_SYSTEM.md)
+- [Local Models Integration](./LOCAL_MODELS.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Security](./SECURITY.md)
 

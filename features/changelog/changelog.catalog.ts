@@ -10,6 +10,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "0.9.3-experimental",
+    releasedOn: "2026-02-23",
+    title: "AI Integration & Local Models Support",
+    summary:
+      "Added support for local deep-learning models via Transformers.js, introducing the Content Copy Pipeline and the AI Cleanup Engine for OCR denoising.",
+    highlights: [
+      "Integrated `@huggingface/transformers` in a dedicated Web Worker to run T5 and MiniLM models purely on-device using WebGPU and WebAssembly.",
+      "Added AI Cleanup Engine to refine raw OCR outputs using Xenova's T5-series models, with 'Lite', 'Balanced', and 'Pro' tier selection.",
+      "Added a new settings UI for Local AI Models, enabling model size selection (15MB to 100MB) and caching preferences.",
+      "Introduced the Copy Contents pipeline that can parse PDFs, PPTXs, DOCXs, and images, automatically invoking the cleanup engine on scanned documents.",
+      "Expanded project documentation with a dedicated Local Models guide, architectural flows for the Web Worker multiplexing, and OSS-friendly repository metadata.",
+    ],
+  },
+  {
     version: "0.9.1",
     releasedOn: "2026-02-23",
     title: "Shortcut Streaming Fix + Mobile Command and Dock Refinements",

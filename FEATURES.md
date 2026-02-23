@@ -5,7 +5,7 @@
 - Custom version declaration source at `features/version/version.ts`.
 - Curated release notes source at `features/changelog/changelog.catalog.ts`.
 - In-app version banner shown after a version bump with `View Changelog` and `Dismiss`.
-- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through `v0.9.1`.
+- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through current.
 - Version label rendered in the app shell footer for quick reference.
 
 ## Dashboard and Navigation
@@ -59,6 +59,14 @@
 - Offline diagnostics and storage health surfaces.
 - Offline Library static fallback (`/offline-library.html`) for guaranteed offline access when app route bundles are unavailable.
 - Offline-aware navigation handoff between fallback and full app route when connectivity changes.
+
+## AI and Local Intelligence
+
+- Full-content extraction (`Copy Contents` pipeline) for PDFs, DOCXs, PPTXs, and images.
+- Extractor routers orchestrate native Mammoth (DOCX), `<a:t>` tags (PPTX), native PDF text, and `Tesseract.js` image OCR fallbacks.
+- AI Cleanup Engine powered by local T5 models via `@huggingface/transformers` to denoise and format garbled OCR output.
+- Configurable intelligence profiles in settings mapped to Xenova's model tiers (Lite, Balanced, Pro).
+- Fully private, on-device compute via Web Workers, utilizing WebGPU and multi-threading where available.
 
 ## Bulk Operations, Zip, and Share
 

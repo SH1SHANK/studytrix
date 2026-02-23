@@ -1,6 +1,6 @@
 {
   "name": "studytrix",
-  "version": "0.9.1",
+  "version": "0.9.3-experimental",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -15,12 +15,14 @@ graph TD
         SET[Settings + Guides]
         ZS[Zustand Stores]
         LOC[(IndexedDB / File System Access API)]
+        AI[[Intelligence Web Worker]]
 
         UI <--> CMD
         UI <--> BULK
         UI <--> SET
         UI <--> ZS
         ZS <--> LOC
+        ZS <--> AI
     end
 
     subgraph Server["Next.js Server Layer"]
@@ -64,6 +66,13 @@ graph TD
 - Scope-aware indexing and search for global and local folder contexts.
 - Prefix-based mode switching (`/`, `#`, `:`, `>`, `@`).
 - Nested path discovery support for deeper folder hierarchies.
+
+### `features/intelligence`
+
+- Extractor framework managing PDF, DOCX, PPTX, and image content parsing with OCR bounding-box detection.
+- A decoupled, singleton Web Worker orchestrating Xenova Hugging Face models.
+- Cross-feature support for semantic text embeddings (`MiniLM`) and content denoising (`T5`).
+- Intelligent fallbacks leveraging progressive enhancement depending on GPU hardware/WASM capacity.
 
 ### `features/offline`
 
