@@ -44,6 +44,17 @@ Scope prefixes:
 
 ## Release Notes (Detailed)
 
+### v0.9.3-experimental - Intelligence UX Polish + Local Model Switching (`2026-02-23`)
+
+- Added live model switching for CommandCenter semantic search directly from Settings (manual model change and auto/manual mode transitions).
+- Added robust index-safety behavior when semantic model changes so stale vectors are invalidated and rebuilt cleanly.
+- Added a polished `Model Activity` panel in Settings showing animated download/provisioning progress for:
+  - Semantic search model
+  - Cleanup engine model
+- Added stronger runtime feedback across local-model lifecycle (`loading`, `ready`, `error`) with responsive status badges and progress bars.
+- Improved OCR cleanup reliability by enforcing strict fallback to original OCR text whenever generated output is too short or invalid.
+- Kept all model execution on-device via Web Worker + Transformers runtime (WebGPU with WASM fallback).
+
 ### v0.9.1 - Shortcut Streaming Fix + Mobile Command and Dock Refinements (`2026-02-23`)
 
 - Fixed Google Drive shortcut downloads by resolving shortcut targets before stream/export and improving error mapping for inaccessible/missing targets.

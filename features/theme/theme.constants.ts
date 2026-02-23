@@ -5,7 +5,9 @@ export type ThemeId =
   | "sunset"
   | "minimal"
   | "eclipse"
-  | "graphite";
+  | "graphite"
+  | "aurora";
+
 
 export interface ThemePreview {
   primary: string;
@@ -55,6 +57,11 @@ export const THEMES: ThemeOption[] = [
     label: "Graphite",
     preview: { primary: "#3b82f6", background: "#111111", accent: "#2a2a2a" },
   },
+  {
+    id: "aurora",
+    label: "Aurora (OLED)",
+    preview: { primary: "#06b6d4", background: "#000000", accent: "#a855f7" },
+  },
 ];
 
 export const DEFAULT_THEME_ID: ThemeId = "classic";
@@ -71,7 +78,9 @@ export const TAG_COLOR_PALETTES: Record<ThemeId, readonly string[]> = {
   minimal: ["#475569", "#64748B", "#0EA5E9", "#14B8A6", "#94A3B8", "#334155", "#0F766E", "#6B7280"],
   eclipse: ["#A855F7", "#8B5CF6", "#C084FC", "#22D3EE", "#F472B6", "#F59E0B", "#34D399", "#60A5FA"],
   graphite: ["#3B82F6", "#60A5FA", "#22C55E", "#F59E0B", "#F87171", "#A78BFA", "#38BDF8", "#94A3B8"],
+  aurora: ["#06B6D4", "#8B5CF6", "#F43F5E", "#10B981", "#F59E0B", "#3B82F6", "#EC4899", "#EAB308"],
 };
+
 
 export function getTagColorPalette(themeId: string | null | undefined): readonly string[] {
   const resolvedTheme = THEMES.find((theme) => theme.id === themeId)?.id ?? DEFAULT_THEME_ID;

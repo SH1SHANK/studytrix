@@ -10,6 +10,7 @@ export const INTELLIGENCE_SETTINGS_IDS = {
   modelId: "intelligence_model_id",
   cleanupModelId: "intelligence_cleanup_model_id",
   clearIndex: "intelligence_clear_index",
+  clearModelCache: "intelligence_clear_model_cache",
   semanticWeight: "intelligence_semantic_weight",
 } as const;
 

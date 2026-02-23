@@ -47,6 +47,7 @@ function SettingsItemRendererComponent({
     || setting.id === "intelligence_cleanup_model_id"
     || setting.id === "intelligence_semantic_weight"
     || setting.id === "intelligence_clear_index"
+    || setting.id === "intelligence_clear_model_cache"
   ) {
     return null;
   }

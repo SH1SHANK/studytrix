@@ -299,6 +299,20 @@ export function SettingsLayout() {
       return;
     }
 
+    if (id === "intelligence_clear_model_cache") {
+      try {
+        const intelligenceClient = await import("@/features/intelligence/intelligence.client");
+        await intelligenceClient.getIntelligenceClient().clearModelCache().catch(() => undefined);
+
+        setStatus("Model cache cleared");
+        setError(null);
+      } catch {
+        setError("Failed to clear model cache");
+        setStatus(null);
+      }
+      return;
+    }
+
     if (id !== "reset_all_settings") {
       return;
     }

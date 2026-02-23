@@ -3852,9 +3852,9 @@ export function CommandBar({
                               initial={{ opacity: 0, scale: 0.8, x: -10 }}
                               animate={{ opacity: 1, scale: 1, x: 0 }}
                               exit={{ opacity: 0, scale: 0.8, x: -10 }}
-                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                              transition={{ type: "spring", stiffness: 400, damping: 28, mass: 0.8 }}
                               key={pill.key}
-                              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary shadow-sm"
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary shadow-xs transition-colors hover:bg-primary/15 hover:border-primary/40"
                             >
                               {pill.icon === "folder" ? (
                                 <IconFolder className="size-3.5 shrink-0" />
@@ -3870,11 +3870,11 @@ export function CommandBar({
                               <span className="max-w-24 truncate">{pill.label}</span>
                               <button
                                 type="button"
-                                className="shrink-0 rounded-full p-0.5 opacity-60 transition-all hover:bg-primary/20 hover:opacity-100"
+                                className="shrink-0 rounded-full p-0.5 opacity-60 transition-all hover:bg-primary/20 hover:text-primary hover:opacity-100"
                                 onClick={pill.onRemove}
                                 aria-label={`Remove ${pill.label} scope`}
                               >
-                                <IconX className="size-3 shrink-0" />
+                                <IconX className="size-3.5 shrink-0" />
                               </button>
                             </motion.div>
                           ))}
@@ -3958,23 +3958,23 @@ export function CommandBar({
                       transition={{ duration: 0.25, ease: "easeOut" }}
                       className="overflow-hidden px-2 pb-1"
                     >
-                      <div className="flex items-center gap-2 overflow-hidden text-[11px] text-muted-foreground">
+                      <div className="flex items-center gap-2 overflow-hidden rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-[11px] font-medium text-foreground/80 shadow-xs transition-colors hover:bg-primary/10 hover:text-foreground">
                         <span className="truncate">{"\u2697\ufe0f"} Smart Search is experimental</span>
-                        <span aria-hidden="true">\u00b7</span>
+                        <span aria-hidden="true" className="text-muted-foreground/60">·</span>
                         <Link
                           href="/blog/how-semantic-search-works"
-                          className="shrink-0 underline underline-offset-2 transition-colors hover:text-foreground"
+                          className="shrink-0 text-primary underline decoration-primary/40 underline-offset-2 transition-colors hover:decoration-primary"
                         >
                           Learn more
                         </Link>
-                        <span aria-hidden="true">\u00b7</span>
+                        <span aria-hidden="true" className="text-muted-foreground/60">·</span>
                         <button
                           type="button"
                           onClick={() => {
                             setShowExperimentalNotice(false);
                             try { window.localStorage.setItem("studytrix.smartsearch.noticeDismissed", "1"); } catch { /* ignore */ }
                           }}
-                          className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors hover:bg-muted/70 hover:text-foreground"
+                          className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-black/10 hover:text-foreground dark:hover:bg-white/10"
                           aria-label="Dismiss smart search notice"
                         >
                           <IconX className="size-3" />

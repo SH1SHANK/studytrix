@@ -1,6 +1,6 @@
 "use client";
 
-import { IconCheck, IconSun, IconMoon, IconTree, IconSunset, IconCircleDashed, IconMoonStars, IconHexagon } from "@tabler/icons-react";
+import { IconCheck, IconSun, IconMoon, IconTree, IconSunset, IconCircleDashed, IconMoonStars, IconHexagon, IconSparkles } from "@tabler/icons-react";
 
 import {
   type ThemeId,
@@ -21,7 +21,7 @@ const LIGHT_THEME_IDS: readonly ThemeId[] = [
   "minimal",
 ];
 
-const DARK_THEME_IDS: readonly ThemeId[] = ["midnight", "eclipse", "graphite"];
+const DARK_THEME_IDS: readonly ThemeId[] = ["midnight", "eclipse", "graphite", "aurora"];
 
 function getThemesByIds(ids: readonly ThemeId[]) {
   return ids
@@ -46,6 +46,8 @@ function getThemeIcon(id: ThemeId) {
       return <IconMoonStars {...props} />;
     case "graphite":
       return <IconHexagon {...props} />;
+    case "aurora":
+      return <IconSparkles {...props} />;
     default:
       return <IconSun {...props} />;
   }

@@ -16,6 +16,9 @@ interface IntelligenceState {
   lastIndexedAt: number | null;
   duplicates: Map<string, string>;
   activeModelId: string | null;
+  embeddingDownloadPercent: number | null;
+  embeddingDownloadLoadedBytes: number | null;
+  embeddingDownloadTotalBytes: number | null;
   cleanupModelId: string | null;
   cleanupDownloadPercent: number | null;
   cleanupDownloadLoadedBytes: number | null;
@@ -34,6 +37,11 @@ interface IntelligenceState {
   setDuplicates: (pairs: IntelligenceDuplicatePair[]) => void;
   clearDuplicates: () => void;
   setCleanupModelId: (modelId: string | null) => void;
+  setEmbeddingDownloadProgress: (payload: {
+    percent: number | null;
+    loadedBytes: number | null;
+    totalBytes: number | null;
+  }) => void;
   setCleanupDownloadProgress: (payload: {
     percent: number | null;
     loadedBytes: number | null;
@@ -54,6 +62,9 @@ const initialState = {
   lastIndexedAt: null,
   duplicates: new Map<string, string>(),
   activeModelId: null,
+  embeddingDownloadPercent: null,
+  embeddingDownloadLoadedBytes: null,
+  embeddingDownloadTotalBytes: null,
   cleanupModelId: null,
   cleanupDownloadPercent: null,
   cleanupDownloadLoadedBytes: null,
@@ -125,6 +136,14 @@ export const useIntelligenceStore = create<IntelligenceState>((set) => ({
 
   setCleanupModelId: (cleanupModelId) => {
     set({ cleanupModelId });
+  },
+
+  setEmbeddingDownloadProgress: ({ percent, loadedBytes, totalBytes }) => {
+    set({
+      embeddingDownloadPercent: percent,
+      embeddingDownloadLoadedBytes: loadedBytes,
+      embeddingDownloadTotalBytes: totalBytes,
+    });
   },
 
   setCleanupDownloadProgress: ({ percent, loadedBytes, totalBytes }) => {

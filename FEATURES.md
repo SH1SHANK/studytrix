@@ -66,6 +66,10 @@
 - Extractor routers orchestrate native Mammoth (DOCX), `<a:t>` tags (PPTX), native PDF text, and `Tesseract.js` image OCR fallbacks.
 - AI Cleanup Engine powered by local T5 models via `@huggingface/transformers` to denoise and format garbled OCR output.
 - Configurable intelligence profiles in settings mapped to Xenova's model tiers (Lite, Balanced, Pro).
+- Semantic search embedding model can be switched live from Settings (auto/manual mode aware).
+- Settings includes a responsive Model Activity panel with animated download/provisioning indicators for semantic and cleanup models.
+- Worker-backed model lifecycle emits progress + status events used for visible UX feedback without blocking interactions.
+- Cleanup pipeline applies strict output-safety fallback to original OCR text when generated output is too short.
 - Fully private, on-device compute via Web Workers, utilizing WebGPU and multi-threading where available.
 
 ## Bulk Operations, Zip, and Share

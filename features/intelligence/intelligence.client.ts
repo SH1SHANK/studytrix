@@ -331,6 +331,23 @@ export class IntelligenceClient {
     return this.request("CLEAR_INDEX", {});
   }
 
+  /**
+   * Programmatically clear the Transformers.js model binaries from the browser's CacheStorage.
+   * Useful for recovering from corrupted downloads or freeing up space.
+   */
+  async clearModelCache(): Promise<void> {
+    try {
+      const cacheNames = await caches.keys();
+      const deletePromises = cacheNames
+        .filter((name) => name.includes("transformers-cache"))
+        .map((name) => caches.delete(name));
+      
+      await Promise.all(deletePromises);
+    } catch (error) {
+      console.error("Failed to clear model cache array buffers", error);
+    }
+  }
+
   dispose(): void {
     for (const pending of this.pending.values()) {
       pending.reject(new Error("Intelligence worker disposed"));

@@ -72,6 +72,9 @@ graph TD
 - Extractor framework managing PDF, DOCX, PPTX, and image content parsing with OCR bounding-box detection.
 - A decoupled, singleton Web Worker orchestrating Xenova Hugging Face models.
 - Cross-feature support for semantic text embeddings (`MiniLM`) and content denoising (`T5`).
+- Worker multiplex protocol supports semantic indexing/query, cleanup generation, model switching, and progress/status event streaming.
+- Semantic model switching is index-safe: incompatible vectors are invalidated and reindexed instead of reused.
+- Settings surfaces worker progress callbacks through responsive model activity UI without blocking primary workflows.
 - Intelligent fallbacks leveraging progressive enhancement depending on GPU hardware/WASM capacity.
 
 ### `features/offline`

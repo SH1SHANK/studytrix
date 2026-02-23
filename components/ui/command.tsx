@@ -72,24 +72,24 @@ function CommandInput({
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input> & { endAction?: React.ReactNode }) {
   return (
-    <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="min-h-11 rounded-xl border-border/75 bg-input/15 shadow-sm">
+    <div data-slot="command-input-wrapper" className="p-1 pb-0 transition-all duration-200">
+      <InputGroup className="min-h-12 rounded-xl border-border/60 bg-input/10 shadow-xs transition-all duration-300 focus-within:border-primary/40 focus-within:bg-input/20 focus-within:ring-2 focus-within:ring-primary/20 hover:border-border/80">
+        <InputGroupAddon className="shrink-0 pl-3.5 pr-1.5 text-muted-foreground transition-colors duration-200 group-focus-within/input-group:text-primary/80">
+          <IconSearch className="size-4 shrink-0" />
+        </InputGroupAddon>
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
-            "w-full min-w-0 flex-1 bg-transparent px-3.5 py-2 text-[16px] leading-relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm",
+            "w-full min-w-0 flex-1 bg-transparent px-2 py-3 text-[16px] leading-relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50 sm:text-base",
             className
           )}
           {...props}
         />
         {endAction ? (
-          <InputGroupAddon className="shrink-0 pr-1 text-muted-foreground/80">
+          <InputGroupAddon className="shrink-0 pr-1.5 text-muted-foreground/80">
             {endAction}
           </InputGroupAddon>
         ) : null}
-        <InputGroupAddon className="shrink-0 pr-3 text-muted-foreground/80">
-          <IconSearch className="size-3.5 shrink-0 opacity-50" />
-        </InputGroupAddon>
       </InputGroup>
     </div>
   )

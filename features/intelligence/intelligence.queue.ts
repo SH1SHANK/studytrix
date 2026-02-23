@@ -37,7 +37,7 @@ function requestIdle(callback: IdleCallbackFunction, options?: IdleRequestOption
       didTimeout: false,
       timeRemaining: () => 0,
     });
-  }, 16);
+  }, 100);
 }
 
 function cancelIdle(handle: IdleCallbackHandle): void {

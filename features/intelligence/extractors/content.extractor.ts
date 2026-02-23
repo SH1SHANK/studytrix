@@ -73,37 +73,43 @@ export function isExtractableMimeType(mimeType: string | null | undefined): bool
 
 async function extractFullPdfText(arrayBuffer: ArrayBuffer): Promise<FullExtractionResult | null> {
   const pdf = await loadPdfDocument(arrayBuffer);
-  const numPages = Math.max(0, Number(pdf.numPages) || 0);
-  const collected: string[] = [];
+  
+  try {
+    const numPages = Math.max(0, Number(pdf.numPages) || 0);
+    const collected: string[] = [];
 
-  for (let pageNumber = 1; pageNumber <= numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const textContent = await page.getTextContent();
+    for (let pageNumber = 1; pageNumber <= numPages; pageNumber += 1) {
+      let page;
+      try {
+        page = await pdf.getPage(pageNumber);
+        const textContent = await page.getTextContent();
 
-    for (const item of textContent.items as Array<{ str?: string }>) {
-      const token = typeof item?.str === "string" ? item.str.trim() : "";
-      if (token.length > 0) {
-        collected.push(token);
+        for (const item of textContent.items as Array<{ str?: string }>) {
+          const token = typeof item?.str === "string" ? item.str.trim() : "";
+          if (token.length > 0) {
+            collected.push(token);
+          }
+        }
+      } finally {
+        page?.cleanup?.();
       }
     }
 
-    page.cleanup?.();
+    const joined = collected.join(" ").trim();
+
+    // If very little text was found, this is likely an image-based (scanned) PDF.
+    if (joined.length < 50) {
+      return null; // signal caller to try OCR
+    }
+
+    return {
+      text: cleanExtractedText(joined),
+      confidence: 100,
+      isOcrResult: false,
+    };
+  } finally {
+    await pdf.destroy?.();
   }
-
-  await pdf.destroy?.();
-
-  const joined = collected.join(" ").trim();
-
-  // If very little text was found, this is likely an image-based (scanned) PDF.
-  if (joined.length < 50) {
-    return null; // signal caller to try OCR
-  }
-
-  return {
-    text: cleanExtractedText(joined),
-    confidence: 100,
-    isOcrResult: false,
-  };
 }
 
 // ---------------------------------------------------------------------------

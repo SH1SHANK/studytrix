@@ -12,15 +12,15 @@ export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
     version: "0.9.3-experimental",
     releasedOn: "2026-02-23",
-    title: "AI Integration & Local Models Support",
+    title: "Intelligence UX Polish + Local Model Switching",
     summary:
-      "Added support for local deep-learning models via Transformers.js, introducing the Content Copy Pipeline and the AI Cleanup Engine for OCR denoising.",
+      "Expanded local on-device model controls with robust semantic/cleanup model switching, download progress feedback, and safer OCR denoising fallbacks.",
     highlights: [
-      "Integrated `@huggingface/transformers` in a dedicated Web Worker to run T5 and MiniLM models purely on-device using WebGPU and WebAssembly.",
-      "Added AI Cleanup Engine to refine raw OCR outputs using Xenova's T5-series models, with 'Lite', 'Balanced', and 'Pro' tier selection.",
-      "Added a new settings UI for Local AI Models, enabling model size selection (15MB to 100MB) and caching preferences.",
-      "Introduced the Copy Contents pipeline that can parse PDFs, PPTXs, DOCXs, and images, automatically invoking the cleanup engine on scanned documents.",
-      "Expanded project documentation with a dedicated Local Models guide, architectural flows for the Web Worker multiplexing, and OSS-friendly repository metadata.",
+      "Enabled live semantic search model switching from Settings, including auto/manual model mode transitions and index-safe invalidation on model mismatch.",
+      "Added a polished Model Activity panel in Settings with animated download progress bars for both semantic and cleanup pipelines.",
+      "Added local Cleanup Engine model selection with persisted preference (`Lite`, `Balanced`, `Pro`) and immediate worker-side switching.",
+      "Added worker progress/status events for model provisioning and wired them into responsive UI feedback (loading, ready, error states).",
+      "Hardened OCR denoising safety with strict fallback to original OCR text when output quality is unreliable (including short-output guard).",
     ],
   },
   {

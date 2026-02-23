@@ -256,6 +256,13 @@ const rawSettingsSchema: SettingsSchema = {
       category: "Intelligence",
     },
     {
+      id: "intelligence_clear_model_cache",
+      label: "Clear Model Cache",
+      description: "Delete downloaded inference models. They will re-download when needed.",
+      type: "danger",
+      category: "Intelligence",
+    },
+    {
       id: "auto_prefetch",
       label: "Auto Prefetch",
       description: "Prefetch nearby files in folder flows for faster open times.",

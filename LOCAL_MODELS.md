@@ -1,48 +1,85 @@
-# Local AI Models Integration
+# Local Models in Studytrix
 
-Studytrix incorporates completely offline, serverless AI capabilities directly within your browser. By utilizing device hardware through WebAssembly (WASM) and WebGPU, Studytrix performs advanced text processing tasks—like semantic search and document error correction—without uploading your data to third-party endpoints.
+Studytrix runs intelligence features entirely on-device using a dedicated Web Worker and `@huggingface/transformers@4.0.0-next.4`. No semantic query or cleanup text is sent to external inference APIs.
 
-## The Architecture
+## What Runs Locally
 
-Studytrix uses `@huggingface/transformers@4.36.2` to run machine learning models natively in JavaScript. These models run in a dedicated, singleton **Web Worker** (`intelligence.worker.ts`) to avoid blocking the main UI thread.
+### 1. Semantic Search Embeddings
 
-### Web Worker Multiplexing
+- Task: `feature-extraction`
+- Primary models:
+  - `Xenova/all-MiniLM-L6-v2`
+  - `Xenova/bge-small-en-v1.5`
+- Usage:
+  - CommandCenter semantic indexing (`INDEX_DOCS`)
+  - Query embeddings (`QUERY`)
 
-The intelligence worker handles multiple machine learning pipelines concurrently:
-1.  **`SEARCH_INDEX`**: Generates high-dimensional vector embeddings for file contents to enable concept-based (Semantic) Search.
-2.  **`CLEAN_TEXT`**: Employs sequence-to-sequence language models to fix garbled OCR artifacts from scanned documents.
+### 2. OCR Cleanup (Denoising)
 
-The worker implements a "Pipeline Singleton Map" pattern, acquiring mutual-exclusion locks during model loading to prevent concurrent instantiation races while ensuring that models are disposed of gracefully when the user alters settings or changes limits.
+- Tasks:
+  - `text2text-generation` for T5 models
+  - `summarization` for BART
+- Models (settings-selectable):
+  - `Lite`: `Xenova/t5-tiny` (~15MB)
+  - `Balanced`: `Xenova/t5-small` (~40MB)
+  - `Pro`: `Xenova/bart-base-cnn` (~100MB)
+- Usage:
+  - File Manager `Copy Contents` flow for OCR-derived text (`CLEAN_TEXT`)
 
-## The Models
+## Worker Multiplexing and Model Lifecycle
 
-Studytrix provides tiered intelligence quality controls under the "Local AI Models" settings panel, allowing users to balance accuracy against network usage (for the initial model download) and system memory consumption.
+The single worker multiplexes search + cleanup pipelines:
 
-### Embeddings Pipeline (Semantic Search)
-The app uses Xenova's quantized `all-MiniLM-L6-v2`. At less than 25MB, it excels at generating 384-dimensional vector representations of document chunks.
+- `INIT` / `SET_MODEL`: semantic runtime
+- `SWITCH_MODEL`: cleanup runtime
+- `INDEX_DOCS` / `QUERY`: semantic indexing and retrieval
+- `CLEAN_TEXT`: OCR denoising
 
-### Denoising Pipeline (AI Cleanup Engine)
-The **Cleanup Engine** is triggered during the "Copy Contents" flow on scanned documents. Since OCR on noisy scans (using Tesseract.js) often yields misspellings and formatting errors, Studytrix uses T5-family encoder-decoder models to denoise the text.
+Model runtimes are singleton-managed:
 
-The settings menu provides three tiers:
-| Tier       | Model                           | Size   | Use Case |
-| ---------- | ------------------------------- | ------ | -------- |
-| **Lite**   | `Xenova/t5-tiny` (q4)           | ~15MB  | Mobile devices, strict data caps |
-| **Balanced**| `Xenova/t5-small` (q4)         | ~40MB  | Default. Excellent error correction speed. |
-| **Pro**    | `Xenova/bart-base-cnn` (q4)     | ~100MB | High-fidelity recovery of academic layouts. |
+- Existing runtime reused when model ID matches.
+- Previous cleanup runtime is disposed before loading the next model.
+- Semantic model switches invalidate incompatible vectors so stale embeddings are not reused.
+- Cleanup runtime is terminated on persist/clear flows to release memory pressure.
 
-> **Note:** Models are downloaded directly from the Hugging Face hub on their first execution. The browser's native Cache API persistently stores them locally. Subsequent executions, even after app uninstalls or offline sessions, are instantaneous.
+## Runtime Backends and Fallbacks
 
-## OCR & Sanity Guards
+Model execution prefers GPU acceleration and degrades safely:
 
-Running generative models on raw text includes the risk of "hallucinations" (where the model creatively alters facts instead of just fixing spelling). To enforce accuracy inside an academic workspace:
+1. Try `webgpu` when available.
+2. Fallback to `wasm`.
+3. If semantic pipeline cannot load, fallback hashed embeddings are used for non-blocking search behavior.
+4. If cleanup model cannot load, `Copy Contents` falls back to original OCR text.
 
-1.  **Inference Parameters**: The models operate at a generation `temperature=0` (greedy decoding) with `repetition_penalty=1.2` to ensure deterministic, grounded outputs.
-2.  **Explicit Prompting**: The engine prefixes all payloads with a rigid `fix errors: ` prompt, anchoring the T5 model strictly in its grammatical denoising objective rather than broader summarization or paraphrasing tasks.
-3.  **The Sanity Check**: After the text is generated, proper length validation occurs. If the AI output length is less than 40% of the input's bounding box text density, Studytrix discards the generated text and falls back to the original OCR stream to prevent data suppression.
+## Download Progress and UX Feedback
 
-## Storage and Compatibility
+The worker emits event-based lifecycle feedback:
 
-Local AI integration relies heavily on WebGL and WebGPU acceleration (if enabled). Devices without dedicated hardware support will default to standard WebAssembly single-threaded execution, causing slower processing times.
+- `MODEL_DOWNLOAD_PROGRESS`
+- `MODEL_PIPELINE_STATUS`
 
-You can observe active model loading bars and processing indicators inside the Command Center and the offline storage page, providing transparency into resource availability and execution.
+These events drive:
+
+- CommandCenter setup indicators for semantic model provisioning.
+- Settings `Model Activity` panel with animated semantic + cleanup progress bars.
+- Status badges (`loading`, `ready`, `error`) and transient success/error feedback messages.
+
+## OCR Cleanup Guardrails
+
+To prevent over-aggressive rewriting:
+
+- T5 prompts use `fix errors:` prefix.
+- Generation uses deterministic settings:
+  - `temperature: 0`
+  - `repetition_penalty: 1.2`
+- If cleaned output is too short (less than 40% of input length), output is discarded and original OCR text is copied.
+
+## Persistence
+
+- Selected cleanup model is persisted locally (`localStorage`).
+- Semantic index snapshots are persisted in IndexedDB.
+- Model artifacts are cached by the browser runtime used by Transformers.
+
+## Privacy
+
+All semantic embedding, OCR cleanup, and model inference steps execute in-browser. Studytrix does not ship user OCR text or search intent to third-party model endpoints.

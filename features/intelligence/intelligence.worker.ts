@@ -61,6 +61,7 @@ type TransformersModule = {
     allowRemoteModels?: boolean;
     allowLocalModels?: boolean;
     useBrowserCache?: boolean;
+    customFetch?: (url: string | URL, init?: RequestInit) => Promise<Response>;
   };
   pipeline?: TransformerPipelineFactory;
 };
@@ -332,6 +333,48 @@ function createProgressCallback(
   };
 }
 
+async function fetchWithRetry(
+  url: string | URL,
+  init?: RequestInit,
+  retries = 5,
+  baseDelayMs = 500,
+): Promise<Response> {
+  let attempt = 0;
+
+  while (attempt < retries) {
+    try {
+      const response = await fetch(url, init);
+
+      // Successfully fetched, or it's a client error (except 408/429) that shouldn't be retried.
+      if (
+        response.ok
+        || (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429)
+      ) {
+        return response;
+      }
+
+      // If it's a 5xx error or 408/429, we throw to trigger the retry logic.
+      throw new Error(`HTTP ${response.status} - Transient error`);
+    } catch (error) {
+      attempt += 1;
+
+      if (attempt >= retries) {
+        throw error;
+      }
+
+      // Exponential backoff with a bit of jitter to prevent thundering herds
+      const jitter = Math.random() * 200;
+      const delay = baseDelayMs * 2 ** (attempt - 1) + jitter;
+
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, delay);
+      });
+    }
+  }
+
+  throw new Error("Maximum retries reached");
+}
+
 async function getTransformersModule(): Promise<TransformersModule> {
   if (!transformersModulePromise) {
     transformersModulePromise = (async () => {
@@ -340,8 +383,9 @@ async function getTransformersModule(): Promise<TransformersModule> {
 
       if (transformers.env) {
         transformers.env.allowRemoteModels = true;
-        transformers.env.allowLocalModels = false;
+        transformers.env.allowLocalModels = true;
         transformers.env.useBrowserCache = true;
+        transformers.env.customFetch = fetchWithRetry;
       }
 
       return transformers;
@@ -943,6 +987,7 @@ async function handleRequest(message: IntelligenceWorkerAnyRequestEnvelope): Pro
     const modelId = isRecord(initPayload) && typeof initPayload.modelId === "string"
       ? initPayload.modelId
       : INTELLIGENCE_FALLBACK_MODEL_ID;
+    const previousModelId = activeModelId;
 
     await ensureEmbedder(modelId || INTELLIGENCE_BALANCED_MODEL_ID);
 
@@ -952,6 +997,10 @@ async function handleRequest(message: IntelligenceWorkerAnyRequestEnvelope): Pro
 
     if (snapshot && snapshot.modelId === modelId) {
       restoreFromSnapshot(snapshot);
+    } else if (previousModelId && previousModelId !== modelId) {
+      indexedVectors.clear();
+      activeSignature = null;
+      activeUpdatedAt = nowMs();
     }
 
     return toStats();

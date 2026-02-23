@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is([data-theme="midnight"] *, [data-theme="eclipse"] *, [data-theme="graphite"] *));
+@custom-variant dark (&:is([data-theme="midnight"] *, [data-theme="eclipse"] *, [data-theme="graphite"] *, [data-theme="aurora"] *));
 
 @theme inline {
   --color-background: var(--background);
@@ -344,6 +344,42 @@
   --sidebar-border: #2a2a2a;
   --sidebar-ring: #3b82f6;
   --background-spot: #374151;
+}
+
+:root[data-theme="aurora"] {
+  --background: #000000;
+  --foreground: #e2e8f0;
+  --card: #09090b;
+  --card-foreground: #f8fafc;
+  --popover: #09090b;
+  --popover-foreground: #f8fafc;
+  --primary: #06b6d4;
+  --primary-foreground: #083344;
+  --secondary: #18181b;
+  --secondary-foreground: #cffafe;
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+  --accent: #1e1b4b;
+  --accent-foreground: #e0e7ff;
+  --destructive: #ef4444;
+  --destructive-foreground: #7f1d1d;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #06b6d4;
+  --chart-1: #22d3ee;
+  --chart-2: #06b6d4;
+  --chart-3: #0891b2;
+  --chart-4: #0e7490;
+  --chart-5: #155e75;
+  --sidebar: #050505;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #06b6d4;
+  --sidebar-primary-foreground: #083344;
+  --sidebar-accent: #18181b;
+  --sidebar-accent-foreground: #cffafe;
+  --sidebar-border: #27272a;
+  --sidebar-ring: #06b6d4;
+  --background-spot: #a855f7;
 }
 
 @layer base {

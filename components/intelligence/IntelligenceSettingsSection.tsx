@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -20,7 +21,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SettingRowShell } from "@/components/settings/SettingCardShell";
 import { getSettingIcon } from "@/components/settings/setting-icons";
-import { fetchIntelligenceModelCatalog } from "@/features/intelligence/intelligence.client";
+import {
+  fetchIntelligenceModelCatalog,
+  getIntelligenceClient,
+} from "@/features/intelligence/intelligence.client";
 import {
   INTELLIGENCE_CLEANUP_DEFAULT_MODEL_ID,
   INTELLIGENCE_SETTINGS_IDS,
@@ -33,8 +37,15 @@ import {
   switchCleanupModel,
 } from "@/features/intelligence/intelligence.cleanup.client";
 import { resolveCleanupModelId } from "@/features/intelligence/intelligence.cleanup.utils";
+import {
+  readDeviceClassHints,
+  resolveAutoModelId,
+} from "@/features/intelligence/intelligence.model-selector";
 import { useIntelligenceStore } from "@/features/intelligence/intelligence.store";
-import type { IntelligenceModelConfig } from "@/features/intelligence/intelligence.types";
+import type {
+  IntelligenceModelConfig,
+  IntelligenceWorkerEventMessage,
+} from "@/features/intelligence/intelligence.types";
 import { useSetting } from "@/ui/hooks/useSettings";
 import { cn } from "@/lib/utils";
 
@@ -125,6 +136,26 @@ function RuntimeStatusBadge({ status }: { status: string }) {
   );
 }
 
+function formatDownloadProgressLabel(
+  percent: number | null,
+  loadedBytes: number | null,
+  totalBytes: number | null,
+): string | null {
+  if (percent === null) {
+    return null;
+  }
+
+  const loadedMb = (loadedBytes ?? 0) / (1024 * 1024);
+  const totalMb = (totalBytes ?? 0) / (1024 * 1024);
+
+  if (!Number.isFinite(totalMb) || totalMb <= 0) {
+    return `${Math.round(percent)}%`;
+  }
+
+  const remaining = Math.max(0, totalMb - loadedMb);
+  return `${Math.round(percent)}% · ${remaining.toFixed(1)}MB remaining`;
+}
+
 function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSettingsSectionProps) {
   const [smartSearchEnabled, setSmartSearchEnabled] = useSetting(INTELLIGENCE_SETTINGS_IDS.smartSearchEnabled);
   const [ocrEnabled, setOcrEnabled] = useSetting(INTELLIGENCE_SETTINGS_IDS.ocrEnabled);
@@ -137,6 +168,10 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const runtimeStatus = useIntelligenceStore((state) => state.runtimeStatus);
+  const activeModelId = useIntelligenceStore((state) => state.activeModelId);
+  const embeddingDownloadPercent = useIntelligenceStore((state) => state.embeddingDownloadPercent);
+  const embeddingDownloadLoadedBytes = useIntelligenceStore((state) => state.embeddingDownloadLoadedBytes);
+  const embeddingDownloadTotalBytes = useIntelligenceStore((state) => state.embeddingDownloadTotalBytes);
   const cleanupRuntimeStatus = useIntelligenceStore((state) => state.cleanupRuntimeStatus);
   const cleanupModelId = useIntelligenceStore((state) => state.cleanupModelId);
   const cleanupDownloadPercent = useIntelligenceStore((state) => state.cleanupDownloadPercent);
@@ -149,6 +184,14 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
   const resolvedAutoModelId = useIntelligenceStore((state) => state.resolvedAutoModelId);
   const setCatalog = useIntelligenceStore((state) => state.setCatalog);
   const setCleanupModelId = useIntelligenceStore((state) => state.setCleanupModelId);
+  const setEmbeddingDownloadProgress = useIntelligenceStore((state) => state.setEmbeddingDownloadProgress);
+  const setCleanupDownloadProgress = useIntelligenceStore((state) => state.setCleanupDownloadProgress);
+  const setRuntimeStatus = useIntelligenceStore((state) => state.setRuntimeStatus);
+  const setModel = useIntelligenceStore((state) => state.setModel);
+  const setIndexStats = useIntelligenceStore((state) => state.setIndexStats);
+  const [modelActivityMessage, setModelActivityMessage] = useState<string | null>(null);
+  const [modelActivityTone, setModelActivityTone] = useState<"info" | "success" | "error">("info");
+  const previousCleanupStatusRef = useRef(cleanupRuntimeStatus);
 
   const enabled = toBoolean(smartSearchEnabled);
   const ocrToggle = toBoolean(ocrEnabled);
@@ -164,6 +207,47 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
   useEffect(() => {
     ensureCleanupBridge();
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = getIntelligenceClient().subscribeEvents((event: IntelligenceWorkerEventMessage) => {
+      if (event.type === "MODEL_DOWNLOAD_PROGRESS" && event.pipeline === "embedding") {
+        setEmbeddingDownloadProgress({
+          percent: event.percent,
+          loadedBytes: event.loadedBytes,
+          totalBytes: event.totalBytes,
+        });
+        return;
+      }
+
+      if (event.type === "MODEL_PIPELINE_STATUS" && event.pipeline === "embedding") {
+        if (event.status === "loading") {
+          setRuntimeStatus("loading");
+          return;
+        }
+
+        if (event.status === "ready") {
+          setRuntimeStatus("ready");
+          setEmbeddingDownloadProgress({
+            percent: 100,
+            loadedBytes: null,
+            totalBytes: null,
+          });
+          return;
+        }
+
+        if (event.status === "error") {
+          setRuntimeStatus("error", event.message ?? "Semantic model load failed");
+          setEmbeddingDownloadProgress({
+            percent: null,
+            loadedBytes: null,
+            totalBytes: null,
+          });
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [setEmbeddingDownloadProgress, setRuntimeStatus]);
 
   useEffect(() => {
     const persisted = readCleanupModelPreference();
@@ -195,15 +279,80 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
     return () => controller.abort();
   }, [setCatalog]);
 
+  useEffect(() => {
+    if (runtimeStatus !== "ready" || embeddingDownloadPercent === null || embeddingDownloadPercent < 100) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setEmbeddingDownloadProgress({
+        percent: null,
+        loadedBytes: null,
+        totalBytes: null,
+      });
+    }, 1600);
+
+    return () => window.clearTimeout(timer);
+  }, [embeddingDownloadPercent, runtimeStatus, setEmbeddingDownloadProgress]);
+
+  useEffect(() => {
+    if (cleanupRuntimeStatus !== "ready" || cleanupDownloadPercent === null || cleanupDownloadPercent < 100) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCleanupDownloadProgress({
+        percent: null,
+        loadedBytes: null,
+        totalBytes: null,
+      });
+    }, 1600);
+
+    return () => window.clearTimeout(timer);
+  }, [cleanupDownloadPercent, cleanupRuntimeStatus, setCleanupDownloadProgress]);
+
+  useEffect(() => {
+    if (!modelActivityMessage) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setModelActivityMessage(null);
+    }, 2500);
+
+    return () => window.clearTimeout(timer);
+  }, [modelActivityMessage]);
+
+  useEffect(() => {
+    const previous = previousCleanupStatusRef.current;
+    if (previous === "loading" && cleanupRuntimeStatus === "ready") {
+      setModelActivityTone("success");
+      setModelActivityMessage("Cleanup engine model is ready.");
+    } else if (previous === "loading" && cleanupRuntimeStatus === "error") {
+      setModelActivityTone("error");
+      setModelActivityMessage(cleanupLastError ?? "Cleanup engine setup failed. Using raw OCR fallback.");
+    }
+
+    previousCleanupStatusRef.current = cleanupRuntimeStatus;
+  }, [cleanupLastError, cleanupRuntimeStatus]);
+
   const models = useMemo(() => catalog?.models ?? [], [catalog]);
+  const resolvedAutoModelIdFromCatalog = useMemo(() => {
+    if (!catalog) {
+      return null;
+    }
+
+    return resolveAutoModelId(catalog, readDeviceClassHints());
+  }, [catalog]);
+  const effectiveResolvedAutoModelId = resolvedAutoModelId ?? resolvedAutoModelIdFromCatalog;
   const selectedModel = useMemo(
     () => resolveSelectedModel(selectedModelId, models),
     [models, selectedModelId],
   );
 
   const resolvedAutoModel = useMemo(
-    () => resolveSelectedModel(resolvedAutoModelId ?? "", models),
-    [models, resolvedAutoModelId],
+    () => resolveSelectedModel(effectiveResolvedAutoModelId ?? "", models),
+    [effectiveResolvedAutoModelId, models],
   );
 
   const estimatedSizeMb = useMemo(() => {
@@ -231,6 +380,108 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
     void onDangerAction?.(INTELLIGENCE_SETTINGS_IDS.clearIndex);
   }, [onDangerAction]);
 
+  const handleSearchModelSwitch = useCallback(async (
+    nextModelId: string,
+    resolvedAutoModelForState?: string | null,
+  ) => {
+    if (!enabled || !nextModelId.trim()) {
+      return;
+    }
+
+    if (activeModelId === nextModelId && runtimeStatus === "ready") {
+      setModelActivityTone("info");
+      setModelActivityMessage("Selected semantic model is already active.");
+      return;
+    }
+
+    setRuntimeStatus("loading");
+    setEmbeddingDownloadProgress({
+      percent: 0,
+      loadedBytes: null,
+      totalBytes: null,
+    });
+    setModelActivityTone("info");
+    setModelActivityMessage("Switching semantic model and warming up runtime…");
+    try {
+      const stats = await getIntelligenceClient().setModel(nextModelId);
+      setModel({
+        activeModelId: stats.modelId,
+        resolvedAutoModelId: resolvedAutoModelForState ?? undefined,
+        usingHashedFallback: stats.usingHashedFallback,
+      });
+      setIndexStats({
+        indexedDocs: stats.indexSize,
+        lastIndexedAt: stats.updatedAt,
+      });
+      setRuntimeStatus("ready");
+      setModelActivityTone("success");
+      setModelActivityMessage("Semantic model switched. Re-indexing continues in background.");
+    } catch (error) {
+      setRuntimeStatus(
+        "error",
+        error instanceof Error ? error.message : "Failed to switch semantic model",
+      );
+      setEmbeddingDownloadProgress({
+        percent: null,
+        loadedBytes: null,
+        totalBytes: null,
+      });
+      setModelActivityTone("error");
+      setModelActivityMessage("Could not switch semantic model. Keyword search fallback remains active.");
+    }
+  }, [
+    activeModelId,
+    enabled,
+    runtimeStatus,
+    setEmbeddingDownloadProgress,
+    setIndexStats,
+    setModel,
+    setRuntimeStatus,
+  ]);
+
+  const handleModelModeChange = useCallback((nextValue: string | null) => {
+    if (typeof nextValue !== "string") {
+      return;
+    }
+
+    setModelMode(nextValue);
+
+    if (!enabled) {
+      return;
+    }
+
+    if (nextValue === "manual") {
+      void handleSearchModelSwitch(selectedModelId);
+      return;
+    }
+
+    if (nextValue === "auto" && resolvedAutoModelIdFromCatalog) {
+      void handleSearchModelSwitch(
+        resolvedAutoModelIdFromCatalog,
+        resolvedAutoModelIdFromCatalog,
+      );
+    }
+  }, [
+    enabled,
+    handleSearchModelSwitch,
+    resolvedAutoModelIdFromCatalog,
+    selectedModelId,
+    setModelMode,
+  ]);
+
+  const handleEmbeddingModelChange = useCallback((nextValue: string | null) => {
+    if (typeof nextValue !== "string") {
+      return;
+    }
+
+    setModelId(nextValue);
+    if (!enabled || selectedMode !== "manual") {
+      return;
+    }
+
+    void handleSearchModelSwitch(nextValue);
+  }, [enabled, handleSearchModelSwitch, selectedMode, setModelId]);
+
   const handleCleanupModelChange = useCallback((nextValue: string | null) => {
     if (typeof nextValue !== "string") {
       return;
@@ -240,25 +491,31 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
     setCleanupModelId(resolved);
     setCleanupModelSetting(resolved);
     persistCleanupModelPreference(resolved);
+    setModelActivityTone("info");
+    setModelActivityMessage("Switching cleanup engine…");
     void switchCleanupModel(resolved);
   }, [setCleanupModelId, setCleanupModelSetting]);
 
   const dependentDisabled = !enabled;
-  const cleanupProgressLabel = useMemo(() => {
-    if (cleanupDownloadPercent === null) {
-      return null;
-    }
-
-    const loadedMb = (cleanupDownloadLoadedBytes ?? 0) / (1024 * 1024);
-    const totalMb = (cleanupDownloadTotalBytes ?? 0) / (1024 * 1024);
-
-    if (!Number.isFinite(totalMb) || totalMb <= 0) {
-      return `${Math.round(cleanupDownloadPercent)}%`;
-    }
-
-    const remaining = Math.max(0, totalMb - loadedMb);
-    return `${Math.round(cleanupDownloadPercent)}% · ${remaining.toFixed(1)}MB remaining`;
-  }, [cleanupDownloadLoadedBytes, cleanupDownloadPercent, cleanupDownloadTotalBytes]);
+  const semanticProgressLabel = useMemo(
+    () => formatDownloadProgressLabel(
+      embeddingDownloadPercent,
+      embeddingDownloadLoadedBytes,
+      embeddingDownloadTotalBytes,
+    ),
+    [embeddingDownloadLoadedBytes, embeddingDownloadPercent, embeddingDownloadTotalBytes],
+  );
+  const cleanupProgressLabel = useMemo(
+    () => formatDownloadProgressLabel(
+      cleanupDownloadPercent,
+      cleanupDownloadLoadedBytes,
+      cleanupDownloadTotalBytes,
+    ),
+    [cleanupDownloadLoadedBytes, cleanupDownloadPercent, cleanupDownloadTotalBytes],
+  );
+  const showSemanticModelActivity = runtimeStatus === "loading" || embeddingDownloadPercent !== null;
+  const showCleanupModelActivity = cleanupRuntimeStatus === "loading" || cleanupDownloadPercent !== null;
+  const showModelActivityPanel = showSemanticModelActivity || showCleanupModelActivity || Boolean(modelActivityMessage);
   const selectedCleanupModel = cleanupModels.find((model) => model.id === selectedCleanupModelId);
 
   return (
@@ -314,24 +571,6 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
         )}
       />
 
-      {(cleanupRuntimeStatus === "loading" || cleanupDownloadPercent !== null) ? (
-        <SettingRowShell
-          label="Cleanup Engine Status"
-          description={cleanupProgressLabel
-            ? `Downloading model artifacts · ${cleanupProgressLabel}`
-            : "Preparing cleanup engine…"}
-          icon={getSettingIcon(INTELLIGENCE_SETTINGS_IDS.cleanupModelId)}
-          trailing={(
-            <div className="w-full sm:w-56">
-              <Progress
-                value={cleanupDownloadPercent ?? null}
-                className="h-1.5"
-              />
-            </div>
-          )}
-        />
-      ) : null}
-
       <div className={cn(dependentDisabled && "opacity-45 pointer-events-none select-none transition-opacity duration-300")}>
         <SettingRowShell
           label="OCR for Handwritten Notes"
@@ -357,7 +596,7 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
           disabled={dependentDisabled}
           trailing={(
             <div className="w-full sm:w-48">
-              <Select value={selectedMode} onValueChange={(nextValue) => setModelMode(nextValue)}>
+              <Select value={selectedMode} onValueChange={handleModelModeChange}>
                 <SelectTrigger id={`setting-${INTELLIGENCE_SETTINGS_IDS.modelMode}`} className="h-10 w-full rounded-xl px-3.5 text-sm">
                   <SelectValue>{selectedMode === "auto" ? "Auto" : "Manual"}</SelectValue>
                 </SelectTrigger>
@@ -381,7 +620,7 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
             <div className="w-full sm:w-56">
               <Select
                 value={selectedModelId}
-                onValueChange={(nextValue) => setModelId(nextValue)}
+                onValueChange={handleEmbeddingModelChange}
                 disabled={dependentDisabled || selectedMode !== "manual" || models.length === 0}
               >
                 <SelectTrigger id={`setting-${INTELLIGENCE_SETTINGS_IDS.modelId}`} className="h-10 w-full rounded-xl px-3.5 text-sm">
@@ -403,6 +642,76 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
             </div>
           )}
         />
+
+        <AnimatePresence initial={false}>
+          {showModelActivityPanel ? (
+            <motion.div
+              key="model-activity-panel"
+              initial={{ opacity: 0, y: 8, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto" }}
+              exit={{ opacity: 0, y: -8, height: 0 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="overflow-hidden"
+            >
+              <div className="rounded-2xl border border-border/70 bg-muted/35 px-3.5 py-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                    Model Activity
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <RuntimeStatusBadge status={runtimeStatus} />
+                    <RuntimeStatusBadge status={cleanupRuntimeStatus} />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5 rounded-xl border border-border/60 bg-card/70 px-2.5 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-foreground">Semantic Search Model</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {semanticProgressLabel ?? (runtimeStatus === "loading" ? "Preparing…" : "Idle")}
+                      </span>
+                    </div>
+                    <Progress
+                      value={semanticProgressLabel ? embeddingDownloadPercent : null}
+                      className="h-1.5"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 rounded-xl border border-border/60 bg-card/70 px-2.5 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-foreground">Cleanup Engine Model</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {cleanupProgressLabel ?? (cleanupRuntimeStatus === "loading" ? "Preparing…" : "Idle")}
+                      </span>
+                    </div>
+                    <Progress
+                      value={cleanupProgressLabel ? cleanupDownloadPercent : null}
+                      className="h-1.5"
+                    />
+                  </div>
+                </div>
+
+                {modelActivityMessage ? (
+                  <motion.p
+                    key={modelActivityMessage}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    className={cn(
+                      "mt-2 text-[11px]",
+                      modelActivityTone === "success" && "text-emerald-700 dark:text-emerald-400",
+                      modelActivityTone === "error" && "text-rose-700 dark:text-rose-400",
+                      modelActivityTone === "info" && "text-muted-foreground",
+                    )}
+                  >
+                    {modelActivityMessage}
+                  </motion.p>
+                ) : null}
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         <SettingRowShell
           label="Search Balance"
@@ -493,6 +802,51 @@ function IntelligenceSettingsSectionComponent({ onDangerAction }: IntelligenceSe
                   <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
                   <AlertDialogAction variant="destructive" className="rounded-xl" onClick={handleClearIndex}>
                     Clear Index
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        />
+        <SettingRowShell
+          label="Clear Model Cache"
+          description={
+            <span className="flex items-center gap-2 flex-wrap">
+              <span>Delete downloaded language models (~{(selectedModel?.sizeMb ?? 0) + (selectedCleanupModel?.sizeMb ?? 0)} MB). They will re-download when needed.</span>
+            </span>
+          }
+          icon={getSettingIcon(INTELLIGENCE_SETTINGS_IDS.clearModelCache)}
+          disabled={dependentDisabled}
+          trailing={(
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 rounded-lg px-3 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                    disabled={dependentDisabled}
+                  >
+                    Clear Cache
+                  </Button>
+                }
+              />
+              <AlertDialogContent className="rounded-2xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear model cache?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will delete all locally cached inference models. Next time you use Smart Search or OCR, they will be downloaded again.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    variant="destructive"
+                    className="rounded-xl"
+                    onClick={() => void onDangerAction?.(INTELLIGENCE_SETTINGS_IDS.clearModelCache)}
+                  >
+                    Clear Cache
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

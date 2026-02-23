@@ -909,16 +909,6 @@ export function EntityActionsMenu({
 
             <section className="rounded-xl border border-border/70 bg-card/80 p-1">
               <MenuActionRow
-                icon={<IconInfoCircle className="size-4" />}
-                label={infoTitle}
-                description="View file details and metadata"
-                onSelect={handleOpenInfo}
-                tone="accent"
-              />
-            </section>
-
-            <section className="rounded-xl border border-border/70 bg-card/80 p-1">
-              <MenuActionRow
                 icon={<IconStar className="size-4 text-amber-500 dark:text-amber-300" />}
                 label={isStarred ? "Unstar" : "Star"}
                 description={isStarred ? "Remove pinned priority" : "Pin this item for quick access"}
@@ -958,9 +948,6 @@ export function EntityActionsMenu({
             ) : null}
 
             <section className="rounded-xl border border-border/75 bg-muted/35 px-2.5 pb-2.5 pt-2">
-              <p className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.11em] text-muted-foreground/90">
-                Primary Actions
-              </p>
               <div className="mt-2.5 grid grid-cols-3 gap-2">
                 <DockActionButton
                   icon={<IconDownload className="size-5 text-sky-500 dark:text-sky-300" />}
