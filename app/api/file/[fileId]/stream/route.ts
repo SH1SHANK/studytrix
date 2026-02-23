@@ -38,6 +38,7 @@ class StreamRouteError extends Error {
 }
 
 const FILE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const SHORTCUT_MIME_TYPE = "application/vnd.google-apps.shortcut";
 const fileService = new FileService();
 
 const SAFE_PREVIEW_MIME_TYPES = new Set<string>([
@@ -396,6 +397,15 @@ export async function GET(
 
     const raw = await fileService.getRawMetadata(fileId);
     const resolvedFileId = raw.resolvedFileId ?? fileId;
+    const requestedFileWasShortcut = raw.sourceMimeType === SHORTCUT_MIME_TYPE;
+
+    if (requestedFileWasShortcut && !raw.resolvedFileId) {
+      throw new StreamRouteError({
+        status: 404,
+        errorCode: "SHORTCUT_TARGET_NOT_FOUND",
+        message: "Shortcut target not found",
+      });
+    }
 
     if (raw.mimeType === "application/vnd.google-apps.folder") {
       throw new StreamRouteError({

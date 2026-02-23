@@ -646,6 +646,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                           mimeType={item.mimeType}
                           sizeBytes={item.sizeBytes}
                           modifiedTime={item.modifiedTime}
+                          webViewLink={item.webViewLink}
                           isOffline={rowState.isOffline}
                           isDownloading={rowState.isDownloading}
                           viewMode={viewMode}
@@ -701,6 +702,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                           mimeType={item.mimeType}
                           sizeBytes={item.sizeBytes}
                           modifiedTime={item.modifiedTime}
+                          webViewLink={item.webViewLink}
                           isOffline={rowState.isOffline}
                           isDownloading={rowState.isDownloading}
                           viewMode={viewMode}
@@ -738,6 +740,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                   mimeType={item.mimeType}
                   sizeBytes={item.sizeBytes}
                   modifiedTime={item.modifiedTime}
+                  webViewLink={item.webViewLink}
                   isOffline={rowState.isOffline}
                   isDownloading={rowState.isDownloading}
                   viewMode={viewMode}

@@ -269,7 +269,6 @@ export function ListRow({
             title={title}
             description={meta}
             triggerClassName="size-11"
-            onOpen={onOpen}
           />
         </div>
       </motion.div>

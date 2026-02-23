@@ -85,7 +85,6 @@ export function FloatingDock({
   const [scopeSummary, setScopeSummary] = useState("");
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [isStandaloneDisplay, setIsStandaloneDisplay] = useState(false);
-  const [viewportWidth, setViewportWidth] = useState(0);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [isScrollHidden, setIsScrollHidden] = useState(false);
   const scrollYRef = useRef(0);
@@ -129,9 +128,7 @@ export function FloatingDock({
       setIsStandaloneDisplay(standaloneMql.matches || nav.standalone === true);
     };
     const updateViewport = () => {
-      const width = Math.round(visualViewport?.width ?? window.innerWidth);
       const height = visualViewport?.height ?? window.innerHeight;
-      setViewportWidth(width);
 
       const roundedHeight = Math.max(0, Math.round(height));
       const hasEditableFocus = isEditableElement(document.activeElement);
@@ -248,23 +245,31 @@ export function FloatingDock({
       return 20;
     }
 
-    return isStandaloneDisplay ? 12 : 8;
+    return isStandaloneDisplay ? 14 : 12;
   }, [isCoarsePointer, isStandaloneDisplay]);
   const shouldHideDock = isPaletteOpen || (isCoarsePointer && (isKeyboardOpen || isScrollHidden));
+  const resolvedPlaceholder = useMemo(() => {
+    const normalized = placeholder.trim();
+    return normalized.length > 0 ? normalized : "Search files, folders, and actions";
+  }, [placeholder]);
+  const dockPlaceholderText = useMemo(() => {
+    if (scopeSummary) {
+      return scopeSummary;
+    }
+
+    if (isCoarsePointer) {
+      return "Search files & actions";
+    }
+
+    return resolvedPlaceholder;
+  }, [isCoarsePointer, resolvedPlaceholder, scopeSummary]);
   const searchButtonWidthClass = useMemo(() => {
     if (!isCoarsePointer) {
-      return "w-12 justify-center sm:justify-between";
+      return "w-12 justify-center sm:w-48 sm:justify-between xl:w-56";
     }
 
-    if (viewportWidth > 0 && viewportWidth < 360) {
-      return "w-[min(60vw,200px)] justify-between";
-    }
-    if (viewportWidth > 0 && viewportWidth < 440) {
-      return "w-[min(58vw,228px)] justify-between";
-    }
-
-    return "w-[min(54vw,240px)] justify-between";
-  }, [isCoarsePointer, viewportWidth]);
+    return "w-full min-w-0 justify-between";
+  }, [isCoarsePointer]);
 
   const navItems = [
     { id: "home", title: "Home", icon: IconHome, path: "/", match: (p: string) => p === "/" },
@@ -295,7 +300,7 @@ export function FloatingDock({
   return (
     <div
       className={cn(
-        "fixed left-0 right-0 z-40 mx-auto flex w-full max-w-fit items-center justify-center transition-all duration-300 ease-out",
+        "fixed inset-x-0 z-40 flex w-full items-center justify-center transition-all duration-300 ease-out",
         shouldHideDock ? "pointer-events-none translate-y-20 opacity-0" : "translate-y-0 opacity-100",
       )}
       style={{ bottom: `calc(env(safe-area-inset-bottom) + ${dockBottomOffsetPx}px)` }}
@@ -303,8 +308,10 @@ export function FloatingDock({
     >
       <motion.div
         className={cn(
-          "relative flex h-14 sm:h-16 items-center gap-1 sm:gap-2 rounded-full border border-border/80 bg-background/80 p-1.5 sm:p-2 shadow-xl backdrop-blur-xl",
-          isCoarsePointer ? "mx-2 max-w-[calc(100vw-0.75rem)]" : undefined,
+          "relative flex items-center rounded-full border border-border/80 bg-background/85 shadow-xl backdrop-blur-xl",
+          isCoarsePointer
+            ? "mx-1 h-13 w-[calc(100vw-0.75rem)] max-w-[32rem] gap-1 p-1.5"
+            : "h-14 gap-1 p-1.5 sm:h-16 sm:gap-2 sm:p-2",
         )}
         onMouseLeave={() => setHoveredIdx(null)}
         layout
@@ -313,13 +320,19 @@ export function FloatingDock({
           {navItems.map((item, idx) => {
             if (item.type === "search") {
               return (
-                <div key="search" className="flex items-center px-1">
+                <div
+                  key="search"
+                  className={cn(
+                    "flex items-center",
+                    isCoarsePointer ? "min-w-0 flex-1 px-0.5" : "px-1",
+                  )}
+                >
                   <motion.button
                     type="button"
                     onClick={onOpenPalette}
-                    layout // w-48 was too big for small screens, adjusted to w-32 or w-40, then sm:w-48
+                    layout
                     className={cn(
-                      "group flex h-10 items-center justify-between gap-1 rounded-full bg-primary/10 px-2 font-normal text-primary shadow-sm ring-1 ring-primary/20 transition-all hover:bg-primary/15 hover:shadow-md active:scale-95 sm:h-11 sm:w-48 sm:gap-2 sm:px-4 sm:justify-between xl:w-56",
+                      "group flex h-10 items-center gap-1 rounded-full bg-primary/10 px-2 font-normal text-primary shadow-sm ring-1 ring-primary/20 transition-all hover:bg-primary/15 hover:shadow-md active:scale-95 sm:h-11 sm:gap-2 sm:px-4",
                       searchButtonWidthClass,
                     )}
                     title={searchTitle}
@@ -327,7 +340,7 @@ export function FloatingDock({
                     <div className="flex items-center gap-2">
                       <IconSearch className="size-5 sm:size-[18px] text-primary transition-colors group-hover:text-primary" />
                       <span className={cn("max-w-32 truncate", isCoarsePointer ? "block" : "hidden sm:block")}>
-                        {scopeSummary || placeholder}
+                        {dockPlaceholderText}
                       </span>
                     </div>
                     {scopeSummary ? (
@@ -361,7 +374,8 @@ export function FloatingDock({
                   variant="ghost"
                   size="icon"
                   className={cn(
-                    "relative size-10 sm:size-11 rounded-full transition-colors duration-200",
+                    "relative rounded-full transition-colors duration-200",
+                    isCoarsePointer ? "size-9" : "size-10 sm:size-11",
                     isActive
                       ? "text-primary hover:text-primary bg-primary/10 sm:bg-transparent"
                       : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",

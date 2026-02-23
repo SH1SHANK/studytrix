@@ -51,6 +51,7 @@ type FileRowProps = {
   mimeType: string | null;
   sizeBytes: number;
   modifiedTime: string | null;
+  webViewLink: string | null;
   isOffline?: boolean;
   isDownloading?: boolean;
   viewMode: "grid" | "list";
@@ -150,6 +151,7 @@ function FileRowComponent({
   mimeType,
   sizeBytes,
   modifiedTime,
+  webViewLink,
   isOffline = false,
   isDownloading = false,
   viewMode,
@@ -224,11 +226,6 @@ function FileRowComponent({
   const visibleFileTags = fileTags.slice(0, FILE_TAG_PREVIEW_LIMIT);
   const hiddenTagCount = fileTags.length - visibleFileTags.length;
 
-  const handleOpenAction = () => {
-    triggerHaptic();
-    onOpen?.();
-  };
-
   const handleMakeOfflineAction = (sourceElement?: HTMLElement) => {
     if (isFolder || isOffline || isDownloading) {
       return;
@@ -267,10 +264,10 @@ function FileRowComponent({
         mimeType,
         sizeBytes,
         modifiedTime,
+        webViewLink,
       }}
       align="end"
       triggerClassName="size-11"
-      onOpen={handleOpenAction}
       onMakeOffline={(sourceElement) => {
         handleMakeOfflineAction(sourceElement);
       }}

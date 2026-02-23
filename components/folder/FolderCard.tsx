@@ -87,7 +87,6 @@ export function FolderCard({
           title={title}
           description={meta}
           triggerClassName="size-9"
-          onOpen={onOpen}
         />
       </div>
 

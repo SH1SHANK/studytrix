@@ -1,19 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  IconArrowUpRight,
-  IconCircleCheck,
   IconCloudDown,
   IconCopy,
   IconDeviceFloppy,
   IconDownload,
   IconDotsVertical,
+  IconInfoCircle,
   IconShare,
   IconStar,
   IconTag,
 } from "@tabler/icons-react";
-import { usePathname, useSearchParams } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@/lib/utils";
@@ -21,7 +19,6 @@ import { useTagStore } from "@/features/tags/tag.store";
 import type { EntityType } from "@/features/tags/tag.types";
 import { Button } from "@/components/ui/button";
 import { shareNativeFile } from "@/features/share/share.service";
-import { sanitizeShareUrl } from "@/features/share/share.page";
 import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { expandFolders } from "@/features/bulk/bulk.service";
 import { makeFilesOffline } from "@/features/bulk/bulk.offline";
@@ -29,18 +26,19 @@ import { toast } from "sonner";
 import { downloadAsZip, shareAsZip } from "@/features/bulk/bulk.share";
 import { useShareStore } from "@/features/share/share.store";
 import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
-import {
-  buildFolderRouteHref,
-  parseFolderTrailParam,
-  FOLDER_TRAIL_IDS_QUERY_PARAM,
-  FOLDER_TRAIL_QUERY_PARAM,
-} from "@/features/navigation/folder-trail";
+import { formatFileSize, getMimeLabel } from "@/features/drive/drive.types";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type EntityActionsMenuProps = {
   entityId: string;
@@ -51,10 +49,10 @@ type EntityActionsMenuProps = {
     mimeType?: string | null;
     sizeBytes?: number | null;
     modifiedTime?: string | null;
+    webViewLink?: string | null;
   };
   align?: "start" | "end";
   triggerClassName?: string;
-  onOpen?: () => void;
   onMakeOffline?: (sourceElement?: HTMLElement) => void;
   onRemoveOffline?: () => void;
   isOffline?: boolean;
@@ -77,6 +75,15 @@ function sanitizeZipPrefix(value: string): string {
 
 function sanitizeDownloadFileName(value: string): string {
   return value.trim().replace(/[<>:\"/\\|?*\x00-\x1f]/g, "_") || "download";
+}
+
+function parseString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function legacyCopyToClipboard(text: string): boolean {
@@ -202,6 +209,24 @@ function parseDownloadFileName(
   return fallback;
 }
 
+function buildDriveShareLink(input: {
+  entityId: string;
+  entityType: EntityType;
+  webViewLink?: string | null;
+}): string {
+  const webViewLink = parseString(input.webViewLink);
+  if (webViewLink && /^https?:\/\//i.test(webViewLink)) {
+    return webViewLink;
+  }
+
+  const encodedId = encodeURIComponent(input.entityId);
+  if (input.entityType === "folder") {
+    return `https://drive.google.com/drive/folders/${encodedId}`;
+  }
+
+  return `https://drive.google.com/file/d/${encodedId}/view`;
+}
+
 function isStandaloneMode(): boolean {
   if (typeof window === "undefined") {
     return false;
@@ -237,56 +262,6 @@ async function downloadFileWithFallback(path: string, fileName: string): Promise
   }
 }
 
-type FileClipboardResult = "copied" | "unsupported" | "failed";
-
-async function copyFileToClipboard(
-  path: string,
-  fallbackFileName: string,
-  mimeTypeHint?: string | null,
-): Promise<FileClipboardResult> {
-  if (
-    typeof window === "undefined"
-    || typeof navigator === "undefined"
-    || window.isSecureContext !== true
-    || typeof ClipboardItem === "undefined"
-    || !navigator.clipboard?.write
-  ) {
-    return "unsupported";
-  }
-
-  try {
-    const response = await fetch(path, {
-      method: "GET",
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return "failed";
-    }
-
-    const blob = await response.blob();
-    const contentTypeHeader = response.headers.get("content-type") ?? "";
-    const contentType = (contentTypeHeader.split(";")[0] ?? "").trim();
-    const resolvedType = contentType || mimeTypeHint || blob.type || "application/octet-stream";
-    const resolvedName = parseDownloadFileName(
-      fallbackFileName,
-      response.headers.get("content-disposition"),
-    );
-    const normalizedBlob = blob.type ? blob : blob.slice(0, blob.size, resolvedType);
-    const file = new File([normalizedBlob], resolvedName, {
-      type: normalizedBlob.type || resolvedType,
-    });
-
-    const item = new ClipboardItem({
-      [file.type || "application/octet-stream"]: file,
-    });
-    await navigator.clipboard.write([item]);
-    return "copied";
-  } catch {
-    return "failed";
-  }
-}
-
 function summarizeFailedFiles(summary: { failedFiles: string[] }, fallback: string): string | null {
   if (summary.failedFiles.length === 0) {
     return null;
@@ -301,6 +276,88 @@ function summarizeFailedFiles(summary: { failedFiles: string[] }, fallback: stri
   return `${summary.failedFiles.length} files could not be included (${preview || fallback}).`;
 }
 
+function formatModifiedTime(value: string | null | undefined): string {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+type MenuActionRowProps = {
+  icon: ReactNode;
+  label: string;
+  description: string;
+  onSelect: () => void;
+  disabled?: boolean;
+  tone?: "default" | "accent";
+};
+
+function MenuActionRow({
+  icon,
+  label,
+  description,
+  onSelect,
+  disabled = false,
+  tone = "default",
+}: MenuActionRowProps) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
+        tone === "accent"
+          ? "bg-muted/30 hover:bg-muted/55"
+          : "hover:bg-muted/45",
+        "disabled:pointer-events-none disabled:opacity-45",
+      )}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect();
+      }}
+      disabled={disabled}
+    >
+      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-card text-muted-foreground shadow-sm ring-1 ring-border/80">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[13px] font-semibold text-foreground">{label}</span>
+        <span className="mt-0.5 block text-[11px] text-muted-foreground">{description}</span>
+      </span>
+    </button>
+  );
+}
+
+type DockActionButtonProps = {
+  icon: ReactNode;
+  label: string;
+  onSelect: () => void;
+};
+
+function DockActionButton({ icon, label, onSelect }: DockActionButtonProps) {
+  return (
+    <button
+      type="button"
+      className="flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-lg border border-border/70 bg-card/70 text-[11px] font-medium text-foreground transition-all duration-150 hover:-translate-y-px hover:border-border hover:bg-card/95"
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect();
+      }}
+    >
+      <span className="text-muted-foreground">{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
 export function EntityActionsMenu({
   entityId,
   entityType,
@@ -309,15 +366,14 @@ export function EntityActionsMenu({
   entityDetails,
   align = "end",
   triggerClassName,
-  onOpen,
   onMakeOffline,
   onRemoveOffline,
   isOffline = false,
   isDownloading = false,
 }: EntityActionsMenuProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const gateDownloadRisk = useDownloadRiskGate();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const hydrationRequestedRef = useRef(false);
   const {
     assignments,
@@ -346,103 +402,162 @@ export function EntityActionsMenu({
 
   const assignment = assignments[entityId];
   const isStarred = assignment?.starred ?? false;
-  // Previously restricted offline actions and share to 'file' only. We now allow it for 'folder' as well.
-  const supportsOfflineActions = true;
 
   const handleToggleStar = useCallback(() => {
     triggerHaptic();
     void toggleStar(entityId).catch(() => undefined);
   }, [entityId, toggleStar]);
-  const pathSegments = pathname.split("/").filter(Boolean);
-  const pathDepartment = pathSegments[0]?.trim().toUpperCase() ?? "";
-  const pathSemester = pathSegments[1]?.trim() ?? "";
-  const pathFolderId = pathSegments[2]?.trim() ?? "";
-  const isAcademicRoute = pathDepartment.length > 0 && pathSemester.length > 0;
-  const currentTrailLabels = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_QUERY_PARAM));
-  const currentTrailIds = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_IDS_QUERY_PARAM));
 
   const fileStreamPath = `/api/file/${encodeURIComponent(entityId)}/stream`;
-  const folderRoutePath = entityType === "folder"
-    ? (() => {
-      if (isAcademicRoute) {
-        const fallbackLabel = (searchParams.get("name") ?? "").trim();
-        const trailLabels = currentTrailLabels.length > 0
-          ? currentTrailLabels
-          : (fallbackLabel ? [fallbackLabel] : []);
-        const trailIds = currentTrailIds.length > 0
-          ? currentTrailIds
-          : (pathFolderId ? [pathFolderId] : []);
 
-        return buildFolderRouteHref({
-          departmentId: pathDepartment,
-          semesterId: pathSemester,
-          folderId: entityId,
-          folderName: title,
-          trailLabels: [...trailLabels, title],
-          trailIds: [...trailIds, entityId],
-        });
-      }
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+  }, []);
 
-      const queryDepartment = (searchParams.get("department") ?? "").trim().toUpperCase();
-      const querySemester = (searchParams.get("semester") ?? "").trim();
-      if (queryDepartment && querySemester) {
-        return buildFolderRouteHref({
-          departmentId: queryDepartment,
-          semesterId: querySemester,
-          folderId: entityId,
-          folderName: title,
-          trailLabels: [title],
-          trailIds: [entityId],
-        });
-      }
-
-      return null;
-    })()
-    : null;
+  const handleOpenInfo = useCallback(() => {
+    triggerHaptic(8);
+    closeMenu();
+    setInfoOpen(true);
+  }, [closeMenu]);
 
   const handleCopyAction = useCallback(() => {
     triggerHaptic(6);
-    if (entityType === "folder") {
-      const linkToCopy = folderRoutePath ? sanitizeShareUrl(folderRoutePath) : null;
-      if (!linkToCopy) {
-        toast.error("Could not prepare link for this folder.");
+    closeMenu();
+
+    const linkToCopy = buildDriveShareLink({
+      entityId,
+      entityType,
+      webViewLink: entityDetails?.webViewLink,
+    });
+    if (!linkToCopy) {
+      toast.error(
+        entityType === "folder"
+          ? "Could not prepare link for this folder."
+          : "Could not prepare link for this file.",
+      );
+      return;
+    }
+
+    void copyToClipboard(linkToCopy).then((copied) => {
+      if (copied) {
+        toast.success(entityType === "folder" ? "Folder link copied." : "File link copied.");
         return;
       }
 
-      void copyToClipboard(linkToCopy).then((copied) => {
-        if (copied) {
-          toast.success("Folder link copied.");
-          return;
-        }
+      toast.error("Clipboard is not available in this browser.");
+    });
+  }, [closeMenu, entityDetails?.webViewLink, entityId, entityType]);
 
-        toast.error("Clipboard is not available in this browser.");
-      });
+  const handleShare = useCallback(() => {
+    triggerHaptic();
+    closeMenu();
+
+    if (entityType === "folder") {
+      void (async () => {
+        const shareStore = useShareStore.getState();
+        try {
+          shareStore.startShare(
+            title,
+            1,
+            {
+              unit: "items",
+              title: "Preparing Folder Files",
+            },
+          );
+
+          const files = await expandFolders(
+            [{ id: entityId, name: title }],
+            {
+              onProgress: (done, total) => {
+                shareStore.updateProgress(done, total);
+              },
+            },
+          );
+          if (files.length === 0) {
+            throw new Error("Folder is empty");
+          }
+
+          const proceed = await gateDownloadRisk(
+            files.map((file) => ({
+              id: file.id,
+              name: file.name,
+              sizeBytes: file.size,
+              kind: "file",
+            })),
+            {
+              actionLabel: "folder share",
+              confirmButtonLabel: "Share Anyway",
+            },
+          );
+          if (!proceed) {
+            shareStore.endShare();
+            return;
+          }
+
+          shareStore.startShare(
+            `${title}.zip`,
+            files.length,
+            {
+              unit: "items",
+              title: "Preparing Folder ZIP",
+            },
+          );
+
+          const summary = await shareAsZip(
+            files,
+            (done, total) => {
+              shareStore.updateProgress(done, total);
+            },
+            `${sanitizeZipPrefix(title)}-share.zip`,
+          );
+          const failureMessage = summarizeFailedFiles(summary, title);
+          if (failureMessage) {
+            shareStore.setError(failureMessage);
+            return;
+          }
+
+          shareStore.endShare();
+        } catch (error) {
+          shareStore.setError(
+            error instanceof Error
+              ? error.message
+              : `Failed to share "${title}"`,
+          );
+        }
+      })();
       return;
     }
 
     void (async () => {
-      const result = await copyFileToClipboard(
-        fileStreamPath,
-        title,
-        entityDetails?.mimeType ?? undefined,
+      const proceed = await gateDownloadRisk(
+        [
+          {
+            id: entityId,
+            name: title,
+            sizeBytes: entityDetails?.sizeBytes ?? null,
+            kind: "file",
+          },
+        ],
+        {
+          actionLabel: "file sharing",
+          confirmButtonLabel: "Share File",
+        },
       );
-
-      if (result === "copied") {
-        toast.success(`Copied "${title}" to clipboard.`);
+      if (!proceed) {
         return;
       }
 
-      if (result === "unsupported") {
-        toast.error("File clipboard copy is not supported on this device/browser.");
-        return;
-      }
-
-      toast.error(`Could not copy "${title}"`);
+      await shareNativeFile(
+        entityId,
+        title,
+        entityDetails?.mimeType ?? "application/octet-stream",
+      );
     })();
-  }, [entityDetails?.mimeType, entityType, fileStreamPath, folderRoutePath, title]);
+  }, [closeMenu, entityDetails?.mimeType, entityDetails?.sizeBytes, entityId, entityType, gateDownloadRisk, title]);
 
   const handleDownload = useCallback(() => {
     triggerHaptic();
+    closeMenu();
 
     if (entityType === "folder") {
       void (async () => {
@@ -541,11 +656,133 @@ export function EntityActionsMenu({
 
       toast.error(`Could not download "${title}"`);
     })();
-  }, [entityDetails?.sizeBytes, entityId, entityType, fileStreamPath, gateDownloadRisk, title]);
+  }, [closeMenu, entityDetails?.sizeBytes, entityId, entityType, fileStreamPath, gateDownloadRisk, title]);
+
+  const handleManageTags = useCallback(() => {
+    triggerHaptic(8);
+    closeMenu();
+    useTagAssignmentStore.getState().openDrawer([
+      { id: entityId, type: entityType },
+    ]);
+  }, [closeMenu, entityId, entityType]);
+
+  const handleOfflineToggle = useCallback(() => {
+    if (isDownloading) {
+      return;
+    }
+
+    triggerHaptic();
+    closeMenu();
+
+    if (isOffline) {
+      onRemoveOffline?.();
+      return;
+    }
+
+    if (entityType === "folder") {
+      const downloadPromise = expandFolders([entityId])
+        .then(async (files) => {
+          if (files.length === 0) {
+            throw new Error("Folder is empty");
+          }
+
+          const proceed = await gateDownloadRisk(
+            files.map((file) => ({
+              id: file.id,
+              name: file.name,
+              sizeBytes: file.size,
+              kind: "file",
+            })),
+            {
+              actionLabel: "offline save",
+              confirmButtonLabel: "Save Offline",
+            },
+          );
+          if (!proceed) {
+            throw new Error("Download canceled.");
+          }
+
+          return makeFilesOffline(files, {
+            group: {
+              id: `folder:${entityId}`,
+              label: title,
+            },
+          });
+        });
+
+      toast.promise(downloadPromise, {
+        loading: `Gathering files in "${title}"...`,
+        success: `Started downloading folder "${title}"`,
+        error: (error) => (
+          error instanceof Error ? error.message : `Failed to download "${title}"`
+        ),
+      });
+      return;
+    }
+
+    void (async () => {
+      const proceed = await gateDownloadRisk(
+        [
+          {
+            id: entityId,
+            name: title,
+            sizeBytes: entityDetails?.sizeBytes ?? null,
+            kind: "file",
+          },
+        ],
+        {
+          actionLabel: "offline save",
+          confirmButtonLabel: "Save Offline",
+        },
+      );
+      if (!proceed) {
+        return;
+      }
+
+      onMakeOffline?.();
+    })();
+  }, [closeMenu, entityDetails?.sizeBytes, entityId, entityType, gateDownloadRisk, isDownloading, isOffline, onMakeOffline, onRemoveOffline, title]);
+
+  const infoRows = useMemo(() => {
+    const typeLabel = entityType === "folder"
+      ? "Folder"
+      : getMimeLabel(entityDetails?.mimeType ?? "application/octet-stream", title);
+
+    const rows: Array<{ label: string; value: string }> = [
+      { label: "Name", value: title },
+      { label: "Type", value: typeLabel },
+    ];
+
+    if (entityType === "file") {
+      rows.push({
+        label: "Size",
+        value: formatFileSize(entityDetails?.sizeBytes ?? null) || "Unknown",
+      });
+    }
+
+    rows.push(
+      { label: "Modified", value: formatModifiedTime(entityDetails?.modifiedTime) },
+      { label: "ID", value: entityId },
+    );
+
+    return rows;
+  }, [entityDetails?.mimeType, entityDetails?.modifiedTime, entityDetails?.sizeBytes, entityId, entityType, title]);
+
+  const offlineActionLabel = isOffline
+    ? "Remove Offline Copy"
+    : isDownloading
+      ? "Downloading..."
+      : "Make Available Offline";
+  const offlineActionDescription = isOffline
+    ? "Free storage and keep this cloud-only"
+    : isDownloading
+      ? "Offline copy is currently being prepared"
+      : "Save for quick access without internet";
+  const infoTitle = entityType === "folder" ? "Folder Info" : "File Info";
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           render={
             <Button
@@ -569,16 +806,14 @@ export function EntityActionsMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align={align}
-          className="w-72 rounded-xl border border-border/80 bg-card/95 p-1.5 shadow-xl backdrop-blur-md"
+          className="w-[min(22rem,calc(100vw-1.25rem))] rounded-2xl border border-border/85 bg-card/95 p-2.5 shadow-xl backdrop-blur-md"
         >
-          <div className="mb-1 rounded-lg border border-border/80 bg-muted/70 px-3 py-2.5">
-            <p className="truncate text-sm font-semibold text-foreground">
-              {title}
-            </p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {description ?? "Quick actions"}
-            </p>
-            {supportsOfflineActions ? (
+          <div className="space-y-2">
+            <div className="rounded-xl border border-border/80 bg-muted/65 px-3 py-2.5">
+              <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {description ?? "Quick actions"}
+              </p>
               <div className="mt-1.5">
                 {isOffline ? (
                   <span className="inline-flex items-center rounded-full border border-emerald-300/80 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300">
@@ -594,333 +829,90 @@ export function EntityActionsMenu({
                   </span>
                 )}
               </div>
-            ) : null}
-          </div>
-
-          <DropdownMenuItem
-            className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-indigo-50 focus:text-indigo-700 dark:focus:bg-indigo-500/20 dark:focus:text-indigo-200"
-            onClick={(event) => {
-              event.stopPropagation();
-              triggerHaptic();
-              onOpen?.();
-            }}
-          >
-            <IconArrowUpRight className="size-4 text-indigo-500 dark:text-indigo-300" />
-            <div className="flex flex-col gap-0.5">
-              <span>{entityType === "folder" ? "Open Folder" : "Open File"}</span>
-              <span className="text-[11px] font-normal text-muted-foreground">
-                {entityType === "folder" ? "Navigate into this folder" : "Open preview"}
-              </span>
             </div>
-          </DropdownMenuItem>
 
-        <DropdownMenuItem
-          className="min-h-11 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-amber-50 focus:text-amber-700 dark:focus:bg-amber-500/20 dark:focus:text-amber-200"
-          onClick={(event) => {
-            event.stopPropagation();
-            handleToggleStar();
-          }}
-        >
-          <IconStar className="size-4 text-amber-500 dark:text-amber-300" />
-          <div className="flex flex-col gap-0.5">
-            <span>{isStarred ? "Unstar" : "Star"}</span>
-            <span className="text-[11px] font-normal text-muted-foreground">
-              {isStarred ? "Remove pinned priority" : "Pin this item to the top"}
-            </span>
+            <section className="rounded-xl border border-border/70 bg-card/80 p-1">
+              <MenuActionRow
+                icon={<IconInfoCircle className="size-4" />}
+                label={infoTitle}
+                description="View file details and metadata"
+                onSelect={handleOpenInfo}
+                tone="accent"
+              />
+            </section>
+
+            <section className="rounded-xl border border-border/70 bg-card/80 p-1">
+              <MenuActionRow
+                icon={<IconStar className="size-4 text-amber-500 dark:text-amber-300" />}
+                label={isStarred ? "Unstar" : "Star"}
+                description={isStarred ? "Remove pinned priority" : "Pin this item for quick access"}
+                onSelect={handleToggleStar}
+              />
+              <MenuActionRow
+                icon={<IconTag className="size-4 text-indigo-500 dark:text-indigo-300" />}
+                label="Assign Tags"
+                description="Categorize and organize"
+                onSelect={handleManageTags}
+              />
+              <MenuActionRow
+                icon={isOffline ? (
+                  <IconCloudDown className="size-4 text-rose-500 dark:text-rose-300" />
+                ) : isDownloading ? (
+                  <IconDeviceFloppy className="size-4 text-sky-500 dark:text-sky-300" />
+                ) : (
+                  <IconDeviceFloppy className="size-4 text-sky-500 dark:text-sky-300" />
+                )}
+                label={offlineActionLabel}
+                description={offlineActionDescription}
+                onSelect={handleOfflineToggle}
+                disabled={isDownloading}
+              />
+            </section>
+
+            <section className="rounded-xl border border-border/75 bg-muted/35 px-2.5 pb-2.5 pt-2">
+              <p className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.11em] text-muted-foreground/90">
+                Primary Actions
+              </p>
+              <div className="mt-2.5 grid grid-cols-3 gap-2">
+                <DockActionButton
+                  icon={<IconDownload className="size-5 text-sky-500 dark:text-sky-300" />}
+                  label="Download"
+                  onSelect={handleDownload}
+                />
+                <DockActionButton
+                  icon={<IconCopy className="size-5 text-slate-500 dark:text-slate-300" />}
+                  label="Copy Link"
+                  onSelect={handleCopyAction}
+                />
+                <DockActionButton
+                  icon={<IconShare className="size-5 text-violet-500 dark:text-violet-300" />}
+                  label="Share"
+                  onSelect={handleShare}
+                />
+              </div>
+            </section>
           </div>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem
-          className="min-h-11 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-indigo-50 focus:text-indigo-700 dark:focus:bg-indigo-500/20 dark:focus:text-indigo-200"
-          onClick={(event) => {
-            event.stopPropagation();
-            triggerHaptic(8);
-            useTagAssignmentStore.getState().openDrawer([
-              { id: entityId, type: entityType },
-            ]);
-          }}
-        >
-          <IconTag className="size-4 text-indigo-500 dark:text-indigo-300" />
-          <div className="flex flex-col gap-0.5">
-            <span>Assign Tags</span>
-            <span className="text-[11px] font-normal text-muted-foreground">
-              Categorize and organize
-            </span>
-          </div>
-        </DropdownMenuItem>
-
-
-
-        {supportsOfflineActions ? (
-          <>
-            <DropdownMenuItem
-              className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-violet-50 focus:text-violet-700 disabled:opacity-45 dark:focus:bg-violet-500/20 dark:focus:text-violet-200"
-              onClick={(event) => {
-                event.stopPropagation();
-                triggerHaptic();
-                
-                if (entityType === "folder") {
-                  void (async () => {
-                    const shareStore = useShareStore.getState();
-                    try {
-                      shareStore.startShare(
-                        title,
-                        1,
-                        {
-                          unit: "items",
-                          title: "Preparing Folder Files",
-                        },
-                      );
-
-                      const files = await expandFolders(
-                        [{ id: entityId, name: title }],
-                        {
-                          onProgress: (done, total) => {
-                            shareStore.updateProgress(done, total);
-                          },
-                        },
-                      );
-                      if (files.length === 0) {
-                        throw new Error("Folder is empty");
-                      }
-
-                      const proceed = await gateDownloadRisk(
-                        files.map((file) => ({
-                          id: file.id,
-                          name: file.name,
-                          sizeBytes: file.size,
-                          kind: "file",
-                        })),
-                        {
-                          actionLabel: "folder share",
-                          confirmButtonLabel: "Share Anyway",
-                        },
-                      );
-                      if (!proceed) {
-                        shareStore.endShare();
-                        return;
-                      }
-
-                      shareStore.startShare(
-                        `${title}.zip`,
-                        files.length,
-                        {
-                          unit: "items",
-                          title: "Preparing Folder ZIP",
-                        },
-                      );
-
-                      const summary = await shareAsZip(
-                        files,
-                        (done, total) => {
-                          shareStore.updateProgress(done, total);
-                        },
-                        `${sanitizeZipPrefix(title)}-share.zip`,
-                      );
-
-                      if (summary.failedFiles.length > 0) {
-                        const preview = summary.failedFiles.slice(0, 3).join(", ");
-                        const remainder = summary.failedFiles.length - Math.min(summary.failedFiles.length, 3);
-                        shareStore.setError(
-                          remainder > 0
-                            ? `${summary.failedFiles.length} files could not be included (${preview} and ${remainder} more).`
-                            : `${summary.failedFiles.length} files could not be included (${preview}).`,
-                        );
-                        return;
-                      }
-
-                      shareStore.endShare();
-                    } catch (error) {
-                      shareStore.setError(
-                        error instanceof Error
-                          ? error.message
-                          : `Failed to share "${title}"`,
-                      );
-                    }
-                  })();
-                } else {
-                  void (async () => {
-                    const proceed = await gateDownloadRisk(
-                      [
-                        {
-                          id: entityId,
-                          name: title,
-                          sizeBytes: entityDetails?.sizeBytes ?? null,
-                          kind: "file",
-                        },
-                      ],
-                      {
-                        actionLabel: "file sharing",
-                        confirmButtonLabel: "Share File",
-                      },
-                    );
-                    if (!proceed) {
-                      return;
-                    }
-
-                    await shareNativeFile(entityId, title, entityDetails?.mimeType ?? "application/octet-stream");
-                  })();
-                }
-              }}
-            >
-              <IconShare className="size-4 text-violet-500 dark:text-violet-300" />
-              <div className="flex flex-col gap-0.5">
-                <span>{entityType === "folder" ? "Share Folder" : "Share File"}</span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  {entityType === "folder" ? "Send as a ZIP archive" : "Send to people, apps, or AI chatbots"}
-                </span>
-              </div>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-sky-50 focus:text-sky-700 disabled:opacity-45 dark:focus:bg-sky-500/20 dark:focus:text-sky-200"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleDownload();
-              }}
-            >
-              <IconDownload className="size-4 text-sky-500 dark:text-sky-300" />
-              <div className="flex flex-col gap-0.5">
-                <span>{entityType === "folder" ? "Download Folder ZIP" : "Download File"}</span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  {entityType === "folder" ? "Create and save a ZIP archive" : "Save a local copy to this device"}
-                </span>
-              </div>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              className="min-h-11 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-slate-100 focus:text-slate-800 dark:focus:bg-slate-800 dark:focus:text-slate-100"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleCopyAction();
-              }}
-            >
-              <IconCopy className="size-4 text-slate-500 dark:text-slate-300" />
-              <div className="flex flex-col gap-0.5">
-                <span>{entityType === "folder" ? "Copy Folder Link" : "Copy File"}</span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  {entityType === "folder"
-                    ? "Paste a clean link into notes or chat"
-                    : "Copy the actual file for pasting into chat/apps"}
-                </span>
-              </div>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              className="min-h-12 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-sky-50 focus:text-sky-700 disabled:opacity-45 dark:focus:bg-sky-500/20 dark:focus:text-sky-200"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (isOffline || isDownloading) {
-                  return;
-                }
-                triggerHaptic();
-                
-                if (entityType === "folder") {
-                  const downloadPromise = expandFolders([entityId])
-                    .then(async (files) => {
-                      if (files.length === 0) {
-                        throw new Error("Folder is empty");
-                      }
-
-                      const proceed = await gateDownloadRisk(
-                        files.map((file) => ({
-                          id: file.id,
-                          name: file.name,
-                          sizeBytes: file.size,
-                          kind: "file",
-                        })),
-                        {
-                          actionLabel: "offline save",
-                          confirmButtonLabel: "Save Offline",
-                        },
-                      );
-                      if (!proceed) {
-                        throw new Error("Download canceled.");
-                      }
-
-                      return makeFilesOffline(files, {
-                        group: {
-                          id: `folder:${entityId}`,
-                          label: title,
-                        },
-                      });
-                    });
-
-                  toast.promise(downloadPromise, {
-                    loading: `Gathering files in "${title}"...`,
-                    success: `Started downloading folder "${title}"`,
-                    error: (err) => err instanceof Error ? err.message : `Failed to download "${title}"`,
-                  });
-                } else {
-                  void (async () => {
-                    const proceed = await gateDownloadRisk(
-                      [
-                        {
-                          id: entityId,
-                          name: title,
-                          sizeBytes: entityDetails?.sizeBytes ?? null,
-                          kind: "file",
-                        },
-                      ],
-                      {
-                        actionLabel: "offline save",
-                        confirmButtonLabel: "Save Offline",
-                      },
-                    );
-                    if (!proceed) {
-                      return;
-                    }
-
-                    onMakeOffline?.(event.currentTarget as HTMLElement);
-                  })();
-                }
-              }}
-              disabled={isOffline || isDownloading}
-            >
-              {isOffline ? (
-                <IconCircleCheck className="size-4 text-emerald-500 dark:text-emerald-300" />
-              ) : (
-                <IconDeviceFloppy className="size-4 text-sky-500 dark:text-sky-300" />
-              )}
-              <div className="flex flex-col gap-0.5">
-                <span>
-                  {isOffline
-                    ? "Already Offline"
-                    : isDownloading
-                      ? "Downloading..."
-                      : "Save Offline Copy"}
-                </span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  {isOffline
-                    ? "This file is available without internet"
-                    : "Download for quick offline access"}
-                </span>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="min-h-11 rounded-lg px-2.5 text-[13px] font-medium transition-all duration-200 hover:translate-x-0.5 focus:bg-rose-50 focus:text-rose-700 disabled:opacity-45 dark:focus:bg-rose-500/20 dark:focus:text-rose-200"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (!isOffline || isDownloading) {
-                  return;
-                }
-                triggerHaptic();
-                onRemoveOffline?.();
-              }}
-              disabled={!isOffline || isDownloading}
-            >
-              <IconCloudDown className="size-4 text-rose-500 dark:text-rose-300" />
-              <div className="flex flex-col gap-0.5">
-                <span>Remove Offline Copy</span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  Free storage and keep cloud-only
-                </span>
-              </div>
-            </DropdownMenuItem>
-          </>
-        ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+        <DialogContent className="max-w-[calc(100%-1.25rem)] gap-3 rounded-2xl border-border/80 p-4 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{infoTitle}</DialogTitle>
+            <DialogDescription>
+              Metadata snapshot for this {entityType === "folder" ? "folder" : "file"}.
+            </DialogDescription>
+          </DialogHeader>
+          <dl className="space-y-2.5 rounded-xl border border-border/70 bg-muted/25 p-3">
+            {infoRows.map((row) => (
+              <div key={row.label} className="grid grid-cols-[88px_1fr] gap-2 text-xs">
+                <dt className="font-medium text-muted-foreground">{row.label}</dt>
+                <dd className="break-all text-foreground">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

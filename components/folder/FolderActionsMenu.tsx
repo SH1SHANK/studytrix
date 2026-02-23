@@ -6,7 +6,6 @@ type FolderActionsMenuProps = {
   entityId: string;
   title: string;
   description?: string;
-  onOpen?: () => void;
   align?: "start" | "end";
   triggerClassName?: string;
   onMakeOffline?: (sourceElement?: HTMLElement) => void;
@@ -19,7 +18,6 @@ export function FolderActionsMenu({
   entityId,
   title,
   description,
-  onOpen,
   align = "end",
   triggerClassName,
   onMakeOffline,
@@ -35,7 +33,6 @@ export function FolderActionsMenu({
       description={description}
       align={align}
       triggerClassName={triggerClassName}
-      onOpen={onOpen}
       onMakeOffline={onMakeOffline}
       onRemoveOffline={onRemoveOffline}
       isOffline={isOffline}

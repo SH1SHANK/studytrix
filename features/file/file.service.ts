@@ -116,6 +116,14 @@ function mapDriveError(error: unknown): FileServiceError {
       }
 
       if (
+        reason === "filenotfound"
+        || reason === "teamdrivefilenotfound"
+        || reason === "notfound"
+      ) {
+        return new FileServiceError("File not found", 404);
+      }
+
+      if (
         reason === "forbidden"
         || reason === "insufficientpermissions"
         || reason === "cannotdownloadfile"
@@ -167,7 +175,11 @@ export class FileService {
       let depth = 0;
       let currentFileId = normalizedFileId;
       let data = await this.fetchDriveMetadata(currentFileId);
+      const sourceMimeType =
+        typeof data.mimeType === "string" ? data.mimeType : undefined;
       let resolvedFileId = normalizedFileId;
+      let resolvedFromShortcut = false;
+      const visitedFileIds = new Set<string>([normalizedFileId]);
 
       while (depth < MAX_SHORTCUT_DEPTH && data.mimeType === SHORTCUT_MIME) {
         const targetId = parseShortcutTargetId(data);
@@ -175,8 +187,14 @@ export class FileService {
           throw new FileServiceError("Shortcut target not found", 404);
         }
 
+        if (visitedFileIds.has(targetId)) {
+          throw new FileServiceError("Shortcut resolution loop detected", 500);
+        }
+
+        visitedFileIds.add(targetId);
         currentFileId = targetId;
         resolvedFileId = targetId;
+        resolvedFromShortcut = true;
         data = await this.fetchDriveMetadata(currentFileId);
         depth += 1;
       }
@@ -196,7 +214,8 @@ export class FileService {
         size: parseDriveSize(data.size),
         modifiedTime:
           typeof data.modifiedTime === "string" ? data.modifiedTime : null,
-        resolvedFileId,
+        resolvedFileId: resolvedFromShortcut ? resolvedFileId : undefined,
+        sourceMimeType: resolvedFromShortcut ? sourceMimeType : undefined,
       };
     } catch (error) {
       if (error instanceof FileServiceError) {

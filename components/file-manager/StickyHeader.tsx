@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   IconArrowLeft,
   IconChevronRight,
@@ -13,7 +14,7 @@ import {
   IconShare,
   IconTag,
 } from "@tabler/icons-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -40,9 +41,108 @@ export function StickyHeader({
   breadcrumbSegments,
 }: StickyHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [disableGlass] = useSetting("disable_glass_effects");
   const [compactMode] = useSetting("compact_mode");
   const isCompact = compactMode === true;
+  const breadcrumbContainerRef = useRef<HTMLElement | null>(null);
+  const activeBreadcrumbRef = useRef<HTMLButtonElement | null>(null);
+  const frameOneRef = useRef<number | null>(null);
+  const frameTwoRef = useRef<number | null>(null);
+  const breadcrumbSignature = useMemo(
+    () => breadcrumbSegments.map((segment) => `${segment.href}|${segment.label}`).join("::"),
+    [breadcrumbSegments],
+  );
+  const searchSignature = searchParams.toString();
+
+  const clearPendingFrames = useCallback(() => {
+    if (frameOneRef.current !== null) {
+      window.cancelAnimationFrame(frameOneRef.current);
+      frameOneRef.current = null;
+    }
+
+    if (frameTwoRef.current !== null) {
+      window.cancelAnimationFrame(frameTwoRef.current);
+      frameTwoRef.current = null;
+    }
+  }, []);
+
+  const alignActiveBreadcrumb = useCallback((behavior: ScrollBehavior) => {
+    const container = breadcrumbContainerRef.current;
+    const activeItem = activeBreadcrumbRef.current;
+    if (!container || !activeItem) {
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = activeItem.getBoundingClientRect();
+    const edgePadding = 12;
+    let targetScrollLeft = container.scrollLeft;
+
+    if (activeRect.right > containerRect.right - edgePadding) {
+      targetScrollLeft += activeRect.right - (containerRect.right - edgePadding);
+    } else if (activeRect.left < containerRect.left + edgePadding) {
+      targetScrollLeft -= (containerRect.left + edgePadding) - activeRect.left;
+    } else {
+      return;
+    }
+
+    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+    const nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, targetScrollLeft));
+    if (Math.abs(nextScrollLeft - container.scrollLeft) < 1) {
+      return;
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    container.scrollTo({
+      left: nextScrollLeft,
+      behavior: reducedMotion ? "auto" : behavior,
+    });
+  }, []);
+
+  const scheduleBreadcrumbAlignment = useCallback(
+    (behavior: ScrollBehavior) => {
+      clearPendingFrames();
+      frameOneRef.current = window.requestAnimationFrame(() => {
+        frameTwoRef.current = window.requestAnimationFrame(() => {
+          alignActiveBreadcrumb(behavior);
+          frameOneRef.current = null;
+          frameTwoRef.current = null;
+        });
+      });
+    },
+    [alignActiveBreadcrumb, clearPendingFrames],
+  );
+
+  useEffect(
+    () => () => {
+      clearPendingFrames();
+    },
+    [clearPendingFrames],
+  );
+
+  useEffect(() => {
+    scheduleBreadcrumbAlignment("smooth");
+  }, [pathname, searchSignature, breadcrumbSignature, scheduleBreadcrumbAlignment]);
+
+  useEffect(() => {
+    const container = breadcrumbContainerRef.current;
+    const activeItem = activeBreadcrumbRef.current;
+    if (!container || !activeItem || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      scheduleBreadcrumbAlignment("auto");
+    });
+    observer.observe(container);
+    observer.observe(activeItem);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [breadcrumbSignature, scheduleBreadcrumbAlignment]);
 
   return (
     <header
@@ -220,7 +320,11 @@ export function StickyHeader({
         </div>
 
         {/* Row 2 — Breadcrumb */}
-        <nav className={isCompact ? "pl-1 overflow-x-auto whitespace-nowrap scrollbar-hide pb-0.5" : "pl-1 overflow-x-auto whitespace-nowrap scrollbar-hide pb-1"} aria-label="Breadcrumb">
+        <nav
+          ref={breadcrumbContainerRef}
+          className={isCompact ? "pl-1 overflow-x-auto whitespace-nowrap scrollbar-hide pb-0.5" : "pl-1 overflow-x-auto whitespace-nowrap scrollbar-hide pb-1"}
+          aria-label="Breadcrumb"
+        >
           <div className="flex w-max items-center gap-x-1.5 gap-y-1">
             {breadcrumbSegments.map((segment, index) => {
               const isLast = index === breadcrumbSegments.length - 1;
@@ -233,6 +337,11 @@ export function StickyHeader({
                     />
                   ) : null}
                   <button
+                    ref={(element) => {
+                      if (isLast) {
+                        activeBreadcrumbRef.current = element;
+                      }
+                    }}
                     type="button"
                     className={
                       isLast

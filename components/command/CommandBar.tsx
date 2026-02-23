@@ -2680,7 +2680,11 @@ export function CommandBar({
     : Math.max(12, viewportMetrics.keyboardInset + 12);
   const listBottomInset = Math.max(isMobilePalette ? 14 : 18, viewportMetrics.keyboardInset + (isMobilePalette ? 16 : 12));
   const inputCenterOffset = useMemo(() => {
-    if (!isCoarsePointer || effectiveVisualQuery.length === 0) {
+    if (
+      !isCoarsePointer
+      || effectiveVisualQuery.length === 0
+      || viewportMetrics.keyboardInset <= 0
+    ) {
       return 0;
     }
 
@@ -2779,7 +2783,7 @@ export function CommandBar({
     if (stickyPrefixMode === "recents") {
       return "Search recent items...";
     }
-    return scopePills.length > 0 ? "Search..." : placeholder;
+    return scopePills.length > 0 ? "Search in current scope..." : placeholder;
   }, [placeholder, scopePills.length, stickyPrefixMode]);
 
   const activeScopeLabel = useMemo(() => {
@@ -2911,7 +2915,7 @@ export function CommandBar({
               exit={{ opacity: 0, y: isMobilePalette ? 20 : 12, scale: isMobilePalette ? 1 : 0.99 }}
               transition={{ type: "spring", ...motionTokens.spring }}
               className={cn(
-                "mx-auto flex w-full min-h-0 flex-col border border-border/70 bg-card/95 p-2 shadow-2xl border-border/80 bg-card/95",
+                "mx-auto flex w-full min-h-0 flex-col border border-border/80 bg-card/95 p-2 shadow-2xl",
                 isMobilePalette
                   ? "max-w-none rounded-t-2xl rounded-b-none border-b-0 px-2 pb-2"
                   : "max-w-3xl rounded-2xl",
@@ -2948,7 +2952,7 @@ export function CommandBar({
 
               <Command
                 shouldFilter={false}
-                className="flex min-h-0 flex-1 rounded-xl border border-border/60 bg-card p-1 shadow-inner border-border/80 bg-card"
+                className="flex min-h-0 flex-1 rounded-xl border border-border/80 bg-card p-1 shadow-inner"
                 onKeyDown={(e) => {
                   const flatItems = displayResults;
                   const totalItems = flatItems.length;
@@ -3057,83 +3061,83 @@ export function CommandBar({
                   transition={{ type: "spring", ...motionTokens.spring }}
                   className="relative mx-auto w-full max-w-2xl"
                 >
+                  {scopePills.length > 0 || stickyModeDescriptor ? (
+                    <div className="px-1 pb-1.5">
+                      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+                        {stickyModeDescriptor ? (() => {
+                          const StickyIcon = stickyModeDescriptor.icon;
+                          return (
+                            <div className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/25 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary">
+                              <StickyIcon className="size-3.5 shrink-0" />
+                              <span>{stickyModeDescriptor.label}</span>
+                              <span className="rounded border border-primary/25 bg-primary/10 px-1 py-px text-[9px]">
+                                {stickyModeDescriptor.prefix}
+                              </span>
+                            </div>
+                          );
+                        })() : null}
+                        <AnimatePresence mode="popLayout">
+                          {scopePills.map((pill) => (
+                            <motion.div
+                              layout
+                              initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                              animate={{ opacity: 1, scale: 1, x: 0 }}
+                              exit={{ opacity: 0, scale: 0.8, x: -10 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                              key={pill.key}
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary shadow-sm"
+                            >
+                              {pill.icon === "folder" ? (
+                                <IconFolder className="size-3.5 shrink-0" />
+                              ) : pill.icon === "tag" ? (
+                                <IconTag className="size-3.5 shrink-0" />
+                              ) : pill.icon === "domain" ? (
+                                <IconDatabase className="size-3.5 shrink-0" />
+                              ) : pill.label === "Actions" ? (
+                                <IconBolt className="size-3.5 shrink-0" />
+                              ) : (
+                                <IconClockHour4 className="size-3.5 shrink-0" />
+                              )}
+                              <span className="max-w-24 truncate">{pill.label}</span>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded-full p-0.5 opacity-60 transition-all hover:bg-primary/20 hover:opacity-100"
+                                onClick={pill.onRemove}
+                                aria-label={`Remove ${pill.label} scope`}
+                              >
+                                <IconX className="size-3 shrink-0" />
+                              </button>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  ) : null}
                   <CommandInput
                     value={query}
                     onValueChange={handleQueryChange}
                     placeholder={commandInputPlaceholder}
                     autoFocus
                     className={cn(
-                      effectiveVisualQuery ? "pr-10" : undefined,
+                      "pr-1",
                     )}
-                    prefixNode={
-                      scopePills.length > 0 || stickyModeDescriptor ? (
-                        <div className="flex max-w-[55vw] shrink-0 items-center gap-1.5 overflow-x-auto no-scrollbar pl-1.5 py-1 sm:max-w-80">
-                          {stickyModeDescriptor ? (() => {
-                            const StickyIcon = stickyModeDescriptor.icon;
-                            return (
-                              <div className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/25 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary">
-                                <StickyIcon className="size-3.5 shrink-0" />
-                                <span>{stickyModeDescriptor.label}</span>
-                                <span className="rounded border border-primary/25 bg-primary/10 px-1 py-px text-[9px]">
-                                  {stickyModeDescriptor.prefix}
-                                </span>
-                              </div>
-                            );
-                          })() : null}
-                          <AnimatePresence mode="popLayout">
-                            {scopePills.map((pill) => (
-                              <motion.div
-                                layout
-                                initial={{ opacity: 0, scale: 0.8, x: -10 }}
-                                animate={{ opacity: 1, scale: 1, x: 0 }}
-                                exit={{ opacity: 0, scale: 0.8, x: -10 }}
-                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                                key={pill.key}
-                                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary shadow-sm"
-                              >
-                                {pill.icon === "folder" ? (
-                                  <IconFolder className="size-3.5 shrink-0" />
-                                ) : pill.icon === "tag" ? (
-                                  <IconTag className="size-3.5 shrink-0" />
-                                ) : pill.icon === "domain" ? (
-                                  <IconDatabase className="size-3.5 shrink-0" />
-                                ) : pill.label === "Actions" ? (
-                                  <IconBolt className="size-3.5 shrink-0" />
-                                ) : (
-                                  <IconClockHour4 className="size-3.5 shrink-0" />
-                                )}
-                                <span className="max-w-24 truncate">{pill.label}</span>
-                                <button
-                                  type="button"
-                                  className="shrink-0 rounded-full p-0.5 opacity-60 transition-all hover:bg-primary/20 hover:opacity-100"
-                                  onClick={pill.onRemove}
-                                  aria-label={`Remove ${pill.label} scope`}
-                                >
-                                  <IconX className="size-3 shrink-0" />
-                                </button>
-                              </motion.div>
-                            ))}
-                          </AnimatePresence>
-                        </div>
-                      ) : null
-                    }
+                    endAction={effectiveVisualQuery ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-7 rounded-md"
+                        onClick={() => {
+                          vibrate(6);
+                          setQuery("");
+                          setScopeHistoryCursor(-1);
+                        }}
+                      >
+                        <IconX className="size-3.5" />
+                        <span className="sr-only">Clear query</span>
+                      </Button>
+                    ) : null}
                   />
-                  {effectiveVisualQuery ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="absolute right-2.5 top-1/2 z-10 -translate-y-1/2"
-                      onClick={() => {
-                        vibrate(6);
-                        setQuery("");
-                        setScopeHistoryCursor(-1);
-                      }}
-                    >
-                      <IconX className="size-3.5" />
-                      <span className="sr-only">Clear query</span>
-                    </Button>
-                  ) : null}
                 </motion.div>
 
                 {showEssentialScopeBar ? (
@@ -3176,7 +3180,7 @@ export function CommandBar({
 
                 <CommandList
                   ref={listRef}
-                  className="min-h-0 flex-1 rounded-lg border border-transparent p-1"
+                  className="min-h-0 max-h-none flex-1 rounded-lg border border-transparent p-1"
                   style={{ paddingBottom: listBottomInset }}
                 >
                   {showLoadingSkeleton ? (
@@ -3198,7 +3202,7 @@ export function CommandBar({
                       <CommandEmpty>
                         <div className="flex flex-col items-center gap-2 py-6 text-center">
                           <IconSearch className="size-4 text-muted-foreground/80" />
-                          <p className="text-xs font-medium text-foreground/80 text-muted-foreground">
+                          <p className="text-xs font-medium text-muted-foreground">
                             {scopeSelectorMode
                               ? `No ${scopeSelectorMode === "folders" ? "folders" : scopeSelectorMode === "tags" ? "tags" : "scope options"} for "${effectiveVisualQuery || "..."}"`
                               : hasAnyScope
@@ -3352,7 +3356,7 @@ export function CommandBar({
                     </>
                   )}
                 </CommandList>
-                <div className="mt-1 flex items-center justify-between rounded-md border border-border/70 px-2 py-1 text-[10px] text-muted-foreground border-border/70 text-muted-foreground">
+                <div className="mt-1 flex items-center justify-between rounded-md border border-border/70 px-2 py-1 text-[10px] text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <span className="rounded border border-border/80 px-1 py-px text-[9px] border-border">
                       {footerScopeLabel}
