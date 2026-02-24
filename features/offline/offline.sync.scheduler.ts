@@ -7,9 +7,9 @@ import { prune } from "@/features/offline/offline.query-cache.db";
 import { useOfflineConnectivityStore } from "@/features/offline/offline.connectivity.store";
 
 const SCHEDULER_INTERVAL_MS = 5 * 60 * 1000;
-const RESUME_CONCURRENCY = 2;
 const MAX_ATTEMPTS = 5;
 const BASE_RETRY_DELAY_MS = 1500;
+const RESUME_GAP_MS = 500;
 
 let intervalId: number | null = null;
 let cleanupVisibility: (() => void) | null = null;
@@ -36,7 +36,12 @@ function retryDelay(attempt: number): number {
 }
 
 function markSynced(): void {
-  useOfflineConnectivityStore.getState().markSync(Date.now());
+  const timestamp = Date.now();
+  useOfflineConnectivityStore.getState().markSync(timestamp);
+  try {
+    window.localStorage.setItem("studytrix.last_sync_at", String(timestamp));
+  } catch {
+  }
 }
 
 function scheduleRetry(taskId: string): void {
@@ -50,7 +55,7 @@ function scheduleRetry(taskId: string): void {
         networkHold: false,
         state: "failed",
         error: "Could not resume after reconnect",
-        errorCode: "NETWORK",
+        errorCode: "NETWORK_ERROR",
         updatedAt: Date.now(),
       });
     }
@@ -107,11 +112,13 @@ async function drainNetworkHoldQueue(): Promise<void> {
     return;
   }
 
-  const candidates = listNetworkHoldTaskIds()
-    .filter((taskId) => !inFlight.has(taskId))
-    .slice(0, RESUME_CONCURRENCY);
-
-  await Promise.all(candidates.map((taskId) => tryResumeTask(taskId)));
+  const candidates = listNetworkHoldTaskIds().filter((taskId) => !inFlight.has(taskId));
+  for (const taskId of candidates) {
+    await tryResumeTask(taskId);
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, RESUME_GAP_MS);
+    });
+  }
 }
 
 async function runSyncCycle(): Promise<void> {

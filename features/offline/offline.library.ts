@@ -46,6 +46,8 @@ type DownloadMetaPayload = {
   size?: number;
   modifiedTime?: string | null;
   updatedAt?: number;
+  downloadedAt?: number;
+  providerKind?: "filesystem" | "indexeddb";
 };
 
 type StorageMetaPayload = {
@@ -118,6 +120,11 @@ function parseDownloadMeta(raw: string): DownloadMetaPayload {
           ? null
           : parseString(parsed.modifiedTime) ?? undefined,
       updatedAt: parseNumber(parsed.updatedAt) ?? undefined,
+      downloadedAt: parseNumber(parsed.downloadedAt) ?? undefined,
+      providerKind:
+        parsed.providerKind === "filesystem" || parsed.providerKind === "indexeddb"
+          ? parsed.providerKind
+          : undefined,
     };
   } catch {
     return {};

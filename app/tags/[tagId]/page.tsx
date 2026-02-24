@@ -3,7 +3,7 @@
 import { use } from "react";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { TagFilesView } from "@/components/tags/TagFilesView";
+import { TagFilesView } from "@/features/tags/ui/TagFilesView";
 
 interface TagFilesPageProps {
   params: Promise<{ tagId: string }>;

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Downloads",
   description:
-    "Track download progress, manage completed files, and review offline transfer diagnostics in Studytrix.",
+    "Track download progress, manage completed files, and handle offline transfers in Studytrix.",
   alternates: {
     canonical: "/downloads",
   },

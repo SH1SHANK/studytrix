@@ -29,7 +29,9 @@ type DriveMemoryEntry = {
 };
 
 const driveMemoryCache = new Map<string, DriveMemoryEntry>();
-const driveInFlight = new Map<string, Promise<DriveItem[]>>();
+const driveInFlight = new Map<string, Promise<{ items: DriveItem[]; nextPageToken?: string }>>();
+const MAX_CACHE_PAGES_PER_FOLDER = 10;
+const MAX_CACHE_ITEMS_PER_FOLDER = 500;
 
 function isUnavailableFolderId(folderId: string): boolean {
   return folderId.trim().toUpperCase().startsWith("UNAVAILABLE_");
@@ -54,27 +56,43 @@ function toDriveState(
   };
 }
 
-async function requestDriveFolder(folderId: string): Promise<DriveItem[]> {
+async function fetchDriveFolderPage(
+  folderId: string,
+  pageToken?: string,
+): Promise<{ items: DriveItem[]; nextPageToken?: string }> {
+  const query = pageToken
+    ? `?pageToken=${encodeURIComponent(pageToken)}`
+    : "";
+
+  const response = await fetch(
+    `/api/drive/${encodeURIComponent(folderId)}${query}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(
+      (body as { error?: string }).error ?? `Request failed (${response.status})`,
+    );
+  }
+
+  const data = (await response.json()) as { items?: DriveItem[]; nextPageToken?: string };
+  const items = Array.isArray(data.items) ? data.items : [];
+  const nextPageToken = typeof data.nextPageToken === "string" && data.nextPageToken.trim().length > 0
+    ? data.nextPageToken.trim()
+    : undefined;
+
+  return { items, nextPageToken };
+}
+
+async function requestDriveFolder(folderId: string): Promise<{ items: DriveItem[]; nextPageToken?: string }> {
   const active = driveInFlight.get(folderId);
   if (active) {
     return active;
   }
 
   const request = (async () => {
-    const response = await fetch(
-      `/api/drive/${encodeURIComponent(folderId)}`,
-      { cache: "no-store" },
-    );
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(
-        (body as { error?: string }).error ?? `Request failed (${response.status})`,
-      );
-    }
-
-    const data = (await response.json()) as { items?: DriveItem[] };
-    const items = Array.isArray(data.items) ? data.items : [];
+    const { items, nextPageToken } = await fetchDriveFolderPage(folderId);
     driveMemoryCache.set(folderId, {
       items,
       updatedAt: Date.now(),
@@ -84,13 +102,65 @@ async function requestDriveFolder(folderId: string): Promise<DriveItem[]> {
       await putWithPolicy(QUERY_CACHE_KEYS.driveFolderPage(folderId), { items });
     }
 
-    return items;
+    return { items, nextPageToken };
   })().finally(() => {
     driveInFlight.delete(folderId);
   });
 
   driveInFlight.set(folderId, request);
   return request;
+}
+
+async function cacheAdditionalPages(
+  folderId: string,
+  initialItems: DriveItem[],
+  nextPageToken?: string,
+): Promise<DriveItem[]> {
+  const merged = new Map<string, DriveItem>();
+  for (const item of initialItems) {
+    if (typeof item.id === "string" && item.id.trim().length > 0 && !merged.has(item.id)) {
+      merged.set(item.id, item);
+    }
+  }
+
+  let pageToken = nextPageToken;
+  let pageCount = 1;
+
+  while (
+    pageToken
+    && pageCount < MAX_CACHE_PAGES_PER_FOLDER
+    && merged.size < MAX_CACHE_ITEMS_PER_FOLDER
+  ) {
+    const token = pageToken;
+    const page = await fetchDriveFolderPage(folderId, token);
+
+    if (isOfflineV3Enabled()) {
+      await putWithPolicy(QUERY_CACHE_KEYS.driveFolderPage(folderId, token), { items: page.items });
+    }
+
+    for (const item of page.items) {
+      if (typeof item.id !== "string" || item.id.trim().length === 0) {
+        continue;
+      }
+      if (merged.size >= MAX_CACHE_ITEMS_PER_FOLDER) {
+        break;
+      }
+      if (!merged.has(item.id)) {
+        merged.set(item.id, item);
+      }
+    }
+
+    pageCount += 1;
+    pageToken = page.nextPageToken;
+  }
+
+  const nextItems = Array.from(merged.values());
+  driveMemoryCache.set(folderId, {
+    items: nextItems,
+    updatedAt: Date.now(),
+  });
+
+  return nextItems;
 }
 
 export function useDriveFolder(folderId: string | null): DriveState {
@@ -220,13 +290,13 @@ export function useDriveFolder(folderId: string | null): DriveState {
       }
 
       try {
-        const items = await requestDriveFolder(folderId);
+        const firstPage = await requestDriveFolder(folderId);
         if (!isActive || requestSeq !== requestSeqRef.current) {
           return;
         }
 
         setState(
-          toDriveState(items, {
+          toDriveState(firstPage.items, {
             isLoading: false,
             error: null,
             source: "network",
@@ -235,6 +305,27 @@ export function useDriveFolder(folderId: string | null): DriveState {
             isOfflineFallback: false,
           }),
         );
+
+        if (firstPage.nextPageToken) {
+          void cacheAdditionalPages(folderId, firstPage.items, firstPage.nextPageToken)
+            .then((allItems) => {
+              if (!isActive || requestSeq !== requestSeqRef.current) {
+                return;
+              }
+
+              setState((prev) => toDriveState(allItems, {
+                isLoading: prev.isLoading,
+                error: prev.error,
+                source: "network",
+                isStale: false,
+                lastUpdatedAt: Date.now(),
+                isOfflineFallback: false,
+              }));
+            })
+            .catch(() => {
+              // Keep first page results if background pagination fails.
+            });
+        }
       } catch (err: unknown) {
         if (!isActive || requestSeq !== requestSeqRef.current) {
           return;

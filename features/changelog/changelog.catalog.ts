@@ -10,17 +10,48 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "0.9.4-experimental",
+    releasedOn: "2026-02-23",
+    title: "Search Scope Redesign + Deep Indexing + Intelligence Setup UX Revamp",
+    summary:
+      "Unified CommandCenter folder scope around breadcrumbs, added cross-repository semantic suggestions, expanded deep indexing coverage, and upgraded model/indexing setup feedback.",
+    highlights: [
+      "Reworked CommandCenter scope model so folder context is breadcrumb-driven (route-aware) and no longer duplicated between prefix pills and top scope chips.",
+      "Added global-root cross-repository semantic suggestions that can surface high-confidence Personal Repository matches in a dedicated secondary section.",
+      "Expanded intelligence indexing architecture to support deeper nested traversal with richer index metadata and scoped querying behavior.",
+      "Strengthened worker/store scope filtering contracts so global-root, personal-root, and folder subtree queries resolve consistently.",
+      "Improved Service Worker incremental-index signaling and related indexing orchestration for newly cached content.",
+      "Redesigned model download/indexing dialog UX with clearer two-step state, friendlier progress copy, richer animated progress bars, and better current-file visibility.",
+    ],
+  },
+  {
     version: "0.9.3-experimental",
     releasedOn: "2026-02-23",
-    title: "Intelligence UX Polish + Local Model Switching",
+    title: "Offline Reliability + CommandCenter UI Refactor",
     summary:
-      "Expanded local on-device model controls with robust semantic/cleanup model switching, download progress feedback, and safer OCR denoising fallbacks.",
+      "Stabilized offline download/summarize behavior, hardened smart-search indexing lifecycle, and shipped a cleaner, denser CommandCenter layout for mobile and desktop.",
     highlights: [
-      "Enabled live semantic search model switching from Settings, including auto/manual model mode transitions and index-safe invalidation on model mismatch.",
-      "Added a polished Model Activity panel in Settings with animated download progress bars for both semantic and cleanup pipelines.",
-      "Added local Cleanup Engine model selection with persisted preference (`Lite`, `Balanced`, `Pro`) and immediate worker-side switching.",
-      "Added worker progress/status events for model provisioning and wired them into responsive UI feedback (loading, ready, error states).",
-      "Hardened OCR denoising safety with strict fallback to original OCR text when output quality is unreliable (including short-output guard).",
+      "Fixed make-available-offline pipeline so file and folder actions always enqueue real download tasks, surface in Downloads, and complete with proper status transitions.",
+      "Fixed summarize pipeline with resilient server/client fallback behavior, stronger PDF extraction passes, retry+timeout handling, and clearer error copy.",
+      "Refined CommandCenter visual hierarchy with improved header wording, smarter status chips, better Smart Search notice spacing, and tighter, more readable file/folder cards.",
+      "Reduced CommandCenter result-card density for compact scanning: shorter rows, tighter metadata chips, and cleaner typography across mobile widths.",
+      "Prevented repeated model download and full reindex loops by reusing persisted index snapshots, adding corpus-signature short-circuit checks, and gating indexing dialog visibility.",
+      "Improved indexing dialog copy and progress presentation to clearly distinguish model setup from file indexing while preserving keyword-search continuity.",
+    ],
+  },
+  {
+    version: "0.9.2",
+    releasedOn: "2026-02-23",
+    title: "Storage/Download Platform Hardening",
+    summary:
+      "Introduced the major offline platform hardening pass across storage providers, download queue behavior, multi-select tooling, and offline management resilience.",
+    highlights: [
+      "Refactored storage-location flows with explicit provider contracts, handle-state tracking, resumable migration checkpoints, and safer filesystem relink behavior.",
+      "Added IndexedDB fallback write safety with pending-sync tracking so storage writes can survive filesystem-provider interruptions.",
+      "Overhauled download lifecycle with waiting/queued semantics, queue-position support, capped concurrency, reconnect FIFO resumption, and canonical completion metadata.",
+      "Added retry/backoff and error-code normalization for download failures, plus improved indeterminate progress handling when total size is unavailable.",
+      "Expanded multi-select action capabilities and refreshed toolbar UX with improved motion, action-state feedback, and offline batch operations.",
+      "Strengthened offline management surfaces with quota-state messaging, stale/evicted handling, and broader cache/runtime integrity checks.",
     ],
   },
   {

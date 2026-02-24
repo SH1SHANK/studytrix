@@ -14,6 +14,10 @@ type MakeFilesOfflineOptions = {
   preflight?: (files: DriveItem[]) => Promise<boolean> | boolean;
 };
 
+function logOfflineDebug(step: string): void {
+  console.debug(`[Offline Debug] ${step}`);
+}
+
 /**
  * Queues all files for offline download via the existing DownloadController.
  * Opens the Download Drawer to show progress.
@@ -40,11 +44,15 @@ export async function makeFilesOffline(
 
   const total = files.length;
   const totalBytes = files.reduce((sum, file) => sum + (file.size ?? 0), 0);
+  logOfflineDebug(`Queueing ${total} file(s) for offline download...`);
   let done = 0;
+  let queued = 0;
+  let failed = 0;
 
   for (const file of files) {
+    logOfflineDebug(`Queue request for file: ${file.name} (${file.id})`);
     try {
-      await startDownload(file.id, options?.group
+      const taskId = await startDownload(file.id, options?.group
         ? {
           kind: "file",
           hiddenInUi: true,
@@ -54,15 +62,33 @@ export async function makeFilesOffline(
           groupTotalBytes: totalBytes > 0 ? totalBytes : undefined,
         }
         : undefined);
-    } catch {
+      if (taskId) {
+        queued += 1;
+        logOfflineDebug(`Queued file download: ${file.name} (${file.id}) -> task ${taskId}`);
+      } else {
+        failed += 1;
+        logOfflineDebug(`Queue returned empty task for file: ${file.name} (${file.id})`);
+      }
+    } catch (error) {
+      failed += 1;
+      logOfflineDebug(
+        `Queue failed for file: ${file.name} (${file.id}) - ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
       toast.error(`Failed to queue "${file.name}" for offline.`);
     }
 
-    done++;
+    done += 1;
     onProgress?.(done, total);
   }
 
-  toast.success(
-    `${done} file${done > 1 ? "s" : ""} queued for offline download.`,
-  );
+  if (queued <= 0) {
+    logOfflineDebug("Queueing failed: no files were queued.");
+    throw new Error("Could not queue offline downloads.");
+  }
+
+  logOfflineDebug(`Queue summary: queued=${queued}, failed=${failed}`);
+  toast.success(`${queued} file${queued > 1 ? "s" : ""} queued for offline download.`);
+  if (failed > 0) {
+    toast.warning(`${failed} file${failed > 1 ? "s were" : " was"} skipped due queue errors.`);
+  }
 }

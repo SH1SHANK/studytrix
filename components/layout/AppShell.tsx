@@ -1,11 +1,11 @@
 import { Suspense, type ReactNode } from "react";
 
-import { CommandBar } from "@/components/command/CommandBar";
-import { ShareProgressDrawer } from "@/components/share/ShareProgressDrawer";
+import { ScopedCommandBar } from "@/features/command/ui/ScopedCommandBar";
+import { ShareProgressDrawer } from "@/features/share/ui/ShareProgressDrawer";
 import { AcademicProvider } from "@/components/layout/AcademicContext";
 import { AppRuntimeBanners } from "@/components/layout/AppRuntimeBanners";
 import { Header } from "@/components/layout/Header";
-import { GlobalStorageSetupSheet } from "@/components/offline/StorageSetupSheet";
+import { GlobalStorageSetupSheet } from "@/features/offline/ui/StorageSetupSheet";
 import { Toaster } from "@/components/ui/sonner";
 import { APP_VERSION, formatVersionLabel } from "@/features/version/version";
 
@@ -43,7 +43,7 @@ export function AppShell({
           <Suspense fallback={null}>
             {showHeader ? <Header title={headerTitle} hideFilters={hideHeaderFilters} /> : null}
           </Suspense>
-          <main className="flex-1 overflow-y-auto scroll-smooth">
+          <main className="flex-1 min-h-0 scroll-smooth">
             <div className="px-4 pt-3 sm:px-5">
               <AppRuntimeBanners />
             </div>
@@ -52,7 +52,7 @@ export function AppShell({
           </main>
         </div>
         <Suspense fallback={null}>
-          <CommandBar placeholder={commandPlaceholder} />
+          <ScopedCommandBar placeholder={commandPlaceholder} />
         </Suspense>
         <ShareProgressDrawer />
         <Toaster />

@@ -1,4 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import {
+  QUERY_CACHE_DB_NAME,
+  QUERY_CACHE_STORE,
+} from "@/features/offline/offline.query-cache.db";
 
 import {
   INTELLIGENCE_DB_NAME,
@@ -11,6 +15,21 @@ interface IntelligenceDbSchema extends DBSchema {
   [INTELLIGENCE_INDEX_STORE]: {
     key: string;
     value: IntelligenceIndexSnapshot;
+  };
+}
+
+interface QueryCacheDbSchema extends DBSchema {
+  [QUERY_CACHE_STORE]: {
+    key: string;
+    value: {
+      key: string;
+      payload: unknown;
+      updatedAt: number;
+      expiresAt: number;
+      maxStaleAt: number;
+      schemaVersion: number;
+      bytesEstimate: number;
+    };
   };
 }
 
@@ -91,6 +110,19 @@ export async function getIntelligenceSnapshot(
   }
 }
 
+export async function getIntelligenceSnapshotSizeBytes(key: string): Promise<number> {
+  const snapshot = await getIntelligenceSnapshot(key);
+  if (!snapshot) {
+    return 0;
+  }
+
+  try {
+    return new Blob([JSON.stringify(snapshot)]).size;
+  } catch {
+    return 0;
+  }
+}
+
 /** Default expected vector dimension — must match the configured model output. */
 const EXPECTED_VECTOR_DIMENSION = 384;
 
@@ -145,4 +177,37 @@ export async function clearIntelligenceSnapshots(): Promise<void> {
 
 export async function clearAllEmbeddings(): Promise<void> {
   await clearIntelligenceSnapshots();
+}
+
+export async function getAllQueryCacheKeysForFolder(folderId: string): Promise<string[]> {
+  const normalizedFolderId = folderId.trim();
+  if (!normalizedFolderId) {
+    return [];
+  }
+
+  const prefix = `drive:folder:${normalizedFolderId}:`;
+  const lower = prefix;
+  const upper = `${prefix}\uffff`;
+
+  try {
+    const queryDb = await openDB<QueryCacheDbSchema>(QUERY_CACHE_DB_NAME, 1);
+    const transaction = queryDb.transaction(QUERY_CACHE_STORE, "readonly");
+    const store = transaction.objectStore(QUERY_CACHE_STORE);
+    const range = IDBKeyRange.bound(lower, upper);
+    const keys: string[] = [];
+
+    let cursor = await store.openKeyCursor(range);
+    while (cursor) {
+      if (typeof cursor.key === "string") {
+        keys.push(cursor.key);
+      }
+      cursor = await cursor.continue();
+    }
+
+    await transaction.done;
+    queryDb.close();
+    return keys.sort((left, right) => left.localeCompare(right));
+  } catch {
+    return [];
+  }
 }

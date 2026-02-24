@@ -1,68 +1,141 @@
 "use client";
 
-import { IconWifiOff, IconFolderOpen } from "@tabler/icons-react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { IconWifiOff } from "@tabler/icons-react";
+
+import { getMetadataByPrefix } from "@/features/offline/offline.db";
+
+type RecentFile = {
+  id: string;
+  name: string;
+  downloadedAt: number;
+};
+
+function parseRecentFile(value: string): RecentFile | null {
+  try {
+    const parsed = JSON.parse(value) as {
+      id?: unknown;
+      name?: unknown;
+      downloadedAt?: unknown;
+      updatedAt?: unknown;
+    };
+
+    const id = typeof parsed.id === "string" ? parsed.id.trim() : "";
+    const name = typeof parsed.name === "string" ? parsed.name.trim() : id;
+    const downloadedAt =
+      typeof parsed.downloadedAt === "number" && Number.isFinite(parsed.downloadedAt)
+        ? parsed.downloadedAt
+        : (typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt)
+          ? parsed.updatedAt
+          : 0);
+
+    if (!id) {
+      return null;
+    }
+
+    return {
+      id,
+      name: name || id,
+      downloadedAt,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default function OfflinePage() {
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("studytrix.last_sync_at");
+      if (raw) {
+        const parsed = Number(raw);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          setLastSyncAt(parsed);
+        }
+      }
+    } catch {
+    }
+
+    void (async () => {
+      try {
+        const records = await getMetadataByPrefix("download-meta:");
+        const parsed = records
+          .map((record) => parseRecentFile(record.value))
+          .filter((record): record is RecentFile => record !== null)
+          .sort((left, right) => right.downloadedAt - left.downloadedAt)
+          .slice(0, 5);
+        setRecentFiles(parsed);
+      } catch {
+        setRecentFiles([]);
+      }
+    })();
+  }, []);
+
+  const lastSyncLabel = useMemo(() => {
+    if (!lastSyncAt) {
+      return "Unknown";
+    }
+
+    try {
+      return new Date(lastSyncAt).toLocaleString();
+    } catch {
+      return "Unknown";
+    }
+  }, [lastSyncAt]);
+
   return (
-    <main className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-background px-6 py-16">
-      {/* Subtle Background Effects */}
-      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center opacity-40 dark:opacity-20">
-        <motion.div
-          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          className="h-[40vh] w-[40vh] rounded-full bg-violet-400/20 blur-[100px]"
-        />
-        <motion.div
-          animate={{ scale: [1.2, 1, 1.2], opacity: [0.2, 0.4, 0.2] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute h-[60vh] w-[60vh] rounded-full bg-sky-400/20 blur-[120px]"
-        />
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="z-10 w-full max-w-md relative"
-      >
-        <div className="absolute -inset-0.5 rounded-3xl bg-gradient-to-b from-border/50 to-transparent blur-sm" />
-        <div className="relative flex flex-col items-center overflow-hidden rounded-3xl border border-border/50 bg-card/60 p-10 text-center shadow-2xl backdrop-blur-xl">
-          
-          <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 300, damping: 20 }}
-            className="mb-6 flex size-20 items-center justify-center rounded-2xl bg-muted/60 shadow-inner ring-1 ring-border/50 dark:bg-muted/30"
-          >
-            <IconWifiOff className="size-10 text-muted-foreground/80" stroke={1.5} />
-          </motion.div>
-
-          <h1 className="mb-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            You are offline
-          </h1>
-          <p className="mb-8 text[15px] leading-relaxed text-muted-foreground sm:px-4">
-            It looks like you've lost your internet connection. Reconnect to access live content, or browse your downloaded files.
-          </p>
-
-          <a
-            href="/offline-library.html"
-            className="group relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-xl bg-foreground px-4 py-3.5 text-[15px] font-semibold text-background transition-all hover:scale-[1.02] hover:bg-foreground/90 active:scale-[0.98]"
-          >
-            <IconFolderOpen className="size-5 transition-transform group-hover:-translate-y-0.5" />
-            <span>Go to Offline Library</span>
-          </a>
-          
-          <div className="mt-6 flex items-center justify-center space-x-2 text-[13px] font-medium text-muted-foreground/80">
-            <span className="flex size-2 min-w-2 items-center justify-center">
-              <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-amber-400 opacity-75"></span>
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
-            </span>
-            <span>Waiting for connection...</span>
+    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col items-center justify-center px-6 py-12">
+      <div className="w-full rounded-2xl border border-border/80 bg-card/80 p-6 shadow-sm backdrop-blur-md sm:p-8">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+            <IconWifiOff className="size-5" />
           </div>
-
+          <div>
+            <p className="text-sm text-muted-foreground">Studytrix</p>
+            <h1 className="text-xl font-semibold text-foreground">You're offline</h1>
+          </div>
         </div>
-      </motion.div>
+
+        <p className="text-sm text-muted-foreground">
+          Live content is unavailable. You can still open files that are already cached.
+        </p>
+
+        <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Last sync: <span className="font-medium text-foreground">{lastSyncLabel}</span>
+        </div>
+
+        <div className="mt-5">
+          <h2 className="text-sm font-semibold text-foreground">Recent cached files</h2>
+          {recentFiles.length === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">No recent cached files available.</p>
+          ) : (
+            <div className="mt-2 space-y-1.5">
+              {recentFiles.map((file) => (
+                <Link
+                  key={file.id}
+                  href={`/api/file/${encodeURIComponent(file.id)}/stream`}
+                  className="block truncate rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-sm text-foreground hover:bg-muted/50"
+                >
+                  {file.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6">
+          <Link
+            href="/offline-library.html"
+            className="inline-flex items-center rounded-lg bg-foreground px-3.5 py-2 text-sm font-semibold text-background"
+          >
+            Open Offline Library
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }

@@ -8,6 +8,13 @@
 - Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through current.
 - Version label rendered in the app shell footer for quick reference.
 
+## Latest Release (`v0.9.4-experimental`)
+
+- Unified CommandCenter folder scoping around one breadcrumb-driven scope model.
+- Added cross-repository semantic suggestions in global scope with confidence thresholding and dedicated rendering.
+- Expanded intelligence indexing/scoping behavior for deep nested repository trees.
+- Improved model download/indexing setup dialog UX with clearer step progress and richer progress animations.
+
 ## Dashboard and Navigation
 
 - Department- and semester-scoped academic browsing.

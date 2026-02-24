@@ -7,6 +7,8 @@ import { IconCloudOff, IconFolder, IconRefresh } from "@tabler/icons-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { openLocalFirst } from "@/features/offline/offline.access";
+import { startDownload } from "@/features/download/download.controller";
+import { useDownloadStore } from "@/features/download/download.store";
 import {
   loadOfflineLibrarySnapshot,
   type OfflineLibrarySnapshot,
@@ -41,6 +43,11 @@ function OfflineLibraryContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [visibleFileCount, setVisibleFileCount] = useState(FILE_PAGE_SIZE);
+  const tasks = useDownloadStore((state) => state.tasks);
+  const evictedTasks = useMemo(
+    () => Object.values(tasks).filter((task) => task.state === "evicted"),
+    [tasks],
+  );
 
   const refresh = useCallback(async (force = false) => {
     setLoading(true);
@@ -146,6 +153,29 @@ function OfflineLibraryContent() {
 
         {!loading && !error && snapshot && snapshot.files.length > 0 ? (
           <div className="space-y-4">
+            {evictedTasks.length > 0 ? (
+              <section className="rounded-xl border border-rose-300/60 bg-rose-50/60 p-4 dark:border-rose-700/40 dark:bg-rose-950/20">
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-300">
+                  Evicted Files
+                </h2>
+                <div className="space-y-2">
+                  {evictedTasks.map((task) => (
+                    <div key={task.id} className="flex items-center justify-between gap-3 rounded-lg border border-rose-300/50 bg-card px-3 py-2 dark:border-rose-700/40">
+                      <p className="truncate text-sm text-foreground">{task.fileName}</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 rounded-md px-2 text-xs"
+                        onClick={() => void startDownload(task.fileId)}
+                      >
+                        Re-download
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
             <section className="rounded-xl border border-border bg-card p-4">
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
                 Offline Folders

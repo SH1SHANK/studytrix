@@ -1,21 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconRefresh, IconSearch, IconTrash } from "@tabler/icons-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
-import { DownloadList } from "@/components/download/DownloadList";
-import { OfflineRuntimeDiagnostics } from "@/components/offline/OfflineRuntimeDiagnostics";
-import { buildDownloadGrouping } from "@/features/download/download.grouping";
+import { Input } from "@/components/ui/input";
+import { DownloadList } from "@/features/download/ui/DownloadList";
+import { useDownloadTaskActions } from "@/features/download/ui/useDownloadTaskActions";
 import { getAllFiles } from "@/features/offline/offline.db";
-import { openLocalFirst } from "@/features/offline/offline.access";
-import type { StorageStats } from "@/features/offline/offline.types";
-import type { DownloadTask } from "@/features/download/download.types";
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
-import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
 import { useSetting } from "@/ui/hooks/useSettings";
 import { cn } from "@/lib/utils";
+
+type DownloadFilter = "all" | "active" | "completed" | "issues";
+type DownloadStorageSummary = {
+  totalFiles: number;
+  totalBytes: number;
+  usage: number | null;
+  quota: number | null;
+};
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) {
@@ -37,10 +41,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+const ACTIVE_STATES = new Set(["downloading", "waiting", "queued", "paused"]);
+const ISSUE_STATES = new Set(["failed", "canceled", "evicted"]);
+
 export default function DownloadsPage() {
   const [compactMode] = useSetting("compact_mode");
   const isCompact = compactMode === true;
-  const gateDownloadRisk = useDownloadRiskGate();
   const {
     tasks,
     startDownload,
@@ -50,12 +56,31 @@ export default function DownloadsPage() {
     removeTask,
     clearCompleted,
   } = useDownloadManager();
+  const {
+    grouped,
+    onPause,
+    onResume,
+    onCancel,
+    onRemove,
+    onRetry,
+    onOpenFile,
+  } = useDownloadTaskActions({
+    tasks,
+    startDownload,
+    pauseDownload,
+    resumeDownload,
+    cancelDownload,
+    removeTask,
+  });
 
-  const [stats, setStats] = useState<StorageStats | null>(null);
+  const [stats, setStats] = useState<DownloadStorageSummary | null>(null);
+  const [activeFilter, setActiveFilter] = useState<DownloadFilter>("all");
+  const [query, setQuery] = useState("");
 
   const refreshStats = useCallback(async () => {
     const files = await getAllFiles();
     const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+
     let usage: number | null = null;
     let quota: number | null = null;
 
@@ -92,166 +117,67 @@ export default function DownloadsPage() {
     };
   }, [refreshStats]);
 
-  const grouped = useMemo(() => buildDownloadGrouping(tasks), [tasks]);
-  const list = grouped.values;
-
-  const downloadingCount = list.filter((task) => task.state === "downloading").length;
-  const queuedCount = list.filter((task) => task.state === "queued").length;
-  const completedCount = list.filter((task) => task.state === "completed").length;
+  const downloadingCount = grouped.byState.downloading.length;
+  const waitingCount = grouped.byState.waiting.length;
+  const queuedCount = grouped.byState.queued.length;
+  const pausedCount = grouped.byState.paused.length;
+  const completedCount = grouped.byState.completed.length;
+  const issueCount = grouped.byState.failed.length + grouped.byState.canceled.length + grouped.byState.evicted.length;
+  const activeCount = downloadingCount + waitingCount + queuedCount + pausedCount;
 
   useEffect(() => {
     void refreshStats();
   }, [completedCount, refreshStats]);
 
-  const runForAggregateChildren = useCallback(
-    (taskId: string, run: (child: DownloadTask) => void) => {
-      const children = grouped.childrenByAggregateTaskId.get(taskId);
-      if (!children || children.length === 0) {
-        return false;
+  const filteredTasks = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const base = grouped.values.filter((task) => {
+      if (activeFilter === "active") {
+        return ACTIVE_STATES.has(task.state);
       }
 
-      for (const child of children) {
-        run(child);
+      if (activeFilter === "completed") {
+        return task.state === "completed";
+      }
+
+      if (activeFilter === "issues") {
+        return ISSUE_STATES.has(task.state);
       }
 
       return true;
-    },
-    [grouped.childrenByAggregateTaskId],
-  );
-
-  const handlePause = useCallback((taskId: string) => {
-    const didRun = runForAggregateChildren(taskId, (child) => {
-      if (child.state === "downloading") {
-        pauseDownload(child.id);
-      }
     });
-    if (!didRun) {
-      pauseDownload(taskId);
-    }
-  }, [pauseDownload, runForAggregateChildren]);
 
-  const handleResume = useCallback((taskId: string) => {
-    const didRun = runForAggregateChildren(taskId, (child) => {
-      if (child.state === "paused" || child.state === "queued") {
-        resumeDownload(child.id);
-      }
+    if (!normalizedQuery) {
+      return base;
+    }
+
+    return base.filter((task) => {
+      const haystack = `${task.fileName} ${task.groupLabel ?? ""}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
     });
-    if (!didRun) {
-      resumeDownload(taskId);
-    }
-  }, [resumeDownload, runForAggregateChildren]);
-
-  const handleCancel = useCallback((taskId: string) => {
-    const didRun = runForAggregateChildren(taskId, (child) => {
-      if (child.state === "downloading" || child.state === "paused" || child.state === "queued") {
-        cancelDownload(child.id);
-      }
-    });
-    if (!didRun) {
-      cancelDownload(taskId);
-    }
-  }, [cancelDownload, runForAggregateChildren]);
-
-  const handleRemove = useCallback((taskId: string) => {
-    const didRun = runForAggregateChildren(taskId, (child) => {
-      removeTask(child.id);
-    });
-    if (!didRun) {
-      removeTask(taskId);
-    }
-  }, [removeTask, runForAggregateChildren]);
-
-  const handleRetry = useCallback((task: DownloadTask) => {
-    void (async () => {
-      const children = grouped.childrenByAggregateTaskId.get(task.id);
-      if (children && children.length > 0) {
-        const retryableChildren = children.filter((child) => child.state === "failed" || child.state === "canceled");
-        const proceed = await gateDownloadRisk(
-          retryableChildren.map((child) => ({
-            id: child.fileId,
-            name: child.fileName,
-            sizeBytes: child.size ?? child.totalBytes ?? null,
-            kind: "file",
-          })),
-          {
-            actionLabel: "retry download",
-            confirmButtonLabel: "Retry",
-          },
-        );
-        if (!proceed) {
-          return;
-        }
-
-        const groupId = task.groupId ?? task.fileId;
-        const groupLabel = task.groupLabel ?? task.fileName;
-        const groupTotalFiles = task.groupTotalFiles ?? children.length;
-        const groupTotalBytes = task.groupTotalBytes;
-        for (const child of children) {
-          if (child.state !== "failed" && child.state !== "canceled") {
-            continue;
-          }
-          void startDownload(child.fileId, {
-            kind: "file",
-            hiddenInUi: true,
-            groupId,
-            groupLabel,
-            groupTotalFiles,
-            groupTotalBytes,
-          });
-        }
-        return;
-      }
-
-      const proceed = await gateDownloadRisk(
-        [
-          {
-            id: task.fileId,
-            name: task.fileName,
-            sizeBytes: task.size ?? task.totalBytes ?? null,
-            kind: task.kind === "folder" ? "folder" : "file",
-          },
-        ],
-        {
-          actionLabel: "retry download",
-          confirmButtonLabel: "Retry",
-        },
-      );
-      if (!proceed) {
-        return;
-      }
-
-      void startDownload(task.fileId);
-    })();
-  }, [gateDownloadRisk, grouped.childrenByAggregateTaskId, startDownload]);
-
-  const handleOpenFile = useCallback((task: DownloadTask) => {
-    if (task.kind === "folder") {
-      return;
-    }
-
-    void openLocalFirst(
-      task.fileId,
-      `/api/file/${encodeURIComponent(task.fileId)}/stream`,
-    );
-  }, []);
+  }, [activeFilter, grouped.values, query]);
 
   return (
     <AppShell headerTitle="Downloads" hideHeaderFilters={true}>
       <div className={cn("mx-auto w-full max-w-3xl px-4 sm:px-5", isCompact ? "py-3 pb-20" : "py-4 pb-24")}>
-        {/* ── Header ─────────────────────────────────────── */}
         <header className={cn(isCompact ? "mb-5 space-y-3" : "mb-6 space-y-4")}>
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Active</p>
               <p className={cn("mt-0.5 font-semibold tabular-nums text-foreground", isCompact ? "text-base" : "text-lg")}>
-                {downloadingCount + queuedCount}
+                {activeCount}
               </p>
             </div>
             <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Completed</p>
               <p className={cn("mt-0.5 font-semibold tabular-nums text-foreground", isCompact ? "text-base" : "text-lg")}>
                 {completedCount}
+              </p>
+            </div>
+            <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Issues</p>
+              <p className={cn("mt-0.5 font-semibold tabular-nums", isCompact ? "text-base" : "text-lg", issueCount > 0 ? "text-rose-600 dark:text-rose-400" : "text-foreground")}>
+                {issueCount}
               </p>
             </div>
             <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
@@ -262,14 +188,32 @@ export default function DownloadsPage() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {(["all", "active", "completed", "issues"] as const).map((filter) => (
+              <Button
+                key={filter}
+                type="button"
+                size="sm"
+                variant={activeFilter === filter ? "default" : "outline"}
+                className={cn("rounded-lg", isCompact ? "h-8 text-xs" : "h-9 text-sm")}
+                onClick={() => setActiveFilter(filter)}
+              >
+                {filter === "all"
+                  ? "All"
+                  : filter === "active"
+                    ? "Active"
+                    : filter === "completed"
+                      ? "Completed"
+                      : "Issues"}
+              </Button>
+            ))}
             <Button
               type="button"
               size="sm"
               variant="outline"
               onClick={clearCompleted}
-              className={cn("gap-1.5 rounded-lg", isCompact ? "h-8 text-xs" : "h-9 text-sm")}
+              disabled={completedCount === 0}
+              className={cn("ml-auto gap-1.5 rounded-lg", isCompact ? "h-8 text-xs" : "h-9 text-sm")}
             >
               <IconTrash className="size-3.5" />
               Clear completed
@@ -278,29 +222,62 @@ export default function DownloadsPage() {
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => { void refreshStats(); }}
+              onClick={() => {
+                void refreshStats();
+              }}
               className={cn("gap-1.5 rounded-lg", isCompact ? "h-8 text-xs" : "h-9 text-sm")}
             >
               <IconRefresh className="size-3.5" />
               Refresh
             </Button>
           </div>
+
+          <div className="relative">
+            <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search downloads..."
+              className="h-10 rounded-xl border-border bg-muted/40 pl-9 text-sm"
+            />
+          </div>
         </header>
 
-        {/* ── Downloads List ──────────────────────────────── */}
-        <main className={cn(isCompact ? "mt-5" : "mt-6")}>
-          <div className="mb-4">
-            <OfflineRuntimeDiagnostics compact={isCompact} />
-          </div>
-          <DownloadList
-            tasks={list}
-            onPause={handlePause}
-            onResume={handleResume}
-            onCancel={handleCancel}
-            onRemove={handleRemove}
-            onRetry={handleRetry}
-            onOpenFile={handleOpenFile}
-          />
+        <main className={cn(isCompact ? "space-y-3" : "space-y-4")}>
+          {filteredTasks.length > 0 ? (
+            <DownloadList
+              tasks={filteredTasks}
+              onPause={onPause}
+              onResume={onResume}
+              onCancel={onCancel}
+              onRemove={onRemove}
+              onRetry={onRetry}
+              onOpenFile={onOpenFile}
+            />
+          ) : (
+            <section className="rounded-xl border border-dashed border-border bg-card/60 px-4 py-8 text-center">
+              <p className="text-sm font-medium text-foreground">
+                No downloads match this view.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Try clearing filters or search keywords.
+              </p>
+              {(activeFilter !== "all" || query.trim()) ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 rounded-lg"
+                  onClick={() => {
+                    setActiveFilter("all");
+                    setQuery("");
+                  }}
+                >
+                  Reset view
+                </Button>
+              ) : null}
+            </section>
+          )}
         </main>
       </div>
     </AppShell>

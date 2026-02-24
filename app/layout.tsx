@@ -1,18 +1,19 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { Outfit } from "next/font/google";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next";
 
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
-import { ThemeStatusBarSync } from "@/components/theme/ThemeStatusBarSync";
+import { ThemeStatusBarSync } from "@/features/theme/ui/ThemeStatusBarSync";
 import { SettingsProvider } from "@/components/providers/SettingsProvider";
-import { DownloadDrawer } from "@/components/download/DownloadDrawer";
-import { DownloadFloatingIndicator } from "@/components/download/DownloadFloatingIndicator";
-import { DownloadRiskDialog } from "@/components/download/DownloadRiskDialog";
-import { SelectionToolbar } from "@/components/file-manager/SelectionToolbar";
-import { OfflineRuntime } from "@/components/offline/OfflineRuntime";
-import { StorageInit } from "@/components/offline/StorageInit";
-import { AssignTagsDrawer } from "@/components/tags/AssignTagsDrawer";
+import { DownloadDrawer } from "@/features/download/ui/DownloadDrawer";
+import { DownloadFloatingIndicator } from "@/features/download/ui/DownloadFloatingIndicator";
+import { DownloadRiskDialog } from "@/features/download/ui/DownloadRiskDialog";
+import { SelectionToolbar } from "@/features/file/ui/file-manager/SelectionToolbar";
+import { ScrollLockRecovery } from "@/components/layout/ScrollLockRecovery";
+import { OfflineRuntime } from "@/features/offline/ui/OfflineRuntime";
+import { StorageInit } from "@/features/offline/ui/StorageInit";
+import { AssignTagsDrawer } from "@/features/tags/ui/AssignTagsDrawer";
 import "./globals.css";
 
 const DEFAULT_SITE_URL = "https://learn.attendrix.app";
@@ -21,11 +22,15 @@ const siteUrl =
     ? process.env.NEXT_PUBLIC_SITE_URL.trim()
     : DEFAULT_SITE_URL;
 
-const outfit = Outfit({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const outfit = localFont({
+  src: [
+    { path: "./fonts/Switzer-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/Switzer-Medium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/Switzer-Semibold.woff2", weight: "600", style: "normal" },
+  ],
+  display: "swap",
   variable: "--font-outfit",
-  fallback: ["Inter", "Satoshi", "system-ui", "sans-serif"],
+  fallback: ["Satoshi", "system-ui", "sans-serif"],
 });
 
 const switzer = localFont({
@@ -145,13 +150,14 @@ export default function RootLayout({
           {`(function(){try{var storageKey="studytrix-theme";var palette={classic:"#ffffff",midnight:"#0f172a",forest:"#f0fdf4",sunset:"#fff7ed",minimal:"#f8fafc",eclipse:"#0d0a1a",graphite:"#111111"};var stored=localStorage.getItem(storageKey);var theme=(stored&&palette[stored])?stored:"classic";var color=palette[theme];var root=document.documentElement;root.setAttribute("data-theme",theme);root.style.backgroundColor=color;var applyMeta=function(selector,name,content){var node=document.head.querySelector(selector);if(!node){node=document.createElement("meta");node.setAttribute("name",name);document.head.appendChild(node);}node.setAttribute("content",content);};applyMeta('meta[name="theme-color"]:not([media])',"theme-color",color);var mediaNodes=document.head.querySelectorAll('meta[name="theme-color"][media]');mediaNodes.forEach(function(node){node.setAttribute("content",color);});applyMeta('meta[name="apple-mobile-web-app-status-bar-style"]',"apple-mobile-web-app-status-bar-style","black-translucent");}catch(_){}})();`}
         </Script>
         <Script id="studytrix-startup-guard" strategy="beforeInteractive">
-          {`(function(){try{var host=window.location.hostname;var isLocal=host==="localhost"||host==="127.0.0.1";if(isLocal){if("serviceWorker"in navigator){navigator.serviceWorker.getRegistrations().then(function(registrations){registrations.forEach(function(registration){var worker=registration.active||registration.waiting||registration.installing;if(!worker){return;}try{var pathname=new URL(worker.scriptURL).pathname;if(pathname==="/studytrix-sw.js"){registration.unregister();}}catch(_){}});}).catch(function(){});}if("caches"in window){caches.keys().then(function(keys){keys.forEach(function(key){if(key.indexOf("studytrix-shell-")===0||key.indexOf("studytrix-static-")===0){caches.delete(key);}});}).catch(function(){});}}var isOfflineChunkError=function(message){if(navigator.onLine!==false){return false;}var text=String(message||"");return text.indexOf("ChunkLoadError")>=0||text.indexOf("Loading chunk")>=0||text.indexOf("Failed to fetch dynamically imported module")>=0||text.indexOf("Failed to load chunk")>=0;};window.addEventListener("error",function(event){if(isOfflineChunkError(event&&event.message)){window.location.replace("/offline.html");}},true);window.addEventListener("unhandledrejection",function(event){var reason=event&&event.reason;var message=typeof reason==="string"?reason:(reason&&reason.message)||String(reason||"");if(isOfflineChunkError(message)){window.location.replace("/offline.html");}});}catch(_){}})();`}
+          {`(function(){try{var host=window.location.hostname;var isLocal=host==="localhost"||host==="127.0.0.1";if(isLocal){if("serviceWorker"in navigator){navigator.serviceWorker.getRegistrations().then(function(registrations){registrations.forEach(function(registration){var worker=registration.active||registration.waiting||registration.installing;if(!worker){return;}try{var pathname=new URL(worker.scriptURL).pathname;if(pathname==="/studytrix-sw.js"){registration.unregister();}}catch(_){}});}).catch(function(){});}if("caches"in window){caches.keys().then(function(keys){keys.forEach(function(key){if(key.indexOf("studytrix-shell-")===0||key.indexOf("studytrix-static-")===0){caches.delete(key);}});}).catch(function(){});}}var isOfflineChunkError=function(message){if(navigator.onLine!==false){return false;}var text=String(message||"");return text.indexOf("ChunkLoadError")>=0||text.indexOf("Loading chunk")>=0||text.indexOf("Failed to fetch dynamically imported module")>=0||text.indexOf("Failed to load chunk")>=0;};window.addEventListener("error",function(event){if(isOfflineChunkError(event&&event.message)){window.location.replace("/offline");}},true);window.addEventListener("unhandledrejection",function(event){var reason=event&&event.reason;var message=typeof reason==="string"?reason:(reason&&reason.message)||String(reason||"");if(isOfflineChunkError(message)){window.location.replace("/offline");}});}catch(_){}})();`}
         </Script>
         <ThemeProvider>
           <ThemeStatusBarSync />
           <SettingsProvider>
             <StorageInit />
             <OfflineRuntime />
+            <ScrollLockRecovery />
             {children}
             <SelectionToolbar />
             <AssignTagsDrawer />
@@ -160,6 +166,7 @@ export default function RootLayout({
             <DownloadRiskDialog />
           </SettingsProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );

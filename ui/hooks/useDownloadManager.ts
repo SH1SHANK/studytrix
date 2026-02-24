@@ -3,12 +3,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
-import { runOfflineV2Migration } from "@/features/offline/offline.migration";
-import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
-import { getFile, getMetadata } from "@/features/offline/offline.db";
-import { useSettingsStore } from "@/features/settings/settings.store";
-import { getFileMetadataWithCache } from "@/features/file/file-metadata.client";
-import "@/features/download/download.diagnostics";
 import {
   cancelDownload,
   pauseDownload,
@@ -22,146 +16,8 @@ import { on } from "@/features/download/download.events";
 import { useDownloadStore } from "@/features/download/download.store";
 
 export const DOWNLOAD_BUTTON_ELEMENT_ID = "download-manager-button";
-const LEGACY_DOWNLOAD_SW_PATH = "/service-worker.js";
 let feedbackSubscribed = false;
 const announcedDownloads = new Set<string>();
-
-function isLegacyDownloadRegistration(
-  registration: ServiceWorkerRegistration,
-): boolean {
-  const candidate = registration.active ?? registration.installing ?? registration.waiting;
-  if (!candidate) {
-    return false;
-  }
-
-  try {
-    const scriptUrl = new URL(candidate.scriptURL);
-    return scriptUrl.pathname === LEGACY_DOWNLOAD_SW_PATH;
-  } catch {
-    return false;
-  }
-}
-
-async function cleanupLegacyDownloadServiceWorker(): Promise<void> {
-  if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
-    return;
-  }
-
-  try {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(
-      registrations
-        .filter((registration) => isLegacyDownloadRegistration(registration))
-        .map(async (registration) => {
-          await registration.unregister();
-        }),
-    );
-  } catch {
-    // Best effort cleanup: SW removal should never block download UI.
-  }
-}
-
-async function repairCompletedTaskMetadata(): Promise<void> {
-  const snapshot = useDownloadStore.getState().tasks;
-  const entries = Object.values(snapshot);
-
-  for (const task of entries) {
-    if (task.state !== "completed") {
-      continue;
-    }
-
-    const knownSize = task.totalBytes ?? task.size ?? task.loadedBytes ?? 0;
-    const requiresRepair = knownSize <= 1 || !task.mimeType;
-    if (!requiresRepair) {
-      continue;
-    }
-
-    let repaired = false;
-
-    // 1) Canonical local download-meta first.
-    const downloadMeta = await getMetadata(`download-meta:${task.fileId}`);
-    if (downloadMeta?.value) {
-      try {
-        const parsed = JSON.parse(downloadMeta.value) as {
-          name?: unknown;
-          mimeType?: unknown;
-          size?: unknown;
-        };
-        const nextSize =
-          typeof parsed.size === "number" && Number.isFinite(parsed.size) && parsed.size > 0
-            ? Math.floor(parsed.size)
-            : knownSize > 1
-              ? knownSize
-              : 0;
-        const nextMimeType =
-          typeof parsed.mimeType === "string" && parsed.mimeType.trim().length > 0
-            ? parsed.mimeType
-            : task.mimeType;
-        const nextName =
-          typeof parsed.name === "string" && parsed.name.trim().length > 0
-            ? parsed.name
-            : task.fileName;
-
-        if (nextSize > 0 || nextMimeType) {
-          useDownloadStore.getState().updateTask(task.id, {
-            fileName: nextName,
-            mimeType: nextMimeType,
-            size: nextSize > 0 ? nextSize : task.size,
-            loadedBytes: nextSize > 0 ? nextSize : task.loadedBytes,
-            totalBytes: nextSize > 0 ? nextSize : task.totalBytes,
-            updatedAt: Date.now(),
-          });
-          repaired = true;
-        }
-      } catch {
-      }
-    }
-
-    // 2) Local offline blob metadata.
-    if (!repaired) {
-      const record = await getFile(task.fileId);
-      if (record && record.size > 0) {
-        useDownloadStore.getState().updateTask(task.id, {
-          mimeType: record.mimeType || record.blob.type || "application/octet-stream",
-          size: record.size,
-          loadedBytes: record.size,
-          totalBytes: record.size,
-          updatedAt: Date.now(),
-        });
-        repaired = true;
-      }
-    }
-
-    // 3) Network metadata as a final fallback (online only).
-    if (!repaired) {
-      const online = typeof navigator === "undefined" ? true : navigator.onLine;
-      if (!online) {
-        continue;
-      }
-
-      const resolved = await getFileMetadataWithCache(task.fileId, {
-        allowNetwork: true,
-      });
-
-      if (!resolved.metadata) {
-        continue;
-      }
-
-      const nextSize =
-        resolved.metadata.size > 0
-          ? resolved.metadata.size
-          : knownSize;
-      useDownloadStore.getState().updateTask(task.id, {
-        fileName: resolved.metadata.name || task.fileName,
-        mimeType: resolved.metadata.mimeType || task.mimeType,
-        size: nextSize > 0 ? nextSize : task.size,
-        loadedBytes: nextSize > 0 ? nextSize : task.loadedBytes,
-        totalBytes: nextSize > 0 ? nextSize : task.totalBytes,
-        updatedAt: Date.now(),
-      });
-    }
-  }
-}
 
 function vibrate(duration = 8): void {
   if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
@@ -234,16 +90,7 @@ export function useDownloadManager() {
   const removeTaskInStore = useDownloadStore((state) => state.removeTask);
 
   useEffect(() => {
-    void cleanupLegacyDownloadServiceWorker();
     ensureFeedbackSubscriptions();
-    void useSettingsStore.getState().initialize();
-    void repairCompletedTaskMetadata();
-    void (async () => {
-      const didMigrate = await runOfflineV2Migration();
-      if (didMigrate) {
-        await useOfflineIndexStore.getState().hydrate();
-      }
-    })();
   }, []);
 
   const start = useCallback(async (fileId: string, options?: StartDownloadOptions) => {

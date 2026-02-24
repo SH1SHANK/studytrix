@@ -11,8 +11,6 @@ interface UseCommandCenterOptions {
   context: Partial<CommandContext>;
   index: SearchEntry[];
   commands?: StructuredCommand[];
-  /** @deprecated No longer used — kept for API compat. */
-  debounceMs?: number;
   limit?: number;
 }
 

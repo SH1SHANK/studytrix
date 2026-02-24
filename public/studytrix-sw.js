@@ -4,7 +4,7 @@ const SHELL_CACHE = `studytrix-shell-${version}`;
 const STATIC_CACHE = `studytrix-static-${version}`;
 const CACHE_PREFIXES = ["studytrix-shell-", "studytrix-static-"];
 const NAV_TIMEOUT_MS = 3000;
-const OFFLINE_FALLBACK_PATH = "/offline.html";
+const OFFLINE_FALLBACK_PATH = "/offline";
 const OFFLINE_LIBRARY_FALLBACK_PATH = "/offline-library.html";
 const OFFLINE_LIBRARY_ROUTE_PATH = "/offline-library";
 
@@ -40,10 +40,34 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
+    return;
+  }
+
+  if (
+    event.data
+    && event.data.type === "FILES_CACHED"
+    && Array.isArray(event.data.files)
+  ) {
+    event.waitUntil((async () => {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const payload = {
+        type: "SW_FILES_CACHED",
+        files: event.data.files,
+        emittedAt: typeof event.data.emittedAt === "number" ? event.data.emittedAt : Date.now(),
+      };
+
+      for (const client of clients) {
+        client.postMessage(payload);
+      }
+    })());
   }
 });
 
 function isApiRequest(requestUrl) {
+  // Never cache stream endpoints. A cached byte stream can corrupt local playback/offline state.
+  if (requestUrl.pathname.startsWith("/api/file/") && requestUrl.pathname.endsWith("/stream")) {
+    return true;
+  }
   return requestUrl.pathname.startsWith("/api/");
 }
 

@@ -1,23 +1,24 @@
 "use client";
 
 import { useCallback } from "react";
+import { IconDownload, IconRefresh } from "@tabler/icons-react";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { OfflineRuntimeDiagnostics } from "@/components/offline/OfflineRuntimeDiagnostics";
-import { BulkDeletePanel } from "@/components/storage/BulkDeletePanel";
-import { CourseStorageTable } from "@/components/storage/CourseStorageTable";
-import { IntegrityStatusCard } from "@/components/storage/IntegrityStatusCard";
-import { LargestFilesList } from "@/components/storage/LargestFilesList";
-import { StorageBreakdownChart } from "@/components/storage/StorageBreakdownChart";
-import { StorageInfographics } from "@/components/storage/StorageInfographics";
-import { StorageLayout } from "@/components/storage/StorageLayout";
-import { StorageOverviewCard } from "@/components/storage/StorageOverviewCard";
-import { StorageQuotaIndicator } from "@/components/storage/StorageQuotaIndicator";
-import { StorageLocationCard } from "@/components/storage/StorageLocationCard";
+import { Button } from "@/components/ui/button";
+import { BulkDeletePanel } from "@/features/storage/ui/BulkDeletePanel";
+import { CourseStorageTable } from "@/features/storage/ui/CourseStorageTable";
+import { IntegrityStatusCard } from "@/features/storage/ui/IntegrityStatusCard";
+import { LargestFilesList } from "@/features/storage/ui/LargestFilesList";
+import { StorageBreakdownChart } from "@/features/storage/ui/StorageBreakdownChart";
+import { StorageInfographics } from "@/features/storage/ui/StorageInfographics";
+import { StorageLocationCard } from "@/features/storage/ui/StorageLocationCard";
+import { StorageOverviewCard } from "@/features/storage/ui/StorageOverviewCard";
+import { StorageQuotaIndicator } from "@/features/storage/ui/StorageQuotaIndicator";
 import { getIntegrityIssues } from "@/features/storage/storage.integrity";
+import { computeUsagePercent } from "@/features/storage/storage.quota";
 import { exportStorageSummary } from "@/features/storage/storage.service";
-import { useStorageDashboard } from "@/ui/hooks/useStorageDashboard";
 import { useSetting } from "@/ui/hooks/useSettings";
+import { useStorageDashboard } from "@/ui/hooks/useStorageDashboard";
 import { cn } from "@/lib/utils";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -48,6 +49,7 @@ export default function StoragePage() {
   } = useStorageDashboard();
 
   const issues = getIntegrityIssues(records);
+  const usagePercent = computeUsagePercent(stats?.quotaBytes ?? null, stats?.usageBytes ?? null);
 
   const handleExportSummary = useCallback(async () => {
     const json = await exportStorageSummary();
@@ -66,19 +68,73 @@ export default function StoragePage() {
 
   return (
     <AppShell headerTitle="Storage" hideHeaderFilters={true}>
-      <div className={cn("px-4 sm:px-5", isCompact ? "pt-3 pb-6 sm:pt-4" : "pt-4 pb-8 sm:pt-5")}>
-        <StorageLayout
-          loading={loading}
-          onRefresh={() => {
-            void refresh();
-          }}
-          onExportSummary={() => {
-            void handleExportSummary();
-          }}
-        >
-          {loading && records.length === 0 ? <p className="text-sm text-muted-foreground">Loading storage data...</p> : null}
+      <div className={cn("mx-auto w-full max-w-3xl px-4 sm:px-5", isCompact ? "py-3 pb-20" : "py-4 pb-24")}>
+        <header className={cn(isCompact ? "mb-5 space-y-3" : "mb-6 space-y-4")}>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Files</p>
+              <p className={cn("mt-0.5 font-semibold tabular-nums text-foreground", isCompact ? "text-base" : "text-lg")}>
+                {stats?.totalFiles ?? 0}
+              </p>
+            </div>
+            <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Corrupted</p>
+              <p className={cn("mt-0.5 font-semibold tabular-nums", isCompact ? "text-base" : "text-lg", issues.corrupted.length > 0 ? "text-rose-600 dark:text-rose-400" : "text-foreground")}>
+                {issues.corrupted.length}
+              </p>
+            </div>
+            <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Partial</p>
+              <p className={cn("mt-0.5 font-semibold tabular-nums", isCompact ? "text-base" : "text-lg", issues.partial.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground")}>
+                {issues.partial.length}
+              </p>
+            </div>
+            <div className={cn("rounded-xl border border-border bg-card", isCompact ? "p-2.5" : "p-3")}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">Quota</p>
+              <p className={cn("mt-0.5 font-semibold tabular-nums text-foreground", isCompact ? "text-base" : "text-lg")}>
+                {usagePercent !== null ? `${usagePercent.toFixed(0)}%` : "N/A"}
+              </p>
+            </div>
+          </div>
 
-          {/* ── Overview ──────────────────────────────────────── */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void refresh();
+              }}
+              disabled={loading}
+              className={cn("gap-1.5 rounded-lg", isCompact ? "h-8 text-xs" : "h-9 text-sm")}
+            >
+              <IconRefresh className={cn("size-3.5", loading && "animate-spin")} />
+              {loading ? "Refreshing" : "Refresh"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void handleExportSummary();
+              }}
+              className={cn("gap-1.5 rounded-lg", isCompact ? "h-8 text-xs" : "h-9 text-sm")}
+            >
+              <IconDownload className="size-3.5" />
+              Export summary
+            </Button>
+          </div>
+        </header>
+
+        <main className={cn(isCompact ? "space-y-4" : "space-y-5")}>
+          {loading && records.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Loading storage data...</p>
+          ) : null}
+
+          <section className={cn(isCompact ? "space-y-3" : "space-y-4")}>
+            <StorageLocationCard />
+          </section>
+
           <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
             <SectionLabel>Overview</SectionLabel>
             <StorageOverviewCard
@@ -88,13 +144,6 @@ export default function StoragePage() {
             />
           </section>
 
-          {/* ── Storage Location ──────────────────────────────── */}
-          <section className={cn(isCompact ? "space-y-3" : "space-y-4")}>
-            <StorageLocationCard />
-            <OfflineRuntimeDiagnostics compact={isCompact} />
-          </section>
-
-          {/* ── Quota & Breakdown ─────────────────────────────── */}
           <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
             <SectionLabel>Quota &amp; Breakdown</SectionLabel>
             <div className={cn("grid lg:grid-cols-2", isCompact ? "gap-2.5" : "gap-3")}>
@@ -106,7 +155,6 @@ export default function StoragePage() {
             </div>
           </section>
 
-          {/* ── Files & Courses ────────────────────────────────── */}
           <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
             <SectionLabel>Files &amp; Courses</SectionLabel>
             <div className={cn("grid lg:grid-cols-2", isCompact ? "gap-2.5" : "gap-3")}>
@@ -120,7 +168,6 @@ export default function StoragePage() {
             </div>
           </section>
 
-          {/* ── Health ─────────────────────────────────────────── */}
           <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
             <SectionLabel>Health &amp; Maintenance</SectionLabel>
             <div className={cn("grid lg:grid-cols-2", isCompact ? "gap-2.5" : "gap-3")}>
@@ -134,9 +181,8 @@ export default function StoragePage() {
             </div>
           </section>
 
-          {/* ── Danger Zone ────────────────────────────────────── */}
           <section className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
-            <SectionLabel>Danger Zone</SectionLabel>
+            <SectionLabel>Cleanup</SectionLabel>
             <BulkDeletePanel
               corruptedCount={issues.corrupted.length}
               onDeleteAll={async () => {
@@ -150,7 +196,6 @@ export default function StoragePage() {
             />
           </section>
 
-          {/* ── Errors ─────────────────────────────────────────── */}
           {errors.length > 0 ? (
             <section
               aria-labelledby="storage-errors-title"
@@ -169,7 +214,7 @@ export default function StoragePage() {
               </ul>
             </section>
           ) : null}
-        </StorageLayout>
+        </main>
       </div>
     </AppShell>
   );

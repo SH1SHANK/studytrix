@@ -56,11 +56,11 @@ export function getQuotaState(percent: number | null): "unknown" | "normal" | "w
     return "unknown";
   }
 
-  if (percent > 90) {
+  if (percent >= 95) {
     return "alert";
   }
 
-  if (percent > 70) {
+  if (percent >= 80) {
     return "warn";
   }
 

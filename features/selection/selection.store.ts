@@ -22,6 +22,9 @@ export const useSelectionStore = create<SelectionState & SelectionActions>()((se
   contextItems: [],
 
   setSelectionMode: (active: boolean) => {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(10);
+    }
     set(() => {
       // If turning off selection mode, also clear all selected items
       if (!active) {
@@ -32,6 +35,9 @@ export const useSelectionStore = create<SelectionState & SelectionActions>()((se
   },
 
   toggleSelection: (id: string) => {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(10);
+    }
     set((state) => {
       const next = new Set(state.selectedIds);
       if (next.has(id)) {
@@ -51,6 +57,9 @@ export const useSelectionStore = create<SelectionState & SelectionActions>()((se
   },
 
   selectAll: (ids: string[]) => {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(10);
+    }
     set({
       selectedIds: new Set(ids),
       isSelectionMode: true,
@@ -58,6 +67,9 @@ export const useSelectionStore = create<SelectionState & SelectionActions>()((se
   },
 
   clearSelection: () => {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(10);
+    }
     set({
       selectedIds: new Set(),
       isSelectionMode: false,

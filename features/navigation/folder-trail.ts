@@ -50,17 +50,8 @@ export function parseFolderTrailParam(raw: string | null | undefined): string[] 
       return normalizeSegments(parsed);
     }
   } catch {
-    // Fall through to legacy delimiter parsing.
+    return normalizeSegments([decoded]);
   }
-
-  if (decoded.includes(" / ")) {
-    return normalizeSegments(decoded.split(" / "));
-  }
-
-  if (decoded.includes("|")) {
-    return normalizeSegments(decoded.split("|"));
-  }
-
   return normalizeSegments([decoded]);
 }
 

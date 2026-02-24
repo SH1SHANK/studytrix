@@ -34,26 +34,6 @@ export function shouldMergeSemanticResults(state: SemanticMergeState): boolean {
 }
 
 /**
- * Returns `true` if duplicate detection should be skipped because the device
- * is on battery-saver or has indicated save-data preference.
- *
- * Falls back to `false` (allow detection) if the APIs are unavailable.
- */
-export function shouldSuppressDuplicateDetection(): boolean {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  // Respect save-data header
-  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-  if (connection?.saveData === true) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
  * Returns `true` if the device appears to be low-end:
  * - `navigator.deviceMemory < 2` (less than 2 GB RAM), or
  * - `navigator.hardwareConcurrency < 4` (fewer than 4 cores)

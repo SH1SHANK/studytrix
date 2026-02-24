@@ -1,21 +1,15 @@
 "use client";
 
 import {
-  INTELLIGENCE_INDEX_CHUNK_SIZE,
   INTELLIGENCE_MODEL_CATALOG_ENDPOINT,
   INTELLIGENCE_QUERY_TIMEOUT_MS,
 } from "./intelligence.constants";
-import { clearAllEmbeddings, getIntelligenceSnapshot, setIntelligenceSnapshot } from "./intelligence.db";
+import { getIntelligenceSnapshot, setIntelligenceSnapshot } from "./intelligence.db";
 import { normalizeModelCatalog } from "./intelligence.model-selector";
-import {
-  type IntelligenceJob,
-  processInIdleChunks,
-  runIntelligenceJobs,
-  shouldRunBackgroundIntelligenceJobs,
-} from "./intelligence.queue";
 import type {
-  IntelligenceDocument,
+  FileEntry,
   IntelligenceModelCatalog,
+  SearchScope,
   IntelligenceWorkerAnyRequestEnvelope,
   IntelligenceWorkerAnyResponseEnvelope,
   IntelligenceWorkerEventMessage,
@@ -27,7 +21,8 @@ import type {
 interface QueryOptions {
   query: string;
   limit: number;
-  scopeSignature?: string;
+  scope: SearchScope;
+  repoFilter?: "global" | "personal" | "both";
   timeoutMs?: number;
 }
 
@@ -55,7 +50,6 @@ export class IntelligenceClient {
 
   private initializedModelId: string | null = null;
 
-  /** Guard against duplicate `init()` calls while the first is still loading. */
   private initializing = false;
 
   private boundOnMessage: ((event: MessageEvent<IntelligenceWorkerAnyResponseEnvelope | IntelligenceWorkerEventMessage>) => void) | null = null;
@@ -110,8 +104,6 @@ export class IntelligenceClient {
 
     worker.addEventListener("message", this.boundOnMessage as EventListener);
 
-    // If the worker crashes, reject all pending requests so callers can
-    // execute deterministic fallbacks on the main thread.
     worker.addEventListener("error", (event) => {
       const message = event instanceof ErrorEvent && event.message
         ? event.message
@@ -130,11 +122,6 @@ export class IntelligenceClient {
     type: T,
     payload: IntelligenceWorkerRequestMap[T],
   ): Promise<IntelligenceWorkerResponseMap[T]> {
-    if (!this.worker && type !== "INIT" && type !== "SET_MODEL" && type !== "GET_STATS") {
-      // Reject immediately if the worker has been disposed to prevent
-      // postMessage on a null reference.
-    }
-
     const worker = this.ensureWorker();
 
     const requestId = createRequestId();
@@ -169,15 +156,13 @@ export class IntelligenceClient {
   }
 
   async init(params: {
-    modelId: string;
+    modelId?: string;
     snapshotKey: string;
   }): Promise<IntelligenceWorkerStats> {
-    // Guard: if already initializing or the worker is ready with the same model,
-    // avoid creating a second worker.
     if (this.initializing) {
       return this.request("GET_STATS", undefined);
     }
-    if (this.worker && this.initializedModelId === params.modelId) {
+    if (this.worker && this.initializedModelId === (params.modelId ?? this.initializedModelId)) {
       return this.request("GET_STATS", undefined);
     }
 
@@ -189,7 +174,7 @@ export class IntelligenceClient {
         snapshot,
       });
 
-      this.initializedModelId = params.modelId;
+      this.initializedModelId = result.modelId;
       return result;
     } finally {
       this.initializing = false;
@@ -198,103 +183,55 @@ export class IntelligenceClient {
 
   async setModel(modelId: string): Promise<IntelligenceWorkerStats> {
     const result = await this.request("SET_MODEL", { modelId });
-    this.initializedModelId = modelId;
+    this.initializedModelId = result.modelId;
     return result;
   }
 
-  async indexDocs(params: {
-    docs: IntelligenceDocument[];
-    signature: string;
-    snapshotKey: string;
-    onProgress?: (progress: { processed: number; total: number }) => void;
-    enableOCR?: boolean;
+  async indexFiles(params: {
+    files: FileEntry[];
+    snapshotKey?: string;
+    signature?: string;
+    onProgress?: (progress: { processed: number; total: number; currentFileName: string }) => void;
   }): Promise<IntelligenceWorkerStats> {
-    if (params.docs.length === 0) {
-      params.onProgress?.({ processed: 0, total: 0 });
+    if (params.files.length === 0) {
+      params.onProgress?.({ processed: 0, total: 0, currentFileName: "" });
       return this.request("GET_STATS", undefined);
     }
 
-    const total = params.docs.length;
-    let processed = 0;
-    params.onProgress?.({ processed: 0, total });
-
-    const jobs: Array<
-      IntelligenceJob<"EMBED", IntelligenceDocument[]>
-      | IntelligenceJob<"OCR", string[]>
-    > = [
-      {
-        type: "EMBED",
-        payload: params.docs,
-      },
-      {
-        type: "OCR",
-        payload: params.docs
-          .map((doc) => (doc.fileId ?? doc.entityId ?? "").trim())
-          .filter((value) => value.length > 0),
-      },
-    ];
-
-    await runIntelligenceJobs({
-      jobs,
-      onJob: async (job) => {
-        if (job.type === "EMBED") {
-          await processInIdleChunks({
-            items: job.payload,
-            chunkSize: INTELLIGENCE_INDEX_CHUNK_SIZE,
-            onChunk: async (chunk, chunkIndex) => {
-              await this.request("INDEX_DOCS", {
-                docs: [...chunk],
-                signature: params.signature,
-                replace: chunkIndex === 0,
-              });
-
-              processed = Math.min(total, processed + chunk.length);
-              params.onProgress?.({ processed, total });
-            },
-          });
+    const unsubscribe = params.onProgress
+      ? this.subscribeEvents((message) => {
+        if (message.type !== "INDEX_PROGRESS") {
           return;
         }
 
-        if (job.type !== "OCR" || params.enableOCR !== true || job.payload.length === 0) {
-          return;
-        }
-
-        const canRunInBackground = await shouldRunBackgroundIntelligenceJobs();
-        if (!canRunInBackground) {
-          return;
-        }
-
-        await this.request("OCR_QUEUE", {
-          fileIds: job.payload,
+        params.onProgress?.({
+          processed: message.processed,
+          total: message.total,
+          currentFileName: message.currentFileName,
         });
-      },
-    });
+      })
+      : () => undefined;
 
-    const persistResult = await this.request("PERSIST", { key: params.snapshotKey });
-    await setIntelligenceSnapshot(persistResult.snapshot);
+    try {
+      const result = await this.request("INDEX_FILES", {
+        files: params.files,
+        signature: params.signature,
+      });
 
-    return this.request("GET_STATS", undefined);
+      if (params.snapshotKey) {
+        const persistResult = await this.request("PERSIST", { key: params.snapshotKey });
+        await setIntelligenceSnapshot(persistResult.snapshot);
+      }
+
+      return result;
+    } finally {
+      unsubscribe();
+    }
   }
 
-  async ocrQueue(fileIds: string[]): Promise<IntelligenceWorkerResponseMap["OCR_QUEUE"]> {
-    return this.request("OCR_QUEUE", {
-      fileIds,
-    });
-  }
-
-  async switchCleanupModel(modelId: string): Promise<IntelligenceWorkerResponseMap["SWITCH_MODEL"]> {
-    return this.request("SWITCH_MODEL", { modelId });
-  }
-
-  async cleanText(params: {
-    text: string;
-    modelId?: string;
-  }): Promise<IntelligenceWorkerResponseMap["CLEAN_TEXT"]> {
-    return this.request("CLEAN_TEXT", params);
-  }
-
-  async detectDuplicates(): Promise<IntelligenceWorkerResponseMap["DETECT_DUPLICATES"]> {
-    return this.request("DETECT_DUPLICATES", {});
+  async cancelIndexing(): Promise<boolean> {
+    const result = await this.request("CANCEL_INDEXING", undefined);
+    return result.cancelled;
   }
 
   async query(params: QueryOptions): Promise<IntelligenceWorkerResponseMap["QUERY"]> {
@@ -305,7 +242,8 @@ export class IntelligenceClient {
     const requestPromise = this.request("QUERY", {
       query: params.query,
       limit: params.limit,
-      scopeSignature: params.scopeSignature,
+      scope: params.scope,
+      repoFilter: params.repoFilter,
     });
 
     const timeoutPromise = new Promise<IntelligenceWorkerResponseMap["QUERY"]>((_, reject) => {
@@ -327,21 +265,16 @@ export class IntelligenceClient {
   }
 
   async clearIndex(): Promise<IntelligenceWorkerStats> {
-    await clearAllEmbeddings();
     return this.request("CLEAR_INDEX", {});
   }
 
-  /**
-   * Programmatically clear the Transformers.js model binaries from the browser's CacheStorage.
-   * Useful for recovering from corrupted downloads or freeing up space.
-   */
   async clearModelCache(): Promise<void> {
     try {
       const cacheNames = await caches.keys();
       const deletePromises = cacheNames
         .filter((name) => name.includes("transformers-cache"))
         .map((name) => caches.delete(name));
-      
+
       await Promise.all(deletePromises);
     } catch (error) {
       console.error("Failed to clear model cache array buffers", error);
@@ -354,7 +287,6 @@ export class IntelligenceClient {
     }
 
     this.pending.clear();
-    this.eventListeners.clear();
 
     if (this.boundOnMessage && this.worker) {
       this.worker.removeEventListener("message", this.boundOnMessage as EventListener);

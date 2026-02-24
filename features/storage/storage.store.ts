@@ -8,7 +8,6 @@ import {
 } from "./storage.analytics";
 import { getIntegrityIssues, revalidateRecord } from "./storage.integrity";
 import {
-  auditOfflineIndexOnce,
   clearAllOffline,
   deleteOfflineRecords,
   getOfflineRecords,
@@ -82,7 +81,6 @@ export const useStorageStore = create<StorageStoreState>((set, get) => ({
 
   loadDashboard: async () => {
     set({ loading: true });
-    void auditOfflineIndexOnce().catch(() => undefined);
 
     try {
       const [records, quota] = await Promise.all([

@@ -12,7 +12,7 @@ type FeatureSection = {
 export const metadata: Metadata = {
   title: "Features",
   description:
-    "Explore Studytrix features across scoped search, offline storage, sharing, copy/download actions, and mobile-first workflows.",
+    "Explore Studytrix features across breadcrumb-aware scoped search, cross-repository semantic suggestions, offline storage, sharing, and mobile-first workflows.",
   alternates: {
     canonical: "/features",
   },
@@ -21,11 +21,22 @@ export const metadata: Metadata = {
 const FEATURE_SECTIONS: FeatureSection[] = [
   {
     title: "Navigation and Discovery",
-    summary: "Fast access to courses, folders, and actions across global and local scopes.",
+    summary: "Fast access to courses, folders, and actions with breadcrumb-aware scoped search.",
     points: [
-      "Command Center with global and scoped search modes.",
+      "Command Center with route-aware `SearchScope` (global-root, personal-root, and folder subtree contexts).",
       "Scoped shortcuts for folder (`/`), tag (`#`), domain (`:`), actions (`>`), and recents (`@`).",
+      "Unified folder scope UI via breadcrumbs, removing duplicate folder-scope states across prefix and chip layers.",
       "Folder-aware command indexing with nested path discovery.",
+    ],
+  },
+  {
+    title: "Smart Search Intelligence",
+    summary: "On-device semantic retrieval with deeper indexing and clearer setup status.",
+    points: [
+      "Cross-repository semantic suggestions in global scope for high-confidence Personal Repository matches.",
+      "Repository-partitioned index metadata with ancestry-aware folder-subtree filtering for semantic queries.",
+      "Incremental semantic index updates from Service Worker file-cache broadcasts (without full recollection).",
+      "Redesigned model download/indexing setup dialog with friendlier staged progress and richer progress visuals.",
     ],
   },
   {

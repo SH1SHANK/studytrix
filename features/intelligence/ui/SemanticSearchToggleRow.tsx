@@ -1,0 +1,56 @@
+"use client";
+
+import Link from "next/link";
+import { FlaskConical } from "lucide-react";
+
+import { Switch } from "@/components/ui/switch";
+import {
+  INTELLIGENCE_LEARN_MORE_PATH,
+  INTELLIGENCE_SETTINGS_IDS,
+} from "@/features/intelligence/intelligence.constants";
+import { useIntelligenceStore } from "@/features/intelligence/intelligence.store";
+import { useSetting } from "@/ui/hooks/useSettings";
+
+export function SemanticSearchToggleRow() {
+  const modelDownloaded = useIntelligenceStore((state) => state.modelDownloaded);
+  const [enabled, setEnabled] = useSetting(INTELLIGENCE_SETTINGS_IDS.smartSearchEnabled);
+  const [showInCommandCenter] = useSetting(INTELLIGENCE_SETTINGS_IDS.showInCommandCenter);
+
+  if (!modelDownloaded || showInCommandCenter === false) {
+    return null;
+  }
+
+  return (
+    <div className="px-3 pt-2">
+      <div className="border-t border-border/40 pt-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <FlaskConical className="size-3.5 text-amber-500" />
+              <p className="text-xs font-medium text-foreground">Smart Search</p>
+              <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                Experimental
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Might show unexpected results · {" "}
+              <Link href={INTELLIGENCE_LEARN_MORE_PATH} className="text-primary underline decoration-primary/35 underline-offset-2 hover:decoration-primary">
+                Learn more
+              </Link>
+            </p>
+          </div>
+          <Switch
+            id="command-semantic-search-toggle"
+            checked={enabled === true}
+            onCheckedChange={(nextValue) => {
+              setEnabled(nextValue);
+            }}
+            aria-label="Toggle Smart Search"
+            size="sm"
+            className="mt-0.5"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

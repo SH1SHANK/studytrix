@@ -5,9 +5,9 @@ import { AppShell } from "@/components/layout/AppShell";
 import {
   ControlsBar,
   FileManagerViewModeProvider,
-} from "@/components/file-manager/ControlsBar";
-import { FileList } from "@/components/file-manager/FileList";
-import { StickyHeader } from "@/components/file-manager/StickyHeader";
+} from "@/features/file/ui/file-manager/ControlsBar";
+import { FileList } from "@/features/file/ui/file-manager/FileList";
+import { StickyHeader } from "@/features/file/ui/file-manager/StickyHeader";
 import { type CatalogResponse, type Course } from "@/features/catalog/catalog.types";
 import {
   buildFolderRouteHref,

@@ -1,22 +1,21 @@
 export type DownloadState =
   | "queued"
+  | "waiting"
   | "downloading"
   | "paused"
   | "completed"
   | "failed"
-  | "canceled";
+  | "canceled"
+  | "evicted";
 
 export type DownloadErrorCode =
-  | "OFFLINE"
-  | "NETWORK"
-  | "RATE_LIMITED"
-  | "NOT_FOUND"
-  | "ACCESS_DENIED"
-  | "INVALID_ID"
-  | "UNSUPPORTED_TYPE"
-  | "QUOTA"
+  | "NETWORK_ERROR"
+  | "QUOTA_EXCEEDED"
+  | "SERVER_ERROR"
+  | "TIMEOUT"
   | "UNKNOWN";
 export type DownloadTaskKind = "file" | "folder";
+export type DownloadProgressMode = "determinate" | "indeterminate";
 
 export interface DownloadTask {
   id: string;
@@ -37,6 +36,8 @@ export interface DownloadTask {
   totalBytes?: number;
   speedBytesPerSecond?: number;
   etaSeconds?: number;
+  queuePosition?: number;
+  progressMode?: DownloadProgressMode;
   networkHold?: boolean;
   retryCount?: number;
   state: DownloadState;

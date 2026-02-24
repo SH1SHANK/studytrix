@@ -208,14 +208,35 @@ function getRelativeLuminance(color: [number, number, number]): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-export function getTagChipTextColor(backgroundHex: string): "#0F172A" | "#FFFFFF" {
+export function getTagChipTextColor(backgroundHex: string): string {
   const rgb = parseHexColor(backgroundHex);
   if (!rgb) {
-    return "#0F172A";
+    return "hsl(var(--foreground))";
   }
 
   const luminance = getRelativeLuminance(rgb);
   return luminance > 0.5 ? "#0F172A" : "#FFFFFF";
+}
+
+export function getTagChipStyle(color: string): {
+  backgroundColor: string;
+  borderColor: string;
+  color: string;
+} {
+  const normalized = color.trim();
+  if (!normalized) {
+    return {
+      backgroundColor: "var(--muted)",
+      borderColor: "var(--border)",
+      color: "var(--foreground)",
+    };
+  }
+
+  return {
+    backgroundColor: `color-mix(in oklab, ${normalized} 18%, var(--card))`,
+    borderColor: `color-mix(in oklab, ${normalized} 44%, var(--border))`,
+    color: `color-mix(in oklab, ${normalized} 78%, var(--foreground))`,
+  };
 }
 
 export function buildTagChipModels(

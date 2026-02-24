@@ -29,8 +29,8 @@ type DownloadStoreState = {
 const DOWNLOAD_STORE_PERSIST_KEY = "studytrix-download-store-v1";
 const MAX_PERSISTED_TASKS = 300;
 const RESTORED_TASK_MESSAGE = "Paused after app restart. Resume to continue.";
-const ACTIVE_STATES = new Set<DownloadTask["state"]>(["queued", "downloading", "paused"]);
-const TERMINAL_STATES = new Set<DownloadTask["state"]>(["completed", "failed", "canceled"]);
+const ACTIVE_STATES = new Set<DownloadTask["state"]>(["queued", "waiting", "downloading", "paused"]);
+const TERMINAL_STATES = new Set<DownloadTask["state"]>(["completed", "failed", "canceled", "evicted"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -62,6 +62,49 @@ function normalizeMimeType(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizeProgressMode(value: unknown): DownloadTask["progressMode"] | undefined {
+  if (value === "determinate" || value === "indeterminate") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function normalizeErrorCode(value: unknown): DownloadTask["errorCode"] | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  if (
+    value === "NETWORK_ERROR"
+    || value === "QUOTA_EXCEEDED"
+    || value === "SERVER_ERROR"
+    || value === "TIMEOUT"
+    || value === "UNKNOWN"
+  ) {
+    return value;
+  }
+
+  if (value === "OFFLINE" || value === "NETWORK" || value === "RATE_LIMITED") {
+    return "NETWORK_ERROR";
+  }
+
+  if (value === "QUOTA") {
+    return "QUOTA_EXCEEDED";
+  }
+
+  if (
+    value === "NOT_FOUND"
+    || value === "ACCESS_DENIED"
+    || value === "INVALID_ID"
+    || value === "UNSUPPORTED_TYPE"
+  ) {
+    return "SERVER_ERROR";
+  }
+
+  return "UNKNOWN";
+}
+
 function sanitizeTask(task: unknown): DownloadTask | null {
   if (!isRecord(task)) {
     return null;
@@ -82,11 +125,13 @@ function sanitizeTask(task: unknown): DownloadTask | null {
 
   const state: DownloadTask["state"] =
     task.state === "queued"
+    || task.state === "waiting"
     || task.state === "downloading"
     || task.state === "paused"
     || task.state === "completed"
     || task.state === "failed"
     || task.state === "canceled"
+    || task.state === "evicted"
       ? task.state
       : "failed";
 
@@ -111,19 +156,7 @@ function sanitizeTask(task: unknown): DownloadTask | null {
   const groupTotalFiles = normalizeByteCount(task.groupTotalFiles);
   const groupCompletedFiles = normalizeByteCount(task.groupCompletedFiles);
   const groupTotalBytes = normalizeByteCount(task.groupTotalBytes);
-  const errorCodeCandidate = typeof task.errorCode === "string" ? task.errorCode : undefined;
-  const errorCode =
-    errorCodeCandidate === "OFFLINE"
-    || errorCodeCandidate === "NETWORK"
-    || errorCodeCandidate === "RATE_LIMITED"
-    || errorCodeCandidate === "NOT_FOUND"
-    || errorCodeCandidate === "ACCESS_DENIED"
-    || errorCodeCandidate === "INVALID_ID"
-    || errorCodeCandidate === "UNSUPPORTED_TYPE"
-    || errorCodeCandidate === "QUOTA"
-    || errorCodeCandidate === "UNKNOWN"
-      ? errorCodeCandidate
-      : undefined;
+  const errorCode = normalizeErrorCode(task.errorCode);
 
   return {
     id,
@@ -144,6 +177,8 @@ function sanitizeTask(task: unknown): DownloadTask | null {
     totalBytes,
     speedBytesPerSecond: speedBytesPerSecond > 0 ? speedBytesPerSecond : undefined,
     etaSeconds: etaSeconds > 0 ? Math.floor(etaSeconds) : undefined,
+    queuePosition: normalizeByteCount(task.queuePosition),
+    progressMode: normalizeProgressMode(task.progressMode),
     networkHold: Boolean(task.networkHold),
     retryCount: Math.max(0, Math.floor(normalizeFiniteNumber(task.retryCount, 0))),
     state: normalizedState,
@@ -270,6 +305,7 @@ export const useDownloadStore = create<DownloadStoreState>()(persist(
           progress: safeProgress,
           loadedBytes: normalizedLoaded,
           totalBytes: normalizedTotal > 0 ? normalizedTotal : current.totalBytes,
+          progressMode: normalizedTotal > 0 ? "determinate" : "indeterminate",
           speedBytesPerSecond: speedBytesPerSecond > 0 ? speedBytesPerSecond : current.speedBytesPerSecond,
           etaSeconds,
           networkHold: false,
@@ -403,7 +439,7 @@ function ensureEventSubscriptions(): void {
       speedBytesPerSecond: undefined,
       etaSeconds: undefined,
       error,
-      errorCode: current?.errorCode ?? "NETWORK",
+      errorCode: current?.errorCode ?? "NETWORK_ERROR",
       retryCount: current?.retryCount ?? 0,
       updatedAt: Date.now(),
     });

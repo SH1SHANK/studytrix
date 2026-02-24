@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { BlogIndexClient } from "@/components/blog/BlogIndexClient";
+import { BlogIndexClient } from "@/features/blog/ui/BlogIndexClient";
 import { BLOG_ARTICLES } from "@/features/blog/blog.catalog";
 
 export const metadata: Metadata = {

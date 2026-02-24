@@ -1,7 +1,7 @@
 "use client";
 
-import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
-import { VersionUpdateBanner } from "@/components/changelog/VersionUpdateBanner";
+import { ConnectivityBanner } from "@/features/offline/ui/ConnectivityBanner";
+import { VersionUpdateBanner } from "@/features/changelog/ui/VersionUpdateBanner";
 import { useSetting } from "@/ui/hooks/useSettings";
 
 export function AppRuntimeBanners() {

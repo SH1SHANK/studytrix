@@ -21,6 +21,10 @@ function deriveAggregateState(children: DownloadTask[], totalFiles: number): Dow
     return "downloading";
   }
 
+  if (children.some((task) => task.state === "waiting")) {
+    return "waiting";
+  }
+
   if (children.some((task) => task.state === "queued")) {
     return "queued";
   }
@@ -35,6 +39,10 @@ function deriveAggregateState(children: DownloadTask[], totalFiles: number): Dow
 
   if (children.some((task) => task.state === "canceled")) {
     return "canceled";
+  }
+
+  if (children.some((task) => task.state === "evicted")) {
+    return "evicted";
   }
 
   return "queued";
@@ -78,7 +86,12 @@ export function buildDownloadGrouping(
     const completedFiles = children.filter((task) => task.state === "completed").length;
     const failedFiles = children.filter((task) => task.state === "failed").length;
     const partialProgress = children
-      .filter((task) => task.state === "downloading" || task.state === "queued" || task.state === "paused")
+      .filter(
+        (task) => task.state === "downloading"
+          || task.state === "queued"
+          || task.state === "waiting"
+          || task.state === "paused",
+      )
       .reduce((sum, task) => sum + (task.progress / 100), 0);
     const fileProgress = totalFiles > 0
       ? Math.min(100, ((completedFiles + partialProgress) / totalFiles) * 100)
@@ -131,11 +144,13 @@ export function buildDownloadGrouping(
 
   const byState: GroupedByState = {
     downloading: displayValues.filter((task) => task.state === "downloading"),
+    waiting: displayValues.filter((task) => task.state === "waiting"),
     queued: displayValues.filter((task) => task.state === "queued"),
     paused: displayValues.filter((task) => task.state === "paused"),
     failed: displayValues.filter((task) => task.state === "failed"),
     completed: displayValues.filter((task) => task.state === "completed"),
     canceled: displayValues.filter((task) => task.state === "canceled"),
+    evicted: displayValues.filter((task) => task.state === "evicted"),
   };
 
   return {

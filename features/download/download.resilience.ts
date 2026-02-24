@@ -64,71 +64,57 @@ export function classifyDownloadErrorCode(error: unknown): DownloadErrorCode {
   if (error instanceof DownloadRequestError) {
     const remoteCode = (error.remoteErrorCode ?? "").toUpperCase();
     if (remoteCode === "RATE_LIMITED") {
-      return "RATE_LIMITED";
+      return "NETWORK_ERROR";
     }
-    if (remoteCode === "FILE_NOT_FOUND") {
-      return "NOT_FOUND";
-    }
-    if (remoteCode === "FILE_ACCESS_DENIED") {
-      return "ACCESS_DENIED";
+    if (remoteCode === "FILE_NOT_FOUND" || remoteCode === "FILE_ACCESS_DENIED") {
+      return "SERVER_ERROR";
     }
     if (remoteCode === "INVALID_FILE_ID") {
-      return "INVALID_ID";
+      return "SERVER_ERROR";
     }
-    if (
-      remoteCode === "UNSUPPORTED_EXPORT"
-      || remoteCode === "UNSUPPORTED_FILE_TYPE"
-      || remoteCode === "RANGE_NOT_SUPPORTED"
-    ) {
-      return "UNSUPPORTED_TYPE";
+    if (remoteCode === "UNSUPPORTED_EXPORT" || remoteCode === "UNSUPPORTED_FILE_TYPE") {
+      return "SERVER_ERROR";
+    }
+    if (error.status === 408) {
+      return "TIMEOUT";
+    }
+    if (typeof error.status === "number" && error.status >= 500) {
+      return "SERVER_ERROR";
     }
   }
 
   const text = error instanceof Error ? error.message.toLowerCase() : String(error ?? "").toLowerCase();
 
   if (text.includes("offline storage limit") || text.includes("quota") || text.includes("storage limit")) {
-    return "QUOTA";
+    return "QUOTA_EXCEEDED";
   }
 
-  if (includesAny(text, ["not found", "404"])) {
-    return "NOT_FOUND";
+  if (includesAny(text, ["timed out", "timeout"])) {
+    return "TIMEOUT";
   }
 
-  if (includesAny(text, ["access denied", "403", "forbidden", "permission"])) {
-    return "ACCESS_DENIED";
+  if (includesAny(text, ["not found", "404", "access denied", "403", "forbidden", "invalid file id", "400"])) {
+    return "SERVER_ERROR";
   }
 
-  if (includesAny(text, ["invalid file id", "invalid id", "400"])) {
-    return "INVALID_ID";
-  }
-
-  if (includesAny(text, ["unsupported export", "unsupported file type", "415"])) {
-    return "UNSUPPORTED_TYPE";
-  }
-
-  if (includesAny(text, ["rate limit", "429"])) {
-    return "RATE_LIMITED";
-  }
-
-  if (includesAny(text, ["you are offline", "waiting for connection", "offline"])) {
-    return "OFFLINE";
-  }
-
-  if (isTransientDownloadError(error) || includesAny(text, ["network", "offline", "connection"])) {
-    return "NETWORK";
+  if (isTransientDownloadError(error) || includesAny(text, ["network", "offline", "connection", "rate limit", "429"])) {
+    return "NETWORK_ERROR";
   }
 
   return "UNKNOWN";
 }
 
 export function computeRetryDelayMs(attempt: number, options?: { baseMs?: number; capMs?: number; jitterRatio?: number }): number {
-  const base = Math.max(50, Math.floor(options?.baseMs ?? 350));
-  const cap = Math.max(base, Math.floor(options?.capMs ?? 3_500));
-  const jitterRatio = Math.max(0, Math.min(0.5, options?.jitterRatio ?? 0.2));
+  const fixed = [2_000, 8_000, 30_000];
+  const normalizedAttempt = Math.max(1, Math.floor(attempt));
+  const selected = fixed[Math.min(normalizedAttempt - 1, fixed.length - 1)];
+  if (!options) {
+    return selected;
+  }
 
-  const exponential = Math.min(cap, base * (2 ** Math.max(0, attempt - 1)));
-  const jitter = exponential * jitterRatio * Math.random();
-  return Math.min(cap, Math.floor(exponential + jitter));
+  const base = Math.max(50, Math.floor(options.baseMs ?? selected));
+  const cap = Math.max(base, Math.floor(options.capMs ?? selected));
+  return Math.min(cap, base);
 }
 
 export async function waitForRetryDelay(ms: number, signal?: AbortSignal): Promise<void> {

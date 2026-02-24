@@ -17,6 +17,8 @@ export type ClientFileMetadata = {
   size: number;
   modifiedTime: string | null;
   updatedAt: number;
+  downloadedAt?: number;
+  providerKind?: "filesystem" | "indexeddb";
 };
 
 type MetadataResolution = {
@@ -60,6 +62,14 @@ function normalizeMetadata(value: unknown, fallbackId: string): ClientFileMetada
     typeof value.updatedAt === "number" && Number.isFinite(value.updatedAt)
       ? value.updatedAt
       : Date.now();
+  const downloadedAt =
+    typeof value.downloadedAt === "number" && Number.isFinite(value.downloadedAt)
+      ? value.downloadedAt
+      : undefined;
+  const providerKind =
+    value.providerKind === "filesystem" || value.providerKind === "indexeddb"
+      ? value.providerKind
+      : undefined;
 
   return {
     id,
@@ -68,6 +78,8 @@ function normalizeMetadata(value: unknown, fallbackId: string): ClientFileMetada
     size,
     modifiedTime,
     updatedAt,
+    downloadedAt,
+    providerKind,
   };
 }
 

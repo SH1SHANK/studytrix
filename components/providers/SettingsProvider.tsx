@@ -3,13 +3,6 @@
 import { useEffect, useRef } from "react";
 import { useSettingsStore } from "@/features/settings/settings.store";
 
-function hexToRgb(hex: string): string | null {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}`
-    : null;
-}
-
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const values = useSettingsStore((state) => state.values);
   const initialized = useSettingsStore((state) => state.initialized);
@@ -26,18 +19,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (!initialized) return;
 
     const root = document.documentElement;
-
-    // Apply accent color
-    const accentColor = values.accent_color as string | undefined;
-    if (accentColor) {
-      const rgb = hexToRgb(accentColor);
-      if (rgb) {
-        // We set a CSS variable that components can use (e.g. for selection, borders, custom badges)
-        // This integrates cleanly without overriding Tailwind's core palette unless explicitly used
-        root.style.setProperty("--setting-accent-rgb", rgb);
-        root.style.setProperty("--setting-accent", accentColor);
-      }
-    }
 
     // Apply compact mode
     const isCompact = values.compact_mode as boolean | undefined;

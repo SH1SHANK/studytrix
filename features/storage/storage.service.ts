@@ -1,16 +1,16 @@
 import {
   putFile,
   clearFiles,
-  getAllMetadata,
   clearMetadata,
   clearSearchIndex,
   deleteFile,
   deleteSearchIndex,
   getAllFiles,
   getFile,
+  getProviderFileBlob,
   getMetadata,
-  setMetadata,
 } from "@/features/offline/offline.db";
+import { getActiveProvider } from "@/features/offline/offline.storage-location";
 import { OfflineError, type OfflineFileRecord } from "@/features/offline/offline.types";
 
 import type { OfflineRecord, QuotaEstimate } from "./storage.types";
@@ -25,8 +25,6 @@ interface StorageMetaPayload {
 
 const DEFAULT_COURSE_CODE = "GENERAL";
 const STORAGE_META_PREFIX = "storage-meta:";
-
-let auditPromise: Promise<void> | null = null;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -73,19 +71,6 @@ function storageMetaKey(fileId: string): string {
   return `${STORAGE_META_PREFIX}${fileId}`;
 }
 
-function parseStorageMetaFileId(key: string): string | null {
-  if (!key.startsWith(STORAGE_META_PREFIX)) {
-    return null;
-  }
-
-  const fileId = key.slice(STORAGE_META_PREFIX.length).trim();
-  return fileId ? fileId : null;
-}
-
-function stringifyPayload(payload: StorageMetaPayload): string {
-  return JSON.stringify(payload);
-}
-
 function deriveStatus(record: { size: number; blobSize: number; checksum?: string },
   metaStatus?: OfflineRecord["status"],
 ): OfflineRecord["status"] {
@@ -108,67 +93,11 @@ function deriveStatus(record: { size: number; blobSize: number; checksum?: strin
   return "complete";
 }
 
-export async function auditOfflineIndex(): Promise<void> {
-  const [files, metadataRecords] = await Promise.all([
-    getAllFiles(),
-    getAllMetadata(),
-  ]);
-
-  const cachedIds = new Set(files.map((file) => file.fileId));
-
-  for (const metadata of metadataRecords) {
-    const fileId = parseStorageMetaFileId(metadata.key);
-    if (!fileId || cachedIds.has(fileId)) {
-      continue;
-    }
-
-    const existingBytes = await getFile(fileId);
-    if (existingBytes) {
-      continue;
-    }
-
-    const payload = parseMetadataPayload(metadata.value);
-    const nextPayload: StorageMetaPayload = {
-      entityId: payload.entityId ?? fileId,
-      courseCode: payload.courseCode ?? DEFAULT_COURSE_CODE,
-      source: payload.source ?? "manual",
-      downloadedAt: payload.downloadedAt ?? Date.now(),
-      status: "error",
-    };
-
-    await setMetadata({
-      key: storageMetaKey(fileId),
-      value: stringifyPayload(nextPayload),
-    });
-  }
-}
-
-export async function auditOfflineIndexOnce(): Promise<void> {
-  if (auditPromise) {
-    await auditPromise;
-    return;
-  }
-
-  auditPromise = (async () => {
-    try {
-      await auditOfflineIndex();
-    } finally {
-      auditPromise = null;
-    }
-  })();
-
-  await auditPromise;
-}
-
 export async function getOfflineRecords(): Promise<OfflineRecord[]> {
-  const [files, metadataRecords] = await Promise.all([
-    getAllFiles(),
-    getAllMetadata(),
-  ]);
-
-  const recordsFromFiles = await Promise.all(
+  const files = await getAllFiles();
+  return await Promise.all(
     files.map(async (file): Promise<OfflineRecord> => {
-      const meta = await getMetadata(`storage-meta:${file.fileId}`);
+      const meta = await getMetadata(storageMetaKey(file.fileId));
       const payload = parseMetadataPayload(meta?.value);
 
       return {
@@ -191,32 +120,6 @@ export async function getOfflineRecords(): Promise<OfflineRecord[]> {
       };
     }),
   );
-
-  const fileIdSet = new Set(files.map((file) => file.fileId));
-  const missingRecords: OfflineRecord[] = [];
-
-  for (const metaRecord of metadataRecords) {
-    const fileId = parseStorageMetaFileId(metaRecord.key);
-    if (!fileId || fileIdSet.has(fileId)) {
-      continue;
-    }
-
-    const payload = parseMetadataPayload(metaRecord.value);
-
-    missingRecords.push({
-      id: fileId,
-      entityId: payload.entityId ?? fileId,
-      size: 0,
-      courseCode: payload.courseCode ?? DEFAULT_COURSE_CODE,
-      mimeType: "application/octet-stream",
-      downloadedAt: payload.downloadedAt ?? Date.now(),
-      lastAccessedAt: 0,
-      status: "error",
-      source: payload.source ?? "manual",
-    });
-  }
-
-  return [...recordsFromFiles, ...missingRecords];
 }
 
 export async function storeOfflineFileVerified(record: OfflineFileRecord): Promise<void> {
@@ -226,6 +129,18 @@ export async function storeOfflineFileVerified(record: OfflineFileRecord): Promi
   if (!verify || verify.blob.size !== record.blob.size || verify.size !== record.size) {
     await deleteFile(record.fileId);
     throw new OfflineError("STORAGE_WRITE_FAILED", `Verification failed for ${record.fileId}`);
+  }
+
+  const provider = getActiveProvider();
+  if (provider?.kind === "filesystem") {
+    const providerBlob = await getProviderFileBlob(record.fileId);
+    if (!providerBlob || providerBlob.size !== record.blob.size) {
+      await deleteFile(record.fileId);
+      throw new OfflineError(
+        "STORAGE_WRITE_FAILED",
+        `Filesystem verification failed for ${record.fileId}`,
+      );
+    }
   }
 }
 

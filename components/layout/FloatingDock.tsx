@@ -11,7 +11,6 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { CommandShortcut } from "@/components/ui/command";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 interface FloatingDockProps {
@@ -57,21 +56,9 @@ function isEditableElement(target: Element | null): boolean {
   }
 
   const inputType = target.type.toLowerCase();
-  return !target.disabled && !target.readOnly && !NON_TEXT_INPUT_TYPES.has(inputType);
-}
-
-function addMqlChangeListener(
-  queryList: MediaQueryList,
-  handler: (event: MediaQueryListEvent) => void,
-): () => void {
-  if (typeof queryList.addEventListener === "function") {
-    queryList.addEventListener("change", handler);
-    return () => queryList.removeEventListener("change", handler);
-  }
-
-  const legacyHandler = handler as unknown as (this: MediaQueryList, ev: MediaQueryListEvent) => void;
-  queryList.addListener(legacyHandler);
-  return () => queryList.removeListener(legacyHandler);
+  return (
+    !target.disabled && !target.readOnly && !NON_TEXT_INPUT_TYPES.has(inputType)
+  );
 }
 
 export function FloatingDock({
@@ -98,7 +85,8 @@ export function FloatingDock({
 
     const syncFromStorage = () => {
       try {
-        const next = window.sessionStorage.getItem(SCOPE_SUMMARY_STORAGE_KEY) ?? "";
+        const next =
+          window.sessionStorage.getItem(SCOPE_SUMMARY_STORAGE_KEY) ?? "";
         setScopeSummary(next);
       } catch {
         setScopeSummary("");
@@ -134,12 +122,18 @@ export function FloatingDock({
       const hasEditableFocus = isEditableElement(document.activeElement);
 
       if (!hasEditableFocus) {
-        keyboardBaselineHeightRef.current = Math.max(keyboardBaselineHeightRef.current, roundedHeight);
+        keyboardBaselineHeightRef.current = Math.max(
+          keyboardBaselineHeightRef.current,
+          roundedHeight,
+        );
         setIsKeyboardOpen(false);
         return;
       }
 
-      const baseline = Math.max(keyboardBaselineHeightRef.current, roundedHeight);
+      const baseline = Math.max(
+        keyboardBaselineHeightRef.current,
+        roundedHeight,
+      );
       keyboardBaselineHeightRef.current = baseline;
       setIsKeyboardOpen(baseline - roundedHeight >= KEYBOARD_HIDE_THRESHOLD_PX);
     };
@@ -156,8 +150,8 @@ export function FloatingDock({
     updateStandalone();
     updateViewport();
 
-    const removePointerListener = addMqlChangeListener(pointerMql, updatePointer);
-    const removeStandaloneListener = addMqlChangeListener(standaloneMql, updateStandalone);
+    pointerMql.addEventListener("change", updatePointer);
+    standaloneMql.addEventListener("change", updateStandalone);
     visualViewport?.addEventListener("resize", updateViewport);
     visualViewport?.addEventListener("scroll", updateViewport);
     window.addEventListener("resize", updateViewport);
@@ -168,8 +162,8 @@ export function FloatingDock({
     return () => {
       window.removeEventListener(SCOPE_SUMMARY_EVENT, onScopeSummary);
       window.removeEventListener("focus", syncFromStorage);
-      removePointerListener();
-      removeStandaloneListener();
+      pointerMql.removeEventListener("change", updatePointer);
+      standaloneMql.removeEventListener("change", updateStandalone);
       visualViewport?.removeEventListener("resize", updateViewport);
       visualViewport?.removeEventListener("scroll", updateViewport);
       window.removeEventListener("resize", updateViewport);
@@ -247,10 +241,13 @@ export function FloatingDock({
 
     return isStandaloneDisplay ? 14 : 12;
   }, [isCoarsePointer, isStandaloneDisplay]);
-  const shouldHideDock = isPaletteOpen || (isCoarsePointer && (isKeyboardOpen || isScrollHidden));
+  const shouldHideDock =
+    isPaletteOpen || (isCoarsePointer && (isKeyboardOpen || isScrollHidden));
   const resolvedPlaceholder = useMemo(() => {
     const normalized = placeholder.trim();
-    return normalized.length > 0 ? normalized : "Search files, folders, and actions";
+    return normalized.length > 0
+      ? normalized
+      : "Search files, folders, and actions";
   }, [placeholder]);
   const dockPlaceholderText = useMemo(() => {
     if (scopeSummary) {
@@ -272,11 +269,35 @@ export function FloatingDock({
   }, [isCoarsePointer]);
 
   const navItems = [
-    { id: "home", title: "Home", icon: IconHome, path: "/", match: (p: string) => p === "/" },
-    { id: "downloads", title: "Downloads", icon: IconDownload, path: "/downloads", match: (p: string) => p.startsWith("/downloads") },
+    {
+      id: "home",
+      title: "Home",
+      icon: IconHome,
+      path: "/",
+      match: (p: string) => p === "/",
+    },
+    {
+      id: "downloads",
+      title: "Downloads",
+      icon: IconDownload,
+      path: "/downloads",
+      match: (p: string) => p.startsWith("/downloads"),
+    },
     { id: "search", type: "search" as const },
-    { id: "storage", title: "Storage", icon: IconDatabase, path: "/storage", match: (p: string) => p.startsWith("/storage") },
-    { id: "settings", title: "Settings", icon: IconSettings, path: "/settings", match: (p: string) => p.startsWith("/settings") },
+    {
+      id: "storage",
+      title: "Storage",
+      icon: IconDatabase,
+      path: "/storage",
+      match: (p: string) => p.startsWith("/storage"),
+    },
+    {
+      id: "settings",
+      title: "Settings",
+      icon: IconSettings,
+      path: "/settings",
+      match: (p: string) => p.startsWith("/settings"),
+    },
   ];
 
   // Subtle spring physics for the dock
@@ -301,9 +322,13 @@ export function FloatingDock({
     <div
       className={cn(
         "fixed inset-x-0 z-40 flex w-full items-center justify-center transition-all duration-300 ease-out",
-        shouldHideDock ? "pointer-events-none translate-y-20 opacity-0" : "translate-y-0 opacity-100",
+        shouldHideDock
+          ? "pointer-events-none translate-y-20 opacity-0"
+          : "translate-y-0 opacity-100",
       )}
-      style={{ bottom: `calc(env(safe-area-inset-bottom) + ${dockBottomOffsetPx}px)` }}
+      style={{
+        bottom: `calc(env(safe-area-inset-bottom) + ${dockBottomOffsetPx}px)`,
+      }}
       aria-hidden={shouldHideDock ? true : undefined}
     >
       <motion.div
@@ -339,19 +364,15 @@ export function FloatingDock({
                   >
                     <div className="flex items-center gap-2">
                       <IconSearch className="size-5 sm:size-[18px] text-primary transition-colors group-hover:text-primary" />
-                      <span className={cn("max-w-32 truncate", isCoarsePointer ? "block" : "hidden sm:block")}>
+                      <span
+                        className={cn(
+                          "max-w-32 truncate",
+                          isCoarsePointer ? "block" : "hidden sm:block",
+                        )}
+                      >
                         {dockPlaceholderText}
                       </span>
                     </div>
-                    {scopeSummary ? (
-                      <span className="hidden max-w-24 truncate rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary sm:inline">
-                        Scoped
-                      </span>
-                    ) : (
-                      <CommandShortcut className="hidden border-primary/20 bg-primary/20 text-primary sm:inline opacity-80">
-                        ⌘K
-                      </CommandShortcut>
-                    )}
                   </motion.button>
                 </div>
               );

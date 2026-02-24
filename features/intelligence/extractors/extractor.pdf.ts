@@ -1,24 +1,35 @@
 import { loadPdfDocument } from "./pdf.runtime";
 
-export type PdfExtractionResult = {
-  text: string | null;
-  isImageBased: boolean;
+export type PDFTextExtractionOptions = {
+  maxPages?: number;
+  minChars?: number;
+  maxChars?: number;
 };
 
-function truncateText(value: string): string {
-  if (value.length <= 800) {
-    return value;
-  }
+export type PDFTextExtractionResult = {
+  text: string;
+  pagesRead: number;
+};
 
-  return value.slice(0, 800);
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
-export async function extractPdfText(arrayBuffer: ArrayBuffer): Promise<PdfExtractionResult> {
+export async function extractPDFText(
+  arrayBuffer: ArrayBuffer,
+  options: PDFTextExtractionOptions = {},
+): Promise<PDFTextExtractionResult> {
+  const {
+    maxPages = 3,
+    minChars = 50,
+    maxChars = 8000,
+  } = options;
+
   try {
     const pdf = await loadPdfDocument(arrayBuffer);
-    
+
     try {
-      const pagesToRead = Math.max(0, Math.min(3, Number(pdf.numPages) || 0));
+      const pagesToRead = Math.max(0, Math.min(maxPages, Number(pdf.numPages) || 0));
       const collected: string[] = [];
 
       for (let pageNumber = 1; pageNumber <= pagesToRead; pageNumber += 1) {
@@ -38,25 +49,25 @@ export async function extractPdfText(arrayBuffer: ArrayBuffer): Promise<PdfExtra
         }
       }
 
-      const joined = collected.join(" ").replace(/\s+/g, " ").trim();
-      if (joined.length < 50) {
+      const normalized = normalizeText(collected.join(" "));
+      if (normalized.length < minChars) {
         return {
-          text: null,
-          isImageBased: true,
+          text: "",
+          pagesRead: pagesToRead,
         };
       }
 
       return {
-        text: truncateText(joined),
-        isImageBased: false,
+        text: normalized.slice(0, maxChars),
+        pagesRead: pagesToRead,
       };
     } finally {
       await pdf.destroy?.();
     }
   } catch {
     return {
-      text: null,
-      isImageBased: false,
+      text: "",
+      pagesRead: 0,
     };
   }
 }

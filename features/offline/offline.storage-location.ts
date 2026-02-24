@@ -6,21 +6,39 @@ import { openDB, type IDBPDatabase } from "idb";
 
 export interface StorageProvider {
   kind: "filesystem" | "indexeddb";
+  /**
+   * Writes `blob` at `name`.
+   * Throws on unrecoverable write failures (e.g. permission revoked, quota exceeded).
+   */
   writeFile(name: string, blob: Blob): Promise<void>;
+  /**
+   * Reads `name`.
+   * Returns `null` when the file does not exist or is unreadable.
+   */
   readFile(name: string): Promise<Blob | null>;
+  /**
+   * Deletes `name`.
+   * Best effort: implementations may swallow "not found".
+   */
   deleteFile(name: string): Promise<void>;
+  /**
+   * Lists user file names (excluding internal marker/manifest files).
+   * Returns empty list on unreadable directories.
+   */
   listFiles(): Promise<string[]>;
+  /**
+   * Lightweight read+write probe.
+   * Must return `false` (not throw) when the provider is currently inaccessible.
+   */
+  testAccess(): Promise<boolean>;
 }
+
+export type StorageHandleStatus = "valid" | "requires-gesture" | "lost" | "unsupported";
 
 export interface StorageLocationConfig {
   providerType: "filesystem" | "indexeddb";
   displayPath: string | null;
-}
-
-export interface MigrationManifest {
-  files: string[];
-  completed: string[];
-  startedAt: number;
+  handleStatus: StorageHandleStatus;
 }
 
 export type PermissionStatus = "granted" | "denied" | "prompt";
@@ -34,7 +52,8 @@ const HANDLE_DB_NAME = "studytrix_dir_handles";
 const HANDLE_DB_VERSION = 1;
 const HANDLE_STORE = "handles";
 const HANDLE_KEY = "primary";
-const MIGRATION_MANIFEST_FILE = "_migration_manifest.json";
+const ACCESS_TEST_FILE = ".studytrix-access-test";
+export const MIN_RECOMMENDED_AVAILABLE_BYTES = 500 * 1024 * 1024;
 
 // ─── Feature Detection ─────────────────────────────────────────────────────
 
@@ -92,10 +111,25 @@ export async function persistDirectoryHandle(
 export async function loadDirectoryHandle(): Promise<{
   handle: FileSystemDirectoryHandle | null;
   permissionGranted: boolean;
+  handleStatus: StorageHandleStatus;
+}>;
+export async function loadDirectoryHandle(options: {
+  requestOnPrompt?: boolean;
+}): Promise<{
+  handle: FileSystemDirectoryHandle | null;
+  permissionGranted: boolean;
+  handleStatus: StorageHandleStatus;
+}>;
+export async function loadDirectoryHandle(options?: {
+  requestOnPrompt?: boolean;
+}): Promise<{
+  handle: FileSystemDirectoryHandle | null;
+  permissionGranted: boolean;
+  handleStatus: StorageHandleStatus;
 }> {
   const db = await getHandleDB();
   if (!db) {
-    return { handle: null, permissionGranted: false };
+    return { handle: null, permissionGranted: false, handleStatus: "unsupported" };
   }
 
   try {
@@ -105,7 +139,7 @@ export async function loadDirectoryHandle(): Promise<{
     )) as FileSystemDirectoryHandle | undefined;
 
     if (!handle) {
-      return { handle: null, permissionGranted: false };
+      return { handle: null, permissionGranted: false, handleStatus: "lost" };
     }
 
     const queryPermission = (handle as any).queryPermission;
@@ -115,11 +149,27 @@ export async function loadDirectoryHandle(): Promise<{
     if (typeof queryPermission === "function") {
       const queryResult = await queryPermission.call(handle, { mode: "readwrite" });
       if (queryResult === "granted") {
-        return { handle, permissionGranted: true };
+        return { handle, permissionGranted: true, handleStatus: "valid" };
       }
 
       if (queryResult === "denied") {
-        return { handle, permissionGranted: false };
+        return { handle, permissionGranted: false, handleStatus: "lost" };
+      }
+
+      if (queryResult === "prompt") {
+        if (options?.requestOnPrompt && typeof requestPermission === "function") {
+          try {
+            const requestResult = await requestPermission.call(handle, { mode: "readwrite" });
+            if (requestResult === "granted") {
+              return { handle, permissionGranted: true, handleStatus: "valid" };
+            }
+            return { handle, permissionGranted: false, handleStatus: "requires-gesture" };
+          } catch {
+            return { handle, permissionGranted: false, handleStatus: "requires-gesture" };
+          }
+        }
+
+        return { handle, permissionGranted: false, handleStatus: "requires-gesture" };
       }
     }
 
@@ -127,18 +177,21 @@ export async function loadDirectoryHandle(): Promise<{
     if (typeof requestPermission === "function") {
       try {
         const requestResult = await requestPermission.call(handle, { mode: "readwrite" });
-        return { handle, permissionGranted: requestResult === "granted" };
+        if (requestResult === "granted") {
+          return { handle, permissionGranted: true, handleStatus: "valid" };
+        }
+        return { handle, permissionGranted: false, handleStatus: "requires-gesture" };
       } catch {
         // requestPermission failed (e.g., no user gesture context).
-        return { handle, permissionGranted: false };
+        return { handle, permissionGranted: false, handleStatus: "requires-gesture" };
       }
     }
 
     // Some mobile/PWA runtimes omit permission APIs; if the handle is restored,
     // allow runtime reads/writes to be the source of truth.
-    return { handle, permissionGranted: true };
+    return { handle, permissionGranted: true, handleStatus: "valid" };
   } catch {
-    return { handle: null, permissionGranted: false };
+    return { handle: null, permissionGranted: false, handleStatus: "lost" };
   }
 }
 
@@ -186,7 +239,19 @@ export function loadConfig(): StorageLocationConfig | null {
       typeof parsed.providerType === "string" &&
       (parsed.providerType === "filesystem" || parsed.providerType === "indexeddb")
     ) {
-      return parsed;
+      const handleStatus =
+        parsed.handleStatus === "valid"
+        || parsed.handleStatus === "requires-gesture"
+        || parsed.handleStatus === "lost"
+        || parsed.handleStatus === "unsupported"
+          ? parsed.handleStatus
+          : (parsed.providerType === "filesystem" ? "requires-gesture" : "valid");
+
+      return {
+        providerType: parsed.providerType,
+        displayPath: parsed.displayPath ?? null,
+        handleStatus,
+      };
     }
 
     return null;
@@ -218,10 +283,9 @@ export class FileSystemAccessProvider implements StorageProvider {
     return this.dirHandle.name;
   }
 
-  async writeFile(name: string, blob: Blob): Promise<void> {
+  private async writeDirect(name: string, blob: Blob): Promise<void> {
     const fileHandle = await this.dirHandle.getFileHandle(name, { create: true });
     const writable = await fileHandle.createWritable();
-
     try {
       await writable.write(blob);
       await writable.close();
@@ -229,9 +293,27 @@ export class FileSystemAccessProvider implements StorageProvider {
       try {
         await writable.abort();
       } catch {
-        // Ignore abort errors.
       }
+      throw error;
+    }
+  }
 
+  async writeFile(name: string, blob: Blob): Promise<void> {
+    const tempName = `${name}.tmp`;
+    await this.writeDirect(tempName, blob);
+
+    try {
+      const tempHandle = await this.dirHandle.getFileHandle(tempName);
+      const move = (tempHandle as any).move;
+      if (typeof move === "function") {
+        await move.call(tempHandle, name);
+      } else {
+        // Chromium variants without move() cannot complete atomically; this fallback can tear on tab kill.
+        await this.writeDirect(name, blob);
+        await this.deleteFile(tempName);
+      }
+    } catch (error) {
+      await this.deleteFile(tempName);
       throw error;
     }
   }
@@ -263,6 +345,16 @@ export class FileSystemAccessProvider implements StorageProvider {
     }
 
     return names;
+  }
+
+  async testAccess(): Promise<boolean> {
+    try {
+      await this.writeDirect(ACCESS_TEST_FILE, new Blob(["ok"], { type: "text/plain" }));
+      await this.deleteFile(ACCESS_TEST_FILE);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async hasMarker(): Promise<boolean> {
@@ -318,6 +410,17 @@ export class IndexedDBProvider implements StorageProvider {
     const records = await getAllFiles();
     return records.map((r) => r.fileId);
   }
+
+  async testAccess(): Promise<boolean> {
+    try {
+      const probeName = `__access_probe_${Date.now()}__`;
+      await this.writeFile(probeName, new Blob(["ok"], { type: "text/plain" }));
+      await this.deleteFile(probeName);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 // ─── Module-Level Singleton ─────────────────────────────────────────────────
@@ -332,121 +435,47 @@ export function getActiveProvider(): StorageProvider | null {
   return activeProvider;
 }
 
-// ─── Migration ──────────────────────────────────────────────────────────────
+// ─── Utility: Pick Directory ────────────────────────────────────────────────
 
-export async function migrateFiles(
-  from: StorageProvider,
-  to: StorageProvider,
-  onProgress?: (done: number, total: number) => void,
-): Promise<void> {
-  const files = await from.listFiles();
-  const total = files.length;
-
-  if (total === 0) {
-    onProgress?.(0, 0);
-    return;
-  }
-
-  // Write checkpoint manifest to the destination.
-  const manifest: MigrationManifest = {
-    files,
-    completed: [],
-    startedAt: Date.now(),
-  };
-
-  await writeManifest(to, manifest);
-
-  // Copy phase — write each file to the new location.
-  for (let i = 0; i < files.length; i++) {
-    const name = files[i];
-
-    if (manifest.completed.includes(name)) {
-      onProgress?.(i + 1, total);
-      continue;
-    }
-
-    const blob = await from.readFile(name);
-    if (blob) {
-      await to.writeFile(name, blob);
-    }
-
-    manifest.completed.push(name);
-    await writeManifest(to, manifest);
-    onProgress?.(i + 1, total);
-  }
-
-  // Delete phase — remove from old provider only after all copies verified.
-  for (const name of files) {
-    await from.deleteFile(name);
-  }
-
-  // Clean up manifest.
-  await to.deleteFile(MIGRATION_MANIFEST_FILE);
-}
-
-export async function resumeMigration(
-  from: StorageProvider,
-  to: StorageProvider,
-  onProgress?: (done: number, total: number) => void,
-): Promise<boolean> {
-  const manifestBlob = await to.readFile(MIGRATION_MANIFEST_FILE);
-  if (!manifestBlob) {
-    return false;
+export async function estimateAvailableStorageBytes(): Promise<number | null> {
+  if (
+    typeof navigator === "undefined"
+    || !navigator.storage
+    || typeof navigator.storage.estimate !== "function"
+  ) {
+    return null;
   }
 
   try {
-    const text = await manifestBlob.text();
-    const manifest = JSON.parse(text) as MigrationManifest;
-
-    if (!Array.isArray(manifest.files) || !Array.isArray(manifest.completed)) {
-      await to.deleteFile(MIGRATION_MANIFEST_FILE);
-      return false;
+    const estimate = await navigator.storage.estimate();
+    if (typeof estimate.quota !== "number" || typeof estimate.usage !== "number") {
+      return null;
     }
-
-    const remaining = manifest.files.filter(
-      (f) => !manifest.completed.includes(f),
-    );
-
-    const total = manifest.files.length;
-    let done = manifest.completed.length;
-
-    for (const name of remaining) {
-      const blob = await from.readFile(name);
-      if (blob) {
-        await to.writeFile(name, blob);
-      }
-
-      manifest.completed.push(name);
-      done++;
-      await writeManifest(to, manifest);
-      onProgress?.(done, total);
-    }
-
-    // Delete from old provider.
-    for (const name of manifest.files) {
-      await from.deleteFile(name);
-    }
-
-    await to.deleteFile(MIGRATION_MANIFEST_FILE);
-    return true;
+    return Math.max(0, estimate.quota - estimate.usage);
   } catch {
-    return false;
+    return null;
   }
 }
 
-async function writeManifest(
-  provider: StorageProvider,
-  manifest: MigrationManifest,
-): Promise<void> {
-  const blob = new Blob([JSON.stringify(manifest)], {
-    type: "application/json",
-  });
-  await provider.writeFile(MIGRATION_MANIFEST_FILE, blob);
+export async function confirmStorageBudgetOrWarn(): Promise<boolean> {
+  const availableBytes = await estimateAvailableStorageBytes();
+  if (availableBytes === null || availableBytes >= MIN_RECOMMENDED_AVAILABLE_BYTES) {
+    return true;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const availableMb = Math.floor(availableBytes / (1024 * 1024));
+  return window.confirm(
+    `Only about ${availableMb} MB storage is available. Offline downloads may fail. Continue anyway?`,
+  );
 }
 
-// ─── Utility: Pick Directory ────────────────────────────────────────────────
-
-export async function pickDirectory(): Promise<FileSystemDirectoryHandle | null> {
+export async function pickDirectory(options?: {
+  startIn?: "documents" | "downloads" | "desktop" | FileSystemDirectoryHandle;
+}): Promise<FileSystemDirectoryHandle | null> {
   if (!supportsFileSystemAccess()) {
     return null;
   }
@@ -459,6 +488,7 @@ export async function pickDirectory(): Promise<FileSystemDirectoryHandle | null>
   try {
     const handle = await picker({
       mode: "readwrite",
+      startIn: options?.startIn ?? "documents",
     });
     return handle;
   } catch {

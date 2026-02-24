@@ -11,10 +11,6 @@ function validateSelect(setting: SettingItem, value: unknown): boolean {
     return false;
   }
 
-  if (setting.id === "intelligence_model_id" || setting.id === "intelligence_cleanup_model_id") {
-    return value.trim().length > 0;
-  }
-
   if (!setting.options || setting.options.length === 0) {
     return false;
   }

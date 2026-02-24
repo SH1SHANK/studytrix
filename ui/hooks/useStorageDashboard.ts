@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 
 import { useStorageStore } from "@/features/storage/storage.store";
-import { auditOfflineIndexOnce } from "@/features/storage/storage.service";
 
 export function useStorageDashboard() {
   const records = useStorageStore((state) => state.records);
@@ -20,7 +19,6 @@ export function useStorageDashboard() {
   const revalidateCorrupted = useStorageStore((state) => state.revalidateCorrupted);
 
   useEffect(() => {
-    void auditOfflineIndexOnce().catch(() => undefined);
     void loadDashboard();
   }, [loadDashboard]);
 

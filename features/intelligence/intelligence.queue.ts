@@ -11,7 +11,7 @@ type IdleRequestOptions = {
   timeout?: number;
 };
 
-export type IntelligenceJobType = "EMBED" | "OCR";
+export type IntelligenceJobType = "EMBED";
 
 export type IntelligenceJob<
   TType extends IntelligenceJobType = IntelligenceJobType,
@@ -19,7 +19,6 @@ export type IntelligenceJob<
 > = {
   type: TType;
   payload: TPayload;
-  /** Timestamp when the job was added to the queue (for starvation tracking). */
   enqueuedAt?: number;
 };
 
@@ -106,98 +105,24 @@ export async function processInIdleChunks<T>(params: {
   });
 }
 
-function getJobPriority(type: IntelligenceJobType): number {
-  if (type === "EMBED") {
-    return 0;
-  }
-
-  return 1;
-}
-
-export function sortIntelligenceJobsByPriority<TJob extends IntelligenceJob>(
-  jobs: readonly TJob[],
-): TJob[] {
-  const now = Date.now();
-  const STARVATION_MS = 60_000;
-
-  return [...jobs].sort((left, right) => {
-    let leftPrio = getJobPriority(left.type);
-    let rightPrio = getJobPriority(right.type);
-
-    // Promote starved OCR jobs to EMBED priority so they are not indefinitely
-    // blocked by a continuous stream of EMBED work.
-    if (left.type === "OCR" && typeof left.enqueuedAt === "number" && now - left.enqueuedAt > STARVATION_MS) {
-      leftPrio = 0;
-    }
-    if (right.type === "OCR" && typeof right.enqueuedAt === "number" && now - right.enqueuedAt > STARVATION_MS) {
-      rightPrio = 0;
-    }
-
-    return leftPrio - rightPrio;
-  });
-}
-
 export async function runIntelligenceJobs<TJob extends IntelligenceJob>(params: {
   jobs: readonly TJob[];
   onJob: (job: TJob, index: number) => Promise<void> | void;
   fileIdExtractor?: (job: TJob) => string;
 }): Promise<void> {
-  const deduplicated = params.fileIdExtractor
-    ? deduplicateIntelligenceJobs(params.jobs, params.fileIdExtractor)
+  const coalesced = params.fileIdExtractor
+    ? coalesceIntelligenceJobs(params.jobs, params.fileIdExtractor)
     : [...params.jobs];
-  const ordered = sortIntelligenceJobsByPriority(deduplicated);
-  for (let index = 0; index < ordered.length; index += 1) {
-    await params.onJob(ordered[index], index);
+
+  for (let index = 0; index < coalesced.length; index += 1) {
+    await params.onJob(coalesced[index], index);
   }
-}
-
-async function batteryAllowsBackgroundJobs(): Promise<boolean> {
-  const runtimeNavigator = navigator as Navigator & {
-    getBattery?: () => Promise<{ level: number; charging: boolean }>;
-  };
-
-  if (typeof runtimeNavigator.getBattery !== "function") {
-    return true;
-  }
-
-  try {
-    const battery = await runtimeNavigator.getBattery();
-    if (battery.level < 0.2 && battery.charging === false) {
-      return false;
-    }
-  } catch {
-    return true;
-  }
-
-  return true;
-}
-
-export async function shouldRunBackgroundIntelligenceJobs(): Promise<boolean> {
-  const runtimeNavigator = navigator as Navigator & {
-    connection?: {
-      saveData?: boolean;
-      effectiveType?: string;
-    };
-  };
-
-  if (runtimeNavigator.connection?.saveData === true) {
-    return false;
-  }
-
-  const effectiveType = runtimeNavigator.connection?.effectiveType;
-  if (effectiveType === "2g" || effectiveType === "slow-2g") {
-    return false;
-  }
-
-  return batteryAllowsBackgroundJobs();
 }
 
 /**
- * Deduplicates jobs by a `fileId` extractor and caps the queue at
- * `INTELLIGENCE_QUEUE_MAX_DEPTH` (500). Duplicate fileIds are skipped
- * rather than re-added.
+ * Coalesces jobs by `fileId` and caps queue depth.
  */
-export function deduplicateIntelligenceJobs<TJob extends IntelligenceJob>(
+export function coalesceIntelligenceJobs<TJob extends IntelligenceJob>(
   jobs: readonly TJob[],
   getFileId: (job: TJob) => string,
   maxDepth = 500,

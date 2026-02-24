@@ -22,7 +22,7 @@ export function createSettingsSchema(schema: SettingsSchema): SettingsSchema {
     }
 
     if (seenIds.has(normalizedId)) {
-      throw new Error(`Invalid settings schema: duplicate setting id '${item.id}'`);
+      throw new Error(`Invalid settings schema: repeated setting id '${item.id}'`);
     }
 
     seenIds.add(normalizedId);

@@ -86,7 +86,7 @@ function CommandInput({
           {...props}
         />
         {endAction ? (
-          <InputGroupAddon className="shrink-0 pr-1.5 text-muted-foreground/80">
+          <InputGroupAddon align="inline-end" className="shrink-0 pr-1.5 text-muted-foreground/80">
             {endAction}
           </InputGroupAddon>
         ) : null}

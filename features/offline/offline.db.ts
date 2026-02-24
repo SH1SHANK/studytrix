@@ -8,10 +8,19 @@ import type {
 import { getActiveProvider } from "./offline.storage-location";
 
 const DB_NAME = "studytrix_offline";
-const VERSION = 1;
+const VERSION = 2;
 const FILES_STORE = "files";
 const SEARCH_INDEX_STORE = "search_index";
 const METADATA_STORE = "metadata";
+const PENDING_SYNC_STORE = "pending_sync";
+const PROVIDER_OPERATION_TIMEOUT_MS = 2000;
+const INDEXED_DB_OPERATION_TIMEOUT_MS = 2000;
+const INDEXED_DB_OPEN_TIMEOUT_MS = 2000;
+const DOWNLOAD_META_PREFIX = "download-meta:";
+const PROVIDER_FILEMAP_PREFIX = "provider-file:";
+const PROVIDER_ID_DELIMITER = "__";
+const MAX_PROVIDER_BASENAME_LENGTH = 80;
+const FILE_ID_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 
 interface OfflineDBSchema extends DBSchema {
   [FILES_STORE]: {
@@ -26,14 +35,34 @@ interface OfflineDBSchema extends DBSchema {
     key: string;
     value: MetadataRecord;
   };
+  [PENDING_SYNC_STORE]: {
+    key: string;
+    value: PendingSyncRecord;
+  };
 }
+
+export type PendingSyncRecord = {
+  fileId: string;
+  queuedAt: number;
+  size: number;
+  mimeType: string;
+  reason: "provider-fallback";
+};
 
 const memoryFiles = new Map<string, OfflineFileRecord>();
 const memorySearchIndex = new Map<string, SearchIndexRecord>();
 const memoryMetadata = new Map<string, MetadataRecord>();
+const memoryPendingSync = new Map<string, PendingSyncRecord>();
 
 let dbPromise: Promise<IDBPDatabase<OfflineDBSchema> | null> | null = null;
 let indexedDbDisabled = false;
+
+class StorageTimeoutError extends Error {
+  constructor(operation: string, timeoutMs: number) {
+    super(`${operation} timed out after ${timeoutMs}ms`);
+    this.name = "StorageTimeoutError";
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -83,6 +112,244 @@ function normalizeFileIdList(values: readonly string[]): string[] {
   return normalized;
 }
 
+function parseDownloadMetaName(value: string | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!isRecord(parsed) || typeof parsed.name !== "string") {
+      return null;
+    }
+
+    const normalized = parsed.name.trim();
+    return normalized.length > 0 ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeFileNamePart(value: string): string {
+  return value
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitDisplayFileName(name: string): { base: string; ext: string } {
+  const sanitized = sanitizeFileNamePart(name);
+  if (!sanitized) {
+    return { base: "offline-file", ext: "" };
+  }
+
+  const lastDot = sanitized.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot === sanitized.length - 1) {
+    return { base: sanitized.slice(0, MAX_PROVIDER_BASENAME_LENGTH), ext: "" };
+  }
+
+  const base = sanitized.slice(0, lastDot).slice(0, MAX_PROVIDER_BASENAME_LENGTH);
+  const extension = sanitized.slice(lastDot).replace(/\.+/g, ".");
+  return {
+    base: base || "offline-file",
+    ext: extension.length <= 12 ? extension : "",
+  };
+}
+
+function parseFileIdFromProviderFileName(fileName: string): string | null {
+  const normalized = fileName.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const dotIndex = normalized.lastIndexOf(".");
+  const stem = dotIndex > 0 ? normalized.slice(0, dotIndex) : normalized;
+  const delimiterIndex = stem.lastIndexOf(PROVIDER_ID_DELIMITER);
+  if (delimiterIndex <= -1) {
+    return null;
+  }
+
+  const maybeId = stem.slice(delimiterIndex + PROVIDER_ID_DELIMITER.length).trim();
+  if (!FILE_ID_PATTERN.test(maybeId)) {
+    return null;
+  }
+
+  return maybeId;
+}
+
+function isManagedProviderFileName(fileName: string): boolean {
+  if (parseFileIdFromProviderFileName(fileName)) {
+    return true;
+  }
+
+  return FILE_ID_PATTERN.test(fileName.trim());
+}
+
+function buildProviderFileName(fileId: string, displayName: string | null): string {
+  const source = displayName?.trim() || "offline-file";
+  const { base, ext } = splitDisplayFileName(source);
+  return `${base}${PROVIDER_ID_DELIMITER}${fileId}${ext}`;
+}
+
+function providerFileMapKey(fileId: string): string {
+  return `${PROVIDER_FILEMAP_PREFIX}${fileId}`;
+}
+
+async function getMappedProviderFileName(fileId: string): Promise<string | null> {
+  const record = await getMetadata(providerFileMapKey(fileId));
+  if (!record?.value) {
+    return null;
+  }
+
+  const normalized = record.value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+async function setMappedProviderFileName(fileId: string, providerFileName: string): Promise<void> {
+  await setMetadata({
+    key: providerFileMapKey(fileId),
+    value: providerFileName,
+  });
+}
+
+async function getPreferredProviderDisplayName(fileId: string): Promise<string | null> {
+  const record = await getMetadata(`${DOWNLOAD_META_PREFIX}${fileId}`);
+  return parseDownloadMetaName(record?.value);
+}
+
+async function withStorageTimeout<T>(
+  operation: string,
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let settled = false;
+
+  return await new Promise<T>((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      reject(new StorageTimeoutError(operation, timeoutMs));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        resolve(value);
+      })
+      .catch((error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        reject(error);
+      });
+  });
+}
+
+async function resolveProviderFileNameForWrite(
+  provider: ReturnType<typeof getActiveProvider>,
+  fileId: string,
+): Promise<string> {
+  if (!provider || provider.kind !== "filesystem") {
+    return fileId;
+  }
+
+  const mapped = await getMappedProviderFileName(fileId);
+  if (mapped) {
+    return mapped;
+  }
+
+  const preferredDisplayName = await getPreferredProviderDisplayName(fileId);
+  const providerFileName = buildProviderFileName(fileId, preferredDisplayName);
+  await setMappedProviderFileName(fileId, providerFileName);
+  return providerFileName;
+}
+
+async function discoverProviderFileName(
+  provider: ReturnType<typeof getActiveProvider>,
+  fileId: string,
+): Promise<string | null> {
+  if (!provider || provider.kind !== "filesystem") {
+    return null;
+  }
+
+  const entries = await withStorageTimeout(
+    "Filesystem listFiles",
+    provider.listFiles(),
+    PROVIDER_OPERATION_TIMEOUT_MS,
+  );
+
+  for (const entry of entries) {
+    if (!isManagedProviderFileName(entry)) {
+      continue;
+    }
+
+    if (parseFileIdFromProviderFileName(entry) === fileId) {
+      await setMappedProviderFileName(fileId, entry);
+      return entry;
+    }
+  }
+
+  return null;
+}
+
+async function readProviderFileById(
+  provider: ReturnType<typeof getActiveProvider>,
+  fileId: string,
+): Promise<Blob | null> {
+  if (!provider || provider.kind !== "filesystem") {
+    return null;
+  }
+
+  const mapped = await getMappedProviderFileName(fileId);
+  if (mapped) {
+    const mappedBlob = await withStorageTimeout(
+      "Filesystem readFile",
+      provider.readFile(mapped),
+      PROVIDER_OPERATION_TIMEOUT_MS,
+    );
+    if (mappedBlob) {
+      return mappedBlob;
+    }
+  }
+
+  const legacyBlob = await withStorageTimeout(
+    "Filesystem readFile",
+    provider.readFile(fileId),
+    PROVIDER_OPERATION_TIMEOUT_MS,
+  );
+  if (legacyBlob) {
+    await setMappedProviderFileName(fileId, fileId);
+    return legacyBlob;
+  }
+
+  const discovered = await discoverProviderFileName(provider, fileId);
+  if (!discovered) {
+    return null;
+  }
+
+  return await withStorageTimeout(
+    "Filesystem readFile",
+    provider.readFile(discovered),
+    PROVIDER_OPERATION_TIMEOUT_MS,
+  );
+}
+
 async function readAllIndexedDbFiles(): Promise<OfflineFileRecord[]> {
   const db = await getDB();
 
@@ -91,7 +358,11 @@ async function readAllIndexedDbFiles(): Promise<OfflineFileRecord[]> {
   }
 
   try {
-    const records = await db.getAll(FILES_STORE);
+    const records = await withStorageTimeout(
+      "IndexedDB getAll(files)",
+      db.getAll(FILES_STORE),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
     return records.map(cloneFileRecord);
   } catch {
     return Array.from(memoryFiles.values()).map(cloneFileRecord);
@@ -107,7 +378,11 @@ async function readIndexedDbFile(fileId: string): Promise<OfflineFileRecord | un
   }
 
   try {
-    const record = await db.get(FILES_STORE, fileId);
+    const record = await withStorageTimeout(
+      "IndexedDB get(file)",
+      db.get(FILES_STORE, fileId),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
     return record ? cloneFileRecord(record) : undefined;
   } catch {
     const cached = memoryFiles.get(fileId);
@@ -123,21 +398,29 @@ async function getDB(): Promise<IDBPDatabase<OfflineDBSchema> | null> {
   if (!dbPromise) {
     dbPromise = (async () => {
       try {
-        return await openDB<OfflineDBSchema>(DB_NAME, VERSION, {
-          upgrade(db) {
-            if (!db.objectStoreNames.contains(FILES_STORE)) {
-              db.createObjectStore(FILES_STORE, { keyPath: "fileId" });
-            }
+        return await withStorageTimeout(
+          "IndexedDB open",
+          openDB<OfflineDBSchema>(DB_NAME, VERSION, {
+            upgrade(db) {
+              if (!db.objectStoreNames.contains(FILES_STORE)) {
+                db.createObjectStore(FILES_STORE, { keyPath: "fileId" });
+              }
 
-            if (!db.objectStoreNames.contains(SEARCH_INDEX_STORE)) {
-              db.createObjectStore(SEARCH_INDEX_STORE, { keyPath: "fileId" });
-            }
+              if (!db.objectStoreNames.contains(SEARCH_INDEX_STORE)) {
+                db.createObjectStore(SEARCH_INDEX_STORE, { keyPath: "fileId" });
+              }
 
-            if (!db.objectStoreNames.contains(METADATA_STORE)) {
-              db.createObjectStore(METADATA_STORE, { keyPath: "key" });
-            }
-          },
-        });
+              if (!db.objectStoreNames.contains(METADATA_STORE)) {
+                db.createObjectStore(METADATA_STORE, { keyPath: "key" });
+              }
+
+              if (!db.objectStoreNames.contains(PENDING_SYNC_STORE)) {
+                db.createObjectStore(PENDING_SYNC_STORE, { keyPath: "fileId" });
+              }
+            },
+          }),
+          INDEXED_DB_OPEN_TIMEOUT_MS,
+        );
       } catch {
         indexedDbDisabled = true;
         return null;
@@ -153,7 +436,7 @@ export async function getFile(fileId: string): Promise<OfflineFileRecord | undef
   const provider = getActiveProvider();
   if (provider?.kind === "filesystem") {
     try {
-      const blob = await provider.readFile(fileId);
+      const blob = await readProviderFileById(provider, fileId);
       if (blob) {
         // Return a synthetic record with the blob from the provider.
         const fromIndexedDb = await readIndexedDbFile(fileId);
@@ -177,21 +460,197 @@ export async function getFile(fileId: string): Promise<OfflineFileRecord | undef
   return readIndexedDbFile(fileId);
 }
 
-export async function putFile(record: OfflineFileRecord): Promise<void> {
-  const cloned = cloneFileRecord(record);
+export async function getProviderFileBlob(fileId: string): Promise<Blob | null> {
+  const provider = getActiveProvider();
+  if (!provider || provider.kind !== "filesystem") {
+    return null;
+  }
 
-  // Write blob to the active provider (single source of truth).
+  try {
+    return await readProviderFileById(provider, fileId);
+  } catch {
+    return null;
+  }
+}
+
+async function markPendingSync(fileId: string, blob: Blob): Promise<void> {
+  const record: PendingSyncRecord = {
+    fileId,
+    queuedAt: Date.now(),
+    size: blob.size,
+    mimeType: blob.type || "application/octet-stream",
+    reason: "provider-fallback",
+  };
+  memoryPendingSync.set(fileId, record);
+
+  const db = await getDB();
+  if (!db) {
+    return;
+  }
+
+  try {
+    await withStorageTimeout(
+      "IndexedDB put(pending_sync)",
+      db.put(PENDING_SYNC_STORE, record),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
+  } catch {
+  }
+}
+
+export async function removePendingSync(fileId: string): Promise<void> {
+  memoryPendingSync.delete(fileId);
+
+  const db = await getDB();
+  if (!db) {
+    return;
+  }
+
+  try {
+    await withStorageTimeout(
+      "IndexedDB delete(pending_sync)",
+      db.delete(PENDING_SYNC_STORE, fileId),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
+  } catch {
+  }
+}
+
+export async function listPendingSync(): Promise<PendingSyncRecord[]> {
+  const db = await getDB();
+  if (!db) {
+    return Array.from(memoryPendingSync.values()).map((entry) => ({ ...entry }));
+  }
+
+  try {
+    const records = await withStorageTimeout(
+      "IndexedDB getAll(pending_sync)",
+      db.getAll(PENDING_SYNC_STORE),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
+    for (const record of records) {
+      memoryPendingSync.set(record.fileId, record);
+    }
+    return records.map((entry) => ({ ...entry }));
+  } catch {
+    return Array.from(memoryPendingSync.values()).map((entry) => ({ ...entry }));
+  }
+}
+
+export async function replayPendingSync(): Promise<{ migrated: number; failed: number }> {
+  const provider = getActiveProvider();
+  if (!provider || provider.kind !== "filesystem") {
+    return { migrated: 0, failed: 0 };
+  }
+
+  const pending = await listPendingSync();
+  if (pending.length === 0) {
+    return { migrated: 0, failed: 0 };
+  }
+
+  let migrated = 0;
+  let failed = 0;
+  for (const entry of pending) {
+    try {
+      const record = await readIndexedDbFile(entry.fileId);
+      if (!record) {
+        await removePendingSync(entry.fileId);
+        continue;
+      }
+
+      const providerFileName = await resolveProviderFileNameForWrite(
+        provider,
+        entry.fileId,
+      );
+
+      await withStorageTimeout(
+        "Filesystem writeFile(replay)",
+        provider.writeFile(providerFileName, record.blob),
+        PROVIDER_OPERATION_TIMEOUT_MS,
+      );
+      await removePendingSync(entry.fileId);
+      migrated += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+
+  return { migrated, failed };
+}
+
+export async function syncIndexedDbFilesToActiveProvider(): Promise<{
+  synced: number;
+  failed: number;
+  alreadyPresent: number;
+}> {
+  const provider = getActiveProvider();
+  if (!provider || provider.kind !== "filesystem") {
+    return { synced: 0, failed: 0, alreadyPresent: 0 };
+  }
+
+  const records = await readAllIndexedDbFiles();
+  if (records.length === 0) {
+    return { synced: 0, failed: 0, alreadyPresent: 0 };
+  }
+
+  let synced = 0;
+  let failed = 0;
+  let alreadyPresent = 0;
+
+  for (const record of records) {
+    try {
+      const existing = await readProviderFileById(provider, record.fileId);
+      if (existing && existing.size === record.blob.size) {
+        await removePendingSync(record.fileId);
+        alreadyPresent += 1;
+        continue;
+      }
+
+      const providerFileName = await resolveProviderFileNameForWrite(provider, record.fileId);
+      await withStorageTimeout(
+        "Filesystem writeFile(sync)",
+        provider.writeFile(providerFileName, record.blob),
+        PROVIDER_OPERATION_TIMEOUT_MS,
+      );
+      await removePendingSync(record.fileId);
+      synced += 1;
+    } catch {
+      await markPendingSync(record.fileId, record.blob);
+      failed += 1;
+    }
+  }
+
+  return { synced, failed, alreadyPresent };
+}
+
+export async function writeWithFallback(fileId: string, blob: Blob): Promise<void> {
   const provider = getActiveProvider();
   if (provider?.kind === "filesystem") {
     try {
-      await provider.writeFile(record.fileId, cloned.blob);
+      const providerFileName = await resolveProviderFileNameForWrite(provider, fileId);
+      await withStorageTimeout(
+        "Filesystem writeFile",
+        provider.writeFile(providerFileName, blob),
+        PROVIDER_OPERATION_TIMEOUT_MS,
+      );
+      await removePendingSync(fileId);
+      return;
     } catch (error) {
       if (isQuotaError(error)) {
         throw new Error("Storage quota exceeded");
       }
-      // If provider write fails, fall through to IndexedDB.
+
+      await markPendingSync(fileId, blob);
+      return;
     }
   }
+
+  await removePendingSync(fileId);
+}
+
+export async function putFile(record: OfflineFileRecord): Promise<void> {
+  const cloned = cloneFileRecord(record);
+  await writeWithFallback(record.fileId, cloned.blob);
 
   // Also store in IndexedDB (metadata cache / fallback).
   const db = await getDB();
@@ -202,7 +661,11 @@ export async function putFile(record: OfflineFileRecord): Promise<void> {
   }
 
   try {
-    await db.put(FILES_STORE, cloned);
+    await withStorageTimeout(
+      "IndexedDB put(file)",
+      db.put(FILES_STORE, cloned),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
     memoryFiles.set(record.fileId, cloned);
   } catch (error) {
     if (isQuotaError(error)) {
@@ -215,12 +678,57 @@ export async function putFile(record: OfflineFileRecord): Promise<void> {
 
 export async function deleteFile(fileId: string): Promise<void> {
   memoryFiles.delete(fileId);
+  memoryPendingSync.delete(fileId);
 
   // Delete from active provider.
   const provider = getActiveProvider();
   if (provider?.kind === "filesystem") {
     try {
-      await provider.deleteFile(fileId);
+      const mappedName = await getMappedProviderFileName(fileId);
+      const namesToDelete = normalizeFileIdList([
+        mappedName ?? "",
+        fileId,
+      ]);
+
+      for (const name of namesToDelete) {
+        await withStorageTimeout(
+          "Filesystem deleteFile",
+          provider.deleteFile(name),
+          PROVIDER_OPERATION_TIMEOUT_MS,
+        );
+      }
+    } catch {
+      // Best effort.
+    }
+
+    try {
+      const discovered = await discoverProviderFileName(provider, fileId);
+      if (discovered && discovered !== fileId) {
+        await withStorageTimeout(
+          "Filesystem deleteFile",
+          provider.deleteFile(discovered),
+          PROVIDER_OPERATION_TIMEOUT_MS,
+        );
+      }
+    } catch {
+      // Best effort.
+    }
+
+    try {
+      await withStorageTimeout(
+        "IndexedDB delete(metadata:filemap)",
+        (async () => {
+          const db = await getDB();
+          if (!db) {
+            memoryMetadata.delete(providerFileMapKey(fileId));
+            return;
+          }
+
+          await db.delete(METADATA_STORE, providerFileMapKey(fileId));
+          memoryMetadata.delete(providerFileMapKey(fileId));
+        })(),
+        INDEXED_DB_OPERATION_TIMEOUT_MS,
+      );
     } catch {
       // Best effort.
     }
@@ -232,7 +740,20 @@ export async function deleteFile(fileId: string): Promise<void> {
   }
 
   try {
-    await db.delete(FILES_STORE, fileId);
+    await withStorageTimeout(
+      "IndexedDB delete(file)",
+      db.delete(FILES_STORE, fileId),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
+  } catch {
+  }
+
+  try {
+    await withStorageTimeout(
+      "IndexedDB delete(pending_sync)",
+      db.delete(PENDING_SYNC_STORE, fileId),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
   } catch {
   }
 }
@@ -246,32 +767,47 @@ export async function getAllFiles(): Promise<OfflineFileRecord[]> {
     return Array.from(mergedById.values()).map(cloneFileRecord);
   }
 
-  let providerIds: string[] = [];
+  let providerFileNames: string[] = [];
   try {
-    providerIds = normalizeFileIdList(await provider.listFiles());
+    providerFileNames = normalizeFileIdList(
+      await withStorageTimeout(
+        "Filesystem listFiles",
+        provider.listFiles(),
+        PROVIDER_OPERATION_TIMEOUT_MS,
+      ),
+    ).filter(isManagedProviderFileName);
   } catch {
-    providerIds = [];
+    providerFileNames = [];
   }
 
-  if (providerIds.length === 0) {
+  if (providerFileNames.length === 0) {
     return Array.from(mergedById.values()).map(cloneFileRecord);
   }
 
   const providerRecords = await Promise.all(
-    providerIds.map(async (fileId) => {
+    providerFileNames.map(async (providerFileName) => {
       try {
-        const blob = await provider.readFile(fileId);
-        if (!blob) {
+        const timedBlob = await withStorageTimeout(
+          "Filesystem readFile",
+          provider.readFile(providerFileName),
+          PROVIDER_OPERATION_TIMEOUT_MS,
+        );
+        if (!timedBlob) {
           return null;
         }
 
-        const cached = mergedById.get(fileId) ?? memoryFiles.get(fileId);
+        const parsedId = parseFileIdFromProviderFileName(providerFileName) ?? providerFileName;
+        if (parsedId !== providerFileName) {
+          void setMappedProviderFileName(parsedId, providerFileName);
+        }
+
+        const cached = mergedById.get(parsedId) ?? memoryFiles.get(parsedId);
         const now = Date.now();
         return {
-          fileId,
-          blob,
-          size: blob.size,
-          mimeType: cached?.mimeType ?? (blob.type || "application/octet-stream"),
+          fileId: parsedId,
+          blob: timedBlob,
+          size: timedBlob.size,
+          mimeType: cached?.mimeType ?? (timedBlob.type || "application/octet-stream"),
           modifiedTime: cached?.modifiedTime ?? null,
           checksum: cached?.checksum,
           cachedAt: cached?.cachedAt ?? now,
@@ -302,7 +838,11 @@ export async function getAllFileIds(): Promise<string[]> {
     indexedKeys = Array.from(memoryFiles.keys());
   } else {
     try {
-      indexedKeys = (await db.getAllKeys(FILES_STORE))
+      indexedKeys = (await withStorageTimeout(
+        "IndexedDB getAllKeys(files)",
+        db.getAllKeys(FILES_STORE),
+        INDEXED_DB_OPERATION_TIMEOUT_MS,
+      ))
         .filter((key): key is string => typeof key === "string");
     } catch {
       indexedKeys = Array.from(memoryFiles.keys());
@@ -316,24 +856,40 @@ export async function getAllFileIds(): Promise<string[]> {
 
   let providerKeys: string[] = [];
   try {
-    providerKeys = await provider.listFiles();
+    providerKeys = (await withStorageTimeout(
+      "Filesystem listFiles",
+      provider.listFiles(),
+      PROVIDER_OPERATION_TIMEOUT_MS,
+    )).filter(isManagedProviderFileName);
   } catch {
     providerKeys = [];
   }
 
-  return normalizeFileIdList([...indexedKeys, ...providerKeys]);
+  const normalizedProviderIds = providerKeys.map((key) => parseFileIdFromProviderFileName(key) ?? key);
+  return normalizeFileIdList([...indexedKeys, ...normalizedProviderIds]);
 }
 
 export async function clearFiles(): Promise<void> {
   memoryFiles.clear();
+  memoryPendingSync.clear();
 
   const provider = getActiveProvider();
   if (provider?.kind === "filesystem") {
     try {
-      const fileIds = normalizeFileIdList(await provider.listFiles());
+      const fileIds = normalizeFileIdList(
+        await withStorageTimeout(
+          "Filesystem listFiles",
+          provider.listFiles(),
+          PROVIDER_OPERATION_TIMEOUT_MS,
+        ),
+      ).filter(isManagedProviderFileName);
       await Promise.all(fileIds.map(async (fileId) => {
         try {
-          await provider.deleteFile(fileId);
+          await withStorageTimeout(
+            "Filesystem deleteFile",
+            provider.deleteFile(fileId),
+            PROVIDER_OPERATION_TIMEOUT_MS,
+          );
         } catch {
         }
       }));
@@ -347,7 +903,20 @@ export async function clearFiles(): Promise<void> {
   }
 
   try {
-    await db.clear(FILES_STORE);
+    await withStorageTimeout(
+      "IndexedDB clear(files)",
+      db.clear(FILES_STORE),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
+  } catch {
+  }
+
+  try {
+    await withStorageTimeout(
+      "IndexedDB clear(pending_sync)",
+      db.clear(PENDING_SYNC_STORE),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
   } catch {
   }
 }
@@ -466,7 +1035,11 @@ export async function getMetadata(key: string): Promise<MetadataRecord | undefin
   }
 
   try {
-    const record = await db.get(METADATA_STORE, key);
+    const record = await withStorageTimeout(
+      "IndexedDB get(metadata)",
+      db.get(METADATA_STORE, key),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
     return record ? cloneMetadataRecord(record) : undefined;
   } catch {
     const record = memoryMetadata.get(key);
@@ -484,7 +1057,11 @@ export async function setMetadata(record: MetadataRecord): Promise<void> {
   }
 
   try {
-    await db.put(METADATA_STORE, cloned);
+    await withStorageTimeout(
+      "IndexedDB put(metadata)",
+      db.put(METADATA_STORE, cloned),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
   } catch {
   }
 }
@@ -497,7 +1074,11 @@ export async function getAllMetadata(): Promise<MetadataRecord[]> {
   }
 
   try {
-    const records = await db.getAll(METADATA_STORE);
+    const records = await withStorageTimeout(
+      "IndexedDB getAll(metadata)",
+      db.getAll(METADATA_STORE),
+      INDEXED_DB_OPERATION_TIMEOUT_MS,
+    );
     return records.map(cloneMetadataRecord);
   } catch {
     return Array.from(memoryMetadata.values()).map(cloneMetadataRecord);
@@ -552,7 +1133,14 @@ export async function clearMetadata(): Promise<void> {
   }
 }
 
-export { DB_NAME, VERSION, FILES_STORE, SEARCH_INDEX_STORE, METADATA_STORE };
+export {
+  DB_NAME,
+  VERSION,
+  FILES_STORE,
+  SEARCH_INDEX_STORE,
+  METADATA_STORE,
+  PENDING_SYNC_STORE,
+};
 
 export const getOfflineFile = getFile;
 export const addOfflineFile = putFile;

@@ -1,5 +1,7 @@
 import { emit } from "./download.events";
 
+const TASK_INACTIVITY_TIMEOUT_MS = 30000;
+
 export interface QueueProgressPayload {
   taskId: string;
   progress: number;
@@ -276,27 +278,63 @@ export class DownloadQueue {
     this.notifyLifecycle({ taskId: entry.taskId, state: "running" });
     let lastLoadedBytes = 0;
     let lastTotalBytes = 0;
+    let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+    let rejectWatchdog: ((reason?: unknown) => void) | null = null;
+    let watchdogSettled = false;
+
+    const clearWatchdog = () => {
+      if (watchdogTimer) {
+        clearTimeout(watchdogTimer);
+        watchdogTimer = null;
+      }
+    };
+
+    const resetWatchdog = () => {
+      clearWatchdog();
+      watchdogTimer = setTimeout(() => {
+        if (watchdogSettled) {
+          return;
+        }
+
+        watchdogSettled = true;
+        if (entry.controller && !entry.controller.signal.aborted) {
+          entry.controller.abort();
+        }
+        rejectWatchdog?.(new Error("Download stalled. Please retry."));
+      }, TASK_INACTIVITY_TIMEOUT_MS);
+    };
+
+    const watchdogPromise = new Promise<never>((_, reject) => {
+      rejectWatchdog = reject;
+    });
 
     try {
-      await entry.handler({
-        signal: controller.signal,
-        emitProgress: (loadedBytes: number, totalBytes: number) => {
-          const total = Math.max(totalBytes, 0);
-          const loaded = Math.max(loadedBytes, 0);
-          lastLoadedBytes = loaded;
-          lastTotalBytes = total;
-          const progress = total > 0
-            ? clampProgress((loaded / total) * 100)
-            : 0;
+      resetWatchdog();
+      await Promise.race([
+        entry.handler({
+          signal: controller.signal,
+          emitProgress: (loadedBytes: number, totalBytes: number) => {
+            resetWatchdog();
+            const total = Math.max(totalBytes, 0);
+            const loaded = Math.max(loadedBytes, 0);
+            lastLoadedBytes = loaded;
+            lastTotalBytes = total;
+            const progress = total > 0
+              ? clampProgress((loaded / total) * 100)
+              : 0;
 
-          this.notifyProgress({
-            taskId: entry.taskId,
-            progress,
-            loadedBytes: loaded,
-            totalBytes: total,
-          });
-        },
-      });
+            this.notifyProgress({
+              taskId: entry.taskId,
+              progress,
+              loadedBytes: loaded,
+              totalBytes: total,
+            });
+          },
+        }),
+        watchdogPromise,
+      ]);
+      watchdogSettled = true;
+      clearWatchdog();
 
       if (entry.abortReason === "pause") {
         entry.state = "paused";
@@ -323,6 +361,8 @@ export class DownloadQueue {
       this.notifyLifecycle({ taskId: entry.taskId, state: "completed" });
       this.entries.delete(entry.taskId);
     } catch (error) {
+      watchdogSettled = true;
+      clearWatchdog();
       if (entry.abortReason === "pause" || isAbortError(error)) {
         entry.state = "paused";
         this.notifyLifecycle({ taskId: entry.taskId, state: "paused" });
@@ -344,6 +384,8 @@ export class DownloadQueue {
       });
       this.entries.delete(entry.taskId);
     } finally {
+      watchdogSettled = true;
+      clearWatchdog();
       entry.controller = null;
       entry.abortReason = null;
       this.runningCount = Math.max(0, this.runningCount - 1);

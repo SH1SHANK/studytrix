@@ -66,6 +66,8 @@ graph TD
 - Scope-aware indexing and search for global and local folder contexts.
 - Prefix-based mode switching (`/`, `#`, `:`, `>`, `@`).
 - Nested path discovery support for deeper folder hierarchies.
+- Route-aware `SearchScope` model (`global-root`, `personal-root`, `folder`) synchronized with breadcrumb context.
+- Folder scope resolution uses subtree ancestry filtering semantics for consistent nested-file matching.
 
 ### `features/intelligence`
 
@@ -76,6 +78,8 @@ graph TD
 - Semantic model switching is index-safe: incompatible vectors are invalidated and reindexed instead of reused.
 - Settings surfaces worker progress callbacks through responsive model activity UI without blocking primary workflows.
 - Intelligent fallbacks leveraging progressive enhancement depending on GPU hardware/WASM capacity.
+- Index metadata now carries repository partitioning and ancestry fields to enable fast scope-filtered querying across global/personal roots and folder subtrees.
+- Service Worker incremental indexing messages allow targeted index updates when new files are cached, reducing unnecessary full re-collection cycles.
 
 ### `features/offline`
 

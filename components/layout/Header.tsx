@@ -18,9 +18,9 @@ import {
 import {
   useAcademicContext,
 } from "@/components/layout/AcademicContext";
-import { DownloadButton } from "@/components/download/DownloadButton";
+import { DownloadButton } from "@/features/download/ui/DownloadButton";
 import { DEPARTMENT_MAP, getDepartmentName } from "@/lib/academic";
-import { SettingsMenu } from "@/components/settings/SettingsMenu";
+import { SettingsMenu } from "@/features/settings/ui/SettingsMenu";
 import { shareCurrentPage } from "@/features/share/share.page";
 import { useSetting } from "@/ui/hooks/useSettings";
 

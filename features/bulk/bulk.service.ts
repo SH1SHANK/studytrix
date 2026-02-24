@@ -253,16 +253,13 @@ export function resolveSelectedItems(
 
 export async function expandFolders(
   folderRefsInput: Array<string | FolderReference>,
-  optionsOrLegacyDepth?: number | ExpandFolderOptions,
+  options?: ExpandFolderOptions,
 ): Promise<ZipSourceFile[]> {
   const refs = toFolderRefs(folderRefsInput);
   if (refs.length === 0) {
     return [];
   }
 
-  const options = typeof optionsOrLegacyDepth === "object" && optionsOrLegacyDepth !== null
-    ? optionsOrLegacyDepth
-    : undefined;
   const onProgress = options?.onProgress;
   const chunkSize = options?.chunkSize ?? NESTED_INDEX_ROOT_CHUNK;
   const chunks = splitIntoChunks(refs, chunkSize);

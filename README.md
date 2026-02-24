@@ -1,7 +1,7 @@
 # Studytrix
 
 > **Status**: Beta / Experimental
-> **Current app version**: `v0.9.3-experimental` (released on `2026-02-23`)
+> **Current app version**: `v0.9.4-experimental` (released on `2026-02-23`)
 
 Studytrix is an offline-first academic workspace built with Next.js 16, React 19, and TypeScript. It combines Drive-backed content browsing, local persistence, on-device AI for semantic search and OCR denoising, command-driven navigation, and mobile/PWA-aware workflows into a single high-performance interface.
 
@@ -43,6 +43,14 @@ Scope prefixes:
 - `@`: recents scope
 
 ## Release Notes (Detailed)
+
+### v0.9.4-experimental - Search Scope Redesign + Deep Indexing + Intelligence Setup UX Revamp (`2026-02-23`)
+
+- Unified folder scoping in CommandCenter so breadcrumb scope is the single source of truth (no duplicate folder scopes between prefix UI and top scope chip).
+- Added route-aware scope behavior with clearer folder-context search transitions and better scope reset handling.
+- Added cross-repository semantic suggestions in global scope, surfacing high-confidence Personal Repository matches in a dedicated section.
+- Expanded intelligence indexing coverage and scope filtering behavior for deeper nested repository structures.
+- Upgraded model download + indexing setup UX with clearer staged progress, richer animated bars, and improved current-file feedback.
 
 ### v0.9.3-experimental - Intelligence UX Polish + Local Model Switching (`2026-02-23`)
 
@@ -204,6 +212,16 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+### Build Verification (CI/Sandbox)
+
+If remote Google Font fetches are blocked during build verification, run:
+
+```bash
+NEXT_DISABLE_REMOTE_FONTS=1 npm run build
+```
+
+This switches layout font loading to local assets for deterministic verification runs.
 
 ## Documentation Index
 

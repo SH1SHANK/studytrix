@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
+import { DashboardSwipeContainer } from "@/features/dashboard/ui/DashboardSwipeContainer";
 import { AppShell } from "@/components/layout/AppShell";
 
 export const metadata: Metadata = {
@@ -16,7 +16,7 @@ export default function Page() {
   return (
     <AppShell showHeader={false}>
       <Suspense fallback={<div className="p-8 text-center text-sm text-muted-foreground">Loading dashboard...</div>}>
-        <DashboardGrid />
+        <DashboardSwipeContainer />
       </Suspense>
     </AppShell>
   );

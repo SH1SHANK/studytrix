@@ -4,7 +4,7 @@ import { parseSettingsJson } from "./settings.schema";
 import { getSettingDefinition } from "./settings.registry";
 import { validateSetting } from "./settings.validation";
 
-const DB_NAME = "app-settings";
+const DB_NAME = "app-settings-v2";
 const DB_VERSION = 1;
 const STORE_NAME = "settings";
 

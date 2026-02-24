@@ -309,6 +309,24 @@ export async function prune(options?: {
   return deleted;
 }
 
+export async function listQueryCacheRecordsByPrefix<T = unknown>(
+  prefix: string,
+): Promise<Array<QueryCacheRecord<T>>> {
+  if (!isOfflineV3Enabled()) {
+    return [];
+  }
+
+  const normalizedPrefix = prefix.trim();
+  if (!normalizedPrefix) {
+    return [];
+  }
+
+  const entries = await listEntries();
+  return entries
+    .filter((entry) => entry.key.startsWith(normalizedPrefix))
+    .map((entry) => cloneRecord(entry as QueryCacheRecord<T>));
+}
+
 export async function clearQueryCache(): Promise<void> {
   memoryCache.clear();
 

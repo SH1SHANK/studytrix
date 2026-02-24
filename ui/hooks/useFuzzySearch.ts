@@ -19,8 +19,6 @@ interface UseFuzzySearchOptions<T> {
   getSearchText: (item: T) => string;
   getRankTexts?: (item: T) => readonly string[];
   recentItems?: readonly T[];
-  /** @deprecated No longer used — kept for API compat; `useDeferredValue` adapts automatically. */
-  debounceMs?: number;
   limit?: number;
   minMatchCharLength?: number;
   threshold?: number;

@@ -38,21 +38,49 @@ export interface IntelligenceDocument {
   fullPath?: string;
 }
 
+export type SearchScope =
+  | { kind: "global-root" }
+  | { kind: "personal-root" }
+  | {
+    kind: "folder";
+    folderId: string;
+    folderName: string;
+    repoKind: "global" | "personal";
+    breadcrumb: Array<{ folderId: string; folderName: string }>;
+  };
+
+export interface IndexableEntity {
+  fileId: string;
+  name: string;
+  fullPath: string;
+  ancestorIds: string[];
+  depth: number;
+  isFolder: boolean;
+  repoKind: "global" | "personal";
+  customFolderId?: string;
+  mimeType?: string;
+  tags?: string[];
+  size?: number;
+  modifiedTime?: string;
+}
+
+export type FileEntry = IndexableEntity;
+
 export interface IntelligenceIndexedVector {
   id: string;
-  entityId?: string;
-  fileId?: string;
+  fileId: string;
   mimeType?: string;
   fullPath?: string;
-  tagsText?: string;
+  ancestorIds?: string[];
+  repoKind?: "global" | "personal";
+  customFolderId?: string;
+  isFolder?: boolean;
+  depth?: number;
   text: string;
   vector: number[];
   inputHash?: string;
   indexedAt?: number;
   lastAccessedAt?: number;
-  isImageBased?: boolean;
-  hasExtractedText?: boolean;
-  lowConfidence?: boolean;
 }
 
 export interface IntelligenceIndexSnapshot {
@@ -61,13 +89,22 @@ export interface IntelligenceIndexSnapshot {
   signature: string;
   updatedAt: number;
   vectors: IntelligenceIndexedVector[];
-  /** Library version at serialisation time — used to discard incompatible stored indices. */
   oramaVersion?: string;
 }
 
 export interface IntelligenceSearchHit {
   id: string;
   score: number;
+  fileId?: string;
+  name?: string;
+  fullPath?: string;
+  ancestorIds?: string[];
+  depth?: number;
+  isFolder?: boolean;
+  mimeType?: string;
+  repoKind?: "global" | "personal";
+  customFolderId?: string;
+  semanticScore?: number;
 }
 
 export interface IntelligenceWorkerStats {
@@ -80,52 +117,24 @@ export interface IntelligenceWorkerStats {
   usingHashedFallback: boolean;
 }
 
-export interface IntelligenceCleanTextResult {
-  text: string;
-  modelId: string;
-  cleaned: boolean;
-  usedFallback: boolean;
-  reason?: string;
-}
-
-export type IntelligenceModelPipeline = "embedding" | "cleanup";
-
-export interface IntelligenceDuplicatePair {
-  fileIdA: string;
-  fileIdB: string;
-  similarity: number;
-}
-
 export interface IntelligenceWorkerRequestMap {
   INIT: {
-    modelId: string;
+    modelId?: string;
     snapshot?: IntelligenceIndexSnapshot | null;
   };
   SET_MODEL: {
     modelId: string;
   };
-  INDEX_DOCS: {
-    docs: IntelligenceDocument[];
-    signature: string;
-    replace?: boolean;
+  INDEX_FILES: {
+    files: IndexableEntity[];
+    signature?: string;
   };
-  OCR_QUEUE: {
-    fileIds: string[];
-  };
-  SWITCH_MODEL: {
-    modelId: string;
-  };
-  CLEAN_TEXT: {
-    text: string;
-    modelId?: string;
-  };
-  DETECT_DUPLICATES: {
-    threshold?: number;
-  };
+  CANCEL_INDEXING: undefined;
   QUERY: {
     query: string;
     limit: number;
-    scopeSignature?: string;
+    scope: SearchScope;
+    repoFilter?: "global" | "personal" | "both";
   };
   PERSIST: {
     key: string;
@@ -139,21 +148,9 @@ export interface IntelligenceWorkerRequestMap {
 export interface IntelligenceWorkerResponseMap {
   INIT: IntelligenceWorkerStats;
   SET_MODEL: IntelligenceWorkerStats;
-  INDEX_DOCS: IntelligenceWorkerStats;
-  OCR_QUEUE: {
-    processed: number;
-    enriched: number;
-    lowConfidence: number;
-    skipped: boolean;
-  };
-  SWITCH_MODEL: {
-    modelId: string;
-    ready: boolean;
-    device: "webgpu" | "wasm" | "unknown";
-  };
-  CLEAN_TEXT: IntelligenceCleanTextResult;
-  DETECT_DUPLICATES: {
-    pairs: IntelligenceDuplicatePair[];
+  INDEX_FILES: IntelligenceWorkerStats;
+  CANCEL_INDEXING: {
+    cancelled: boolean;
   };
   QUERY: {
     hits: IntelligenceSearchHit[];
@@ -201,26 +198,36 @@ export type IntelligenceWorkerAnyResponseEnvelope =
 
 export type IntelligenceWorkerEventMessage =
   | {
-    type: "DUPLICATES_FOUND";
-    pairs: IntelligenceDuplicatePair[];
-  }
-  | {
-    type: "OCR_SKIPPED";
-  }
-  | {
     type: "MODEL_DOWNLOAD_PROGRESS";
-    pipeline: IntelligenceModelPipeline;
-    modelId: string;
+    loaded: number;
+    total: number;
     percent: number | null;
     loadedBytes: number | null;
     totalBytes: number | null;
   }
   | {
-    type: "MODEL_PIPELINE_STATUS";
-    pipeline: IntelligenceModelPipeline;
+    type: "MODEL_READY";
     modelId: string;
-    status: "idle" | "loading" | "ready" | "error";
-    message?: string;
+  }
+  | {
+    type: "MODEL_ERROR";
+    message: string;
+    retryable?: boolean;
+  }
+  | {
+    type: "INDEX_PROGRESS";
+    processed: number;
+    total: number;
+    currentFileName: string;
+  }
+  | {
+    type: "INDEX_FILE_ERROR";
+    fileId: string;
+    error: string;
+  }
+  | {
+    type: "INDEX_COMPLETE";
+    totalIndexed: number;
   };
 
 export type IntelligenceModelMode = "auto" | "manual";

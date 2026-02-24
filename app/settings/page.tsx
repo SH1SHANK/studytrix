@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { AppShell } from "@/components/layout/AppShell";
-import { SettingsLayout } from "@/components/settings/SettingsLayout";
+import { SettingsLayout } from "@/features/settings/ui/SettingsLayout";
 
 export const metadata: Metadata = {
   title: "Settings",
   description:
-    "Manage Studytrix preferences for profile, greeting behavior, storage, command experience, accessibility, and guide links.",
+    "Manage Studytrix preferences for dashboard behavior, repositories, command search, Smart Search, and storage.",
   alternates: {
     canonical: "/settings",
   },

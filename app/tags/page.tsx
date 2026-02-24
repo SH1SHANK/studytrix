@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { CompactPageContainer } from "@/components/layout/CompactPageContainer";
-import { TagManagerPanel } from "@/components/tags/TagManagerPanel";
+import { TagManagerPanel } from "@/features/tags/ui/TagManagerPanel";
 
 export const metadata: Metadata = {
   title: "Tags",

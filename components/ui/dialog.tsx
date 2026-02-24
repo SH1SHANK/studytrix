@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button"
 type DialogContextValue = {
   open: boolean
   setOpen: (open: boolean) => void
+  dismissOnOverlayClick: boolean
+  dismissOnEscape: boolean
 }
 
 const DialogContext = React.createContext<DialogContextValue | null>(null)
@@ -27,11 +29,15 @@ function Dialog({
   open,
   defaultOpen = false,
   onOpenChange,
+  dismissOnOverlayClick = true,
+  dismissOnEscape = true,
   children,
 }: {
   open?: boolean
   defaultOpen?: boolean
   onOpenChange?: (open: boolean) => void
+  dismissOnOverlayClick?: boolean
+  dismissOnEscape?: boolean
   children: React.ReactNode
 }) {
   const [internalOpen, setInternalOpen] = React.useState(defaultOpen)
@@ -46,7 +52,14 @@ function Dialog({
   }, [isControlled, onOpenChange])
 
   return (
-    <DialogContext.Provider value={{ open: resolvedOpen, setOpen }}>
+    <DialogContext.Provider
+      value={{
+        open: resolvedOpen,
+        setOpen,
+        dismissOnOverlayClick,
+        dismissOnEscape,
+      }}
+    >
       {children}
     </DialogContext.Provider>
   )
@@ -118,7 +131,7 @@ function DialogOverlay({
   onClick,
   ...props
 }: React.ComponentProps<"div">) {
-  const { open, setOpen } = useDialogContext()
+  const { open, setOpen, dismissOnOverlayClick } = useDialogContext()
   if (!open) {
     return null
   }
@@ -132,7 +145,11 @@ function DialogOverlay({
       )}
       onClick={(event) => {
         onClick?.(event)
-        if (!event.defaultPrevented && event.target === event.currentTarget) {
+        if (
+          dismissOnOverlayClick &&
+          !event.defaultPrevented &&
+          event.target === event.currentTarget
+        ) {
           setOpen(false)
         }
       }}
@@ -150,7 +167,7 @@ function DialogContent({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
-  const { open, setOpen } = useDialogContext()
+  const { open, setOpen, dismissOnEscape } = useDialogContext()
 
   React.useEffect(() => {
     if (!open) {
@@ -158,7 +175,7 @@ function DialogContent({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (dismissOnEscape && event.key === "Escape") {
         setOpen(false)
       }
     }
@@ -167,7 +184,7 @@ function DialogContent({
     return () => {
       document.removeEventListener("keydown", handleKeyDown)
     }
-  }, [open, setOpen])
+  }, [dismissOnEscape, open, setOpen])
 
   if (!open) {
     return null

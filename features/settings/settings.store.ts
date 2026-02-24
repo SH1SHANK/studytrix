@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 import { getDefaultSettingsMap, getSettingDefinition } from "./settings.registry";
-import { getAllSettings, removeSetting, resetSettings, setSetting } from "./settings.service";
+import { getAllSettings, resetSettings, setSetting } from "./settings.service";
 import { validateSetting } from "./settings.validation";
 
 export interface SettingsState {
@@ -66,33 +66,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     initializePromise = (async () => {
       const persistedValues = await getAllSettings();
       const mergedValues: Record<string, unknown> = { ...defaultValues };
-
-      // Migrate deprecated "accent_color" to new "theme" setting
-      if ("accent_color" in persistedValues) {
-        if (!("theme" in persistedValues)) {
-          persistedValues.theme = "classic";
-          void setSetting("theme", "classic");
-        }
-        delete persistedValues.accent_color;
-        void removeSetting("accent_color");
-      }
-
-      // Migrate deprecated next-themes mode setting to curated themes.
-      if ("theme_mode" in persistedValues) {
-        delete persistedValues.theme_mode;
-        void removeSetting("theme_mode");
-      }
-
-      const deprecatedSettingKeys = [
-        "show_dashboard_quote",
-        "show_motivational_quote",
-      ];
-      for (const deprecatedKey of deprecatedSettingKeys) {
-        if (deprecatedKey in persistedValues) {
-          delete persistedValues[deprecatedKey];
-          void removeSetting(deprecatedKey);
-        }
-      }
 
       for (const [id, value] of Object.entries(persistedValues)) {
         const definition = getSettingDefinition(id);
