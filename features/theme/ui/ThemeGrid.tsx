@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { IconCheck, IconSun, IconMoon, IconTree, IconSunset, IconCircleDashed, IconMoonStars, IconHexagon, IconSparkles } from "@tabler/icons-react";
 
 import {
@@ -54,6 +55,7 @@ function getThemeIcon(id: ThemeId) {
 }
 
 export function ThemeGrid({ currentTheme, onSelect }: ThemeGridProps) {
+  const shouldReduceMotion = useReducedMotion();
   const lightThemes = getThemesByIds(LIGHT_THEME_IDS);
   const darkThemes = getThemesByIds(DARK_THEME_IDS);
 
@@ -61,12 +63,28 @@ export function ThemeGrid({ currentTheme, onSelect }: ThemeGridProps) {
     const isSelected = theme.id === currentTheme;
 
     return (
-      <button
+      <motion.button
         key={theme.id}
         type="button"
         role="radio"
         aria-checked={isSelected}
         onClick={() => onSelect(theme.id)}
+        whileHover={
+          shouldReduceMotion
+            ? undefined
+            : { y: -1.5, scale: 1.012 }
+        }
+        whileTap={
+          shouldReduceMotion
+            ? undefined
+            : { y: 0.5, scale: 0.982 }
+        }
+        transition={{
+          type: "spring",
+          stiffness: 460,
+          damping: 33,
+          mass: 0.5,
+        }}
         className={cn(
           "relative rounded-xl border border-border bg-card p-3 text-left transition-all hover:border-primary/60 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
           isSelected && "border-primary bg-accent/60 ring-2 ring-primary/30",
@@ -79,11 +97,19 @@ export function ThemeGrid({ currentTheme, onSelect }: ThemeGridProps) {
               {theme.label}
             </span>
           </div>
-          {isSelected ? (
-            <span className="rounded-full bg-primary p-1 text-primary-foreground ml-2 shrink-0">
-              <IconCheck className="size-3" stroke={3} />
-            </span>
-          ) : null}
+          <AnimatePresence>
+            {isSelected ? (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.65, rotate: -16 }}
+                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                exit={{ opacity: 0, scale: 0.65, rotate: 14 }}
+                transition={{ duration: 0.18 }}
+                className="ml-2 shrink-0 rounded-full bg-primary p-1 text-primary-foreground"
+              >
+                <IconCheck className="size-3" stroke={3} />
+              </motion.span>
+            ) : null}
+          </AnimatePresence>
         </div>
         <div className="flex items-center gap-2">
           <span
@@ -99,7 +125,7 @@ export function ThemeGrid({ currentTheme, onSelect }: ThemeGridProps) {
             style={{ backgroundColor: theme.preview.accent }}
           />
         </div>
-      </button>
+      </motion.button>
     );
   };
 

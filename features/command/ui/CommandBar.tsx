@@ -86,6 +86,7 @@ import { buildIntelligenceSnapshotKey } from "@/features/intelligence/intelligen
 import { mergeSemanticKeywordResults } from "@/features/intelligence/intelligence.merge";
 import { expandSemanticQuery } from "@/features/intelligence/intelligence.synonyms";
 import { useIntelligenceStore } from "@/features/intelligence/intelligence.store";
+import { useOnboardingStore } from "@/features/onboarding/onboarding.store";
 import type {
   IntelligenceSearchHit,
   SearchScope as NavigationSearchScope,
@@ -191,6 +192,7 @@ export function CommandBar({
   const [debugCommandScoringSetting] = useSetting("debug_command_scoring");
   const [personalRepositoryVisibleSetting] = useSetting("personal_repository_visible");
   const [smartSearchEnabledSetting] = useSetting(INTELLIGENCE_SETTINGS_IDS.smartSearchEnabled);
+  const onboardingActive = useOnboardingStore((state) => state.active);
   const searchDebounceMs = useMemo(() => {
     const raw = typeof searchDebounceSetting === "number" ? searchDebounceSetting : 40;
     return Math.max(20, Math.min(250, Math.round(raw)));
@@ -2317,6 +2319,11 @@ export function CommandBar({
       const isToggle =
         (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
       if (isToggle) {
+        if (onboardingActive) {
+          event.preventDefault();
+          return;
+        }
+
         event.preventDefault();
         setOpen((prev) => {
           if (!prev) {
@@ -2409,6 +2416,7 @@ export function CommandBar({
     clearStickyPrefixMode,
     effectiveFolderScope,
     handleResetNavigationScope,
+    onboardingActive,
     open,
     query,
     scopeHistory,

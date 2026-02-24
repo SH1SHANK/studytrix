@@ -54,6 +54,7 @@ const rawSettingsSchema: SettingsSchema = {
         { label: "Minimal", value: "minimal" },
         { label: "Eclipse", value: "eclipse" },
         { label: "Graphite", value: "graphite" },
+        { label: "Aurora (OLED)", value: "aurora" },
       ],
     },
     {

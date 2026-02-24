@@ -6,6 +6,7 @@ import { AcademicProvider } from "@/components/layout/AcademicContext";
 import { AppRuntimeBanners } from "@/components/layout/AppRuntimeBanners";
 import { Header } from "@/components/layout/Header";
 import { GlobalStorageSetupSheet } from "@/features/offline/ui/StorageSetupSheet";
+import { OnboardingGate } from "@/features/onboarding/ui/OnboardingGate";
 import { Toaster } from "@/components/ui/sonner";
 import { APP_VERSION, formatVersionLabel } from "@/features/version/version";
 
@@ -57,6 +58,7 @@ export function AppShell({
         <ShareProgressDrawer />
         <Toaster />
         <GlobalStorageSetupSheet />
+        <OnboardingGate />
       </div>
     </AcademicProvider>
   );
