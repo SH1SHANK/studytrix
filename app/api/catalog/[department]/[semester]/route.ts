@@ -6,12 +6,14 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const revalidate = 300;
 
 const CATALOG_PATH = path.join(process.cwd(), "data", "catalog.json");
 const DEPARTMENT_PATTERN = /^[A-Z]{2,5}$/;
 const SEMESTER_PATTERN = /^[1-9][0-9]*$/;
 const DRIVE_FOLDER_ID_PATTERN = /^[a-zA-Z0-9_-]{10,}$/;
 const MAX_SEMESTER = 8;
+const CATALOG_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600";
 
 export type CourseType = "core" | "elective" | "lab";
 
@@ -305,7 +307,13 @@ export async function GET(
     const semesterCatalog = departmentCatalog.semesters[semesterKey];
     assertValidSemester(semesterCatalog, `departments.${normalizedDepartment}.semesters.${semesterKey}`);
 
-    return NextResponse.json({ courses: semesterCatalog.courses }, { status: 200 });
+    return NextResponse.json(
+      { courses: semesterCatalog.courses },
+      {
+        status: 200,
+        headers: { "Cache-Control": CATALOG_CACHE_CONTROL },
+      },
+    );
   } catch (error) {
     console.error("Catalog route error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

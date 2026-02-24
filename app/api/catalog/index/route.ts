@@ -6,6 +6,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const revalidate = 300;
 
 const CATALOG_PATH = path.join(process.cwd(), "data", "catalog.json");
 const DRIVE_FOLDER_ID_PATTERN = /^[a-zA-Z0-9_-]{10,}$/;

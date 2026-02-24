@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState } from "react";
@@ -22,9 +23,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ThemeBottomSheet } from "@/features/theme/ui/ThemeBottomSheet";
 import { getThemeLabel } from "@/features/theme/theme.constants";
 import { cn } from "@/lib/utils";
+
+const ThemeBottomSheet = dynamic(
+  () => import("@/features/theme/ui/ThemeBottomSheet").then((mod) => mod.ThemeBottomSheet),
+  { ssr: false },
+);
 
 interface SettingsMenuProps {
   className?: string;
@@ -173,7 +178,9 @@ export function SettingsMenu({ className }: SettingsMenuProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <ThemeBottomSheet open={themeSheetOpen} onOpenChange={setThemeSheetOpen} />
+      {themeSheetOpen ? (
+        <ThemeBottomSheet open={themeSheetOpen} onOpenChange={setThemeSheetOpen} />
+      ) : null}
     </>
   );
 }

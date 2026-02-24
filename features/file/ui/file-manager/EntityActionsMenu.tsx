@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   IconCloudDown,
@@ -9,7 +8,6 @@ import {
   IconDownload,
   IconDotsVertical,
   IconShare,
-  IconSparkles,
   IconStar,
   IconTag,
 } from "@tabler/icons-react";
@@ -34,11 +32,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const SummarizeDialog = dynamic(
-  () => import("@/features/intelligence/ui/SummarizeDialog").then((module) => module.SummarizeDialog),
-  { ssr: false },
-);
 
 type EntityActionsMenuProps = {
   entityId: string;
@@ -344,7 +337,6 @@ export function EntityActionsMenu({
   customActionsLabel = "Additional actions",
 }: EntityActionsMenuProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [summarizeOpen, setSummarizeOpen] = useState(false);
   const gateDownloadRisk = useDownloadRiskGate();
   const hydrationRequestedRef = useRef(false);
   const {
@@ -413,18 +405,6 @@ export function EntityActionsMenu({
       toast.error("Clipboard is not available in this browser.");
     });
   }, [closeMenu, entityDetails?.webViewLink, entityId, entityType]);
-
-  const isPdfFile = entityType === "file" && entityDetails?.mimeType === "application/pdf";
-
-  const handleSummarize = useCallback(() => {
-    if (!isPdfFile) {
-      return;
-    }
-
-    triggerHaptic(6);
-    closeMenu();
-    setSummarizeOpen(true);
-  }, [closeMenu, isPdfFile]);
 
   const handleShare = useCallback(() => {
     triggerHaptic();
@@ -847,17 +827,6 @@ export function EntityActionsMenu({
               />
             </section>
 
-            {isPdfFile ? (
-              <section className="rounded-xl border border-border/70 bg-card/80 p-1">
-                <MenuActionRow
-                  icon={<IconSparkles className="size-4 text-teal-500 dark:text-teal-300" />}
-                  label="Summarize"
-                  description="Generate a study summary from this PDF"
-                  onSelect={handleSummarize}
-                />
-              </section>
-            ) : null}
-
             {hasCustomActions ? (
               <section className="rounded-xl border border-border/70 bg-card/80 p-1">
                 <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/90">
@@ -903,14 +872,6 @@ export function EntityActionsMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {isPdfFile ? (
-        <SummarizeDialog
-          open={summarizeOpen}
-          onOpenChange={setSummarizeOpen}
-          fileId={entityId}
-          fileName={title}
-        />
-      ) : null}
     </>
   );
 }

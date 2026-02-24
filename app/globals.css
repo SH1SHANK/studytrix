@@ -54,7 +54,7 @@
 :root {
   --font-primary: var(--font-outfit), "Inter", "Satoshi", system-ui, sans-serif;
   --font-secondary:
-    var(--font-switzer), "Inter", "Satoshi", system-ui, sans-serif;
+    var(--font-outfit), "Inter", "Satoshi", system-ui, sans-serif;
   transition: background-color 250ms ease, color 250ms ease, border-color 250ms ease;
 
   /* Classic fallback */

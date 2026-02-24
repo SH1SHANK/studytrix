@@ -32,6 +32,7 @@ type CatalogMemoryEntry = {
 
 const catalogResponseCache = new Map<string, CatalogMemoryEntry>();
 const catalogInFlight = new Map<string, Promise<CatalogResponse>>();
+const CATALOG_MEMORY_TTL_MS = 5 * 60 * 1000;
 
 function getCatalogCacheKey(department: string, semester: number): string {
   return `${department.toUpperCase()}::${semester}`;
@@ -150,6 +151,9 @@ export function useCatalog(
     const canUseOffline = isOfflineV3Enabled();
     const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
     const memoryEntry = catalogResponseCache.get(key);
+    const hasFreshMemory =
+      memoryEntry !== undefined &&
+      Date.now() - memoryEntry.updatedAt < CATALOG_MEMORY_TTL_MS;
 
     void (async () => {
       let cachedEntry: Awaited<ReturnType<typeof getFreshOrStale<CatalogResponse>>>["entry"] = null;
@@ -158,7 +162,7 @@ export function useCatalog(
       if (memoryEntry && isActive && requestSeq === requestSeqRef.current) {
         setState({
           courses: memoryEntry.data.courses,
-          isLoading: isOnline,
+          isLoading: isOnline && !hasFreshMemory,
           error: null,
           source: "memory",
           isStale: false,
@@ -183,13 +187,43 @@ export function useCatalog(
       if (!memoryEntry && cachedEntry && isActive && requestSeq === requestSeqRef.current) {
         setState({
           courses: cachedEntry.payload.courses,
-          isLoading: isOnline,
+          isLoading: isOnline && cachedStatus !== "fresh",
           error: null,
           source: "cache",
           isStale: cachedStatus === "stale",
           lastUpdatedAt: cachedEntry.updatedAt,
           isOfflineFallback: !isOnline,
         });
+      }
+
+      if (isOnline && hasFreshMemory) {
+        if (isActive && requestSeq === requestSeqRef.current && memoryEntry) {
+          setState({
+            courses: memoryEntry.data.courses,
+            isLoading: false,
+            error: null,
+            source: "memory",
+            isStale: false,
+            lastUpdatedAt: memoryEntry.updatedAt,
+            isOfflineFallback: false,
+          });
+        }
+        return;
+      }
+
+      if (isOnline && !memoryEntry && cachedEntry && cachedStatus === "fresh") {
+        if (isActive && requestSeq === requestSeqRef.current) {
+          setState({
+            courses: cachedEntry.payload.courses,
+            isLoading: false,
+            error: null,
+            source: "cache",
+            isStale: false,
+            lastUpdatedAt: cachedEntry.updatedAt,
+            isOfflineFallback: false,
+          });
+        }
+        return;
       }
 
       if (!isOnline) {

@@ -262,6 +262,7 @@ export function CommandBar({
     placeholderMeasureRef,
     onReplaceUrl: replaceUrl,
   });
+  const shouldComputeCommandData = open || scopeSelectorMode !== null;
 
   const pathSegments = useMemo(
     () => pathname.split("/").filter(Boolean),
@@ -424,7 +425,7 @@ export function CommandBar({
   }, []);
 
   useEffect(() => {
-    if (!isFolderScope || !activeDriveFolderId) {
+    if (!open || !isFolderScope || !activeDriveFolderId) {
       setDriveItems([]);
       setIsDriveLoading(false);
       return;
@@ -459,7 +460,7 @@ export function CommandBar({
 
     void run();
     return () => controller.abort();
-  }, [activeDriveFolderId, isFolderScope]);
+  }, [activeDriveFolderId, isFolderScope, open]);
 
   useEffect(() => {
     let cancelled = false;
@@ -515,6 +516,11 @@ export function CommandBar({
       nestedIndexUpdatedAt <= 0
       || Date.now() - nestedIndexUpdatedAt > NESTED_INDEX_TTL_MS;
     if (!isStale) {
+      setIsNestedIndexing(false);
+      return;
+    }
+
+    if (!open) {
       setIsNestedIndexing(false);
       return;
     }
@@ -575,16 +581,21 @@ export function CommandBar({
     nestedRootSignature,
     nestedRoots,
     nestedScopeKey,
+    open,
   ]);
 
   useEffect(() => {
+    if (!open) {
+      return;
+    }
+
     let cancelled = false;
 
     const refreshOfflineLibrary = async () => {
       try {
         const snapshot = await loadOfflineLibrarySnapshot({
-          force: open,
-          maxAgeMs: open ? 8_000 : 20_000,
+          force: true,
+          maxAgeMs: 8_000,
         });
         if (!cancelled) {
           setOfflineLibrary(snapshot);
@@ -597,12 +608,6 @@ export function CommandBar({
     };
 
     void refreshOfflineLibrary();
-
-    if (!open) {
-      return () => {
-        cancelled = true;
-      };
-    }
 
     return () => {
       cancelled = true;
@@ -1485,6 +1490,10 @@ export function CommandBar({
   );
 
   const folderSearchIndex = useMemo(() => {
+    if (!shouldComputeCommandData) {
+      return null;
+    }
+
     const folderSearchItems = folderCommands.map((item) => {
       const route =
         typeof item.payload?.route === "string" ? item.payload.route : "";
@@ -1497,10 +1506,10 @@ export function CommandBar({
     });
 
     return buildFolderSearchIndex(folderSearchItems);
-  }, [folderCommands]);
+  }, [folderCommands, shouldComputeCommandData]);
 
   const fuzzyFolderResults = useMemo<EngineCommandItem[]>(() => {
-    if (!fuzzySearchEnabled) {
+    if (!shouldComputeCommandData || !fuzzySearchEnabled || !folderSearchIndex) {
       return [];
     }
 
@@ -1531,7 +1540,14 @@ export function CommandBar({
         } as EngineCommandItem;
       })
       .filter((item): item is EngineCommandItem => item !== null);
-  }, [debouncedQuery, folderCommandById, folderSearchIndex, fuzzySearchEnabled, resultLimit]);
+  }, [
+    debouncedQuery,
+    folderCommandById,
+    folderSearchIndex,
+    fuzzySearchEnabled,
+    resultLimit,
+    shouldComputeCommandData,
+  ]);
 
   const commandContext = useMemo<CommandContext>(() => {
     return {
@@ -1544,13 +1560,17 @@ export function CommandBar({
   }, [activeDriveFolderId, departmentId, folderId, semesterId]);
 
   const commandService = useMemo(() => {
+    if (!shouldComputeCommandData) {
+      return null;
+    }
+
     const index = buildCommandIndex(
       folderCommands,
       fileCommands,
       isFolderScope ? "folder" : "global",
     );
     return new CommandService(index);
-  }, [fileCommands, folderCommands, isFolderScope]);
+  }, [fileCommands, folderCommands, isFolderScope, shouldComputeCommandData]);
 
   const dispatcher = useMemo(() => {
     const registry = new CommandDispatcher();
@@ -1673,6 +1693,13 @@ export function CommandBar({
   }, [effectiveFolderScope, recentScopedFileIds, searchScope, taggedEntityIds]);
 
   const searchSnapshot = useMemo(() => {
+    if (!commandService) {
+      return {
+        exactResults: [] as EngineCommandItem[],
+        durationMs: 0,
+      };
+    }
+
     const startedAt =
       typeof performance !== "undefined" ? performance.now() : Date.now();
     const baseResults = commandService.search(debouncedQuery, commandContext);
@@ -1725,6 +1752,10 @@ export function CommandBar({
   const searchDurationMs = searchSnapshot.durationMs;
 
   const fallbackResults = useMemo(() => {
+    if (!commandService) {
+      return [];
+    }
+
     const base = commandService.search("", commandContext);
     if (isScopeEmpty(searchScope) && effectiveFolderScope === null) {
       return base.slice(0, resultLimit);

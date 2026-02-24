@@ -6,14 +6,10 @@ import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { ThemeStatusBarSync } from "@/features/theme/ui/ThemeStatusBarSync";
 import { SettingsProvider } from "@/components/providers/SettingsProvider";
-import { DownloadDrawer } from "@/features/download/ui/DownloadDrawer";
-import { DownloadFloatingIndicator } from "@/features/download/ui/DownloadFloatingIndicator";
-import { DownloadRiskDialog } from "@/features/download/ui/DownloadRiskDialog";
-import { SelectionToolbar } from "@/features/file/ui/file-manager/SelectionToolbar";
 import { ScrollLockRecovery } from "@/components/layout/ScrollLockRecovery";
 import { OfflineRuntime } from "@/features/offline/ui/OfflineRuntime";
 import { StorageInit } from "@/features/offline/ui/StorageInit";
-import { AssignTagsDrawer } from "@/features/tags/ui/AssignTagsDrawer";
+import { RootRuntimeMounts } from "@/components/layout/RootRuntimeMounts";
 import "./globals.css";
 
 const DEFAULT_SITE_URL = "https://learn.attendrix.app";
@@ -31,17 +27,6 @@ const outfit = localFont({
   display: "swap",
   variable: "--font-outfit",
   fallback: ["Satoshi", "system-ui", "sans-serif"],
-});
-
-const switzer = localFont({
-  src: [
-    { path: "./fonts/Switzer-Regular.woff2", weight: "400", style: "normal" },
-    { path: "./fonts/Switzer-Medium.woff2", weight: "500", style: "normal" },
-    { path: "./fonts/Switzer-Semibold.woff2", weight: "600", style: "normal" },
-  ],
-  display: "swap",
-  variable: "--font-switzer",
-  fallback: ["Inter", "Satoshi", "system-ui", "sans-serif"],
 });
 
 export const viewport: Viewport = {
@@ -143,7 +128,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${outfit.variable} ${switzer.variable}`}
+      className={outfit.variable}
     >
       <body className="min-h-screen bg-background text-foreground antialiased transition-colors">
         <Script id="studytrix-theme-bootstrap" strategy="beforeInteractive">
@@ -159,11 +144,7 @@ export default function RootLayout({
             <OfflineRuntime />
             <ScrollLockRecovery />
             {children}
-            <SelectionToolbar />
-            <AssignTagsDrawer />
-            <DownloadDrawer />
-            <DownloadFloatingIndicator />
-            <DownloadRiskDialog />
+            <RootRuntimeMounts />
           </SettingsProvider>
         </ThemeProvider>
         <Analytics />

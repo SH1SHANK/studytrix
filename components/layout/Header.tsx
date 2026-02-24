@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import {
   IconArrowLeft,
   IconChevronDown,
@@ -18,13 +19,19 @@ import {
 import {
   useAcademicContext,
 } from "@/components/layout/AcademicContext";
-import { DownloadButton } from "@/features/download/ui/DownloadButton";
 import { DEPARTMENT_MAP, getDepartmentName } from "@/lib/academic";
-import { SettingsMenu } from "@/features/settings/ui/SettingsMenu";
 import { shareCurrentPage } from "@/features/share/share.page";
 import { useSetting } from "@/ui/hooks/useSettings";
 
 const DEPARTMENT_OPTIONS = Object.keys(DEPARTMENT_MAP);
+const DownloadButton = dynamic(
+  () => import("@/features/download/ui/DownloadButton").then((mod) => mod.DownloadButton),
+  { ssr: false },
+);
+const SettingsMenu = dynamic(
+  () => import("@/features/settings/ui/SettingsMenu").then((mod) => mod.SettingsMenu),
+  { ssr: false },
+);
 
 export function Header({ title, hideFilters }: { title?: string; hideFilters?: boolean } = {}) {
   const router = useRouter();

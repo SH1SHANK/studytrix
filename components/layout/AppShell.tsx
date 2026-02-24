@@ -1,14 +1,10 @@
 import { Suspense, type ReactNode } from "react";
 
-import { ScopedCommandBar } from "@/features/command/ui/ScopedCommandBar";
-import { ShareProgressDrawer } from "@/features/share/ui/ShareProgressDrawer";
 import { AcademicProvider } from "@/components/layout/AcademicContext";
 import { AppRuntimeBanners } from "@/components/layout/AppRuntimeBanners";
 import { Header } from "@/components/layout/Header";
-import { GlobalStorageSetupSheet } from "@/features/offline/ui/StorageSetupSheet";
-import { OnboardingGate } from "@/features/onboarding/ui/OnboardingGate";
-import { Toaster } from "@/components/ui/sonner";
 import { APP_VERSION, formatVersionLabel } from "@/features/version/version";
+import { AppShellRuntimeMounts } from "@/components/layout/AppShellRuntimeMounts";
 
 type AppShellProps = {
   children: ReactNode;
@@ -52,13 +48,7 @@ export function AppShell({
             <GlobalFooter />
           </main>
         </div>
-        <Suspense fallback={null}>
-          <ScopedCommandBar placeholder={commandPlaceholder} />
-        </Suspense>
-        <ShareProgressDrawer />
-        <Toaster />
-        <GlobalStorageSetupSheet />
-        <OnboardingGate />
+        <AppShellRuntimeMounts commandPlaceholder={commandPlaceholder} />
       </div>
     </AcademicProvider>
   );
