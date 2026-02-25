@@ -2,132 +2,107 @@
 
 ## Versioning and Release Visibility
 
-- Custom version declaration source at `features/version/version.ts`.
-- Curated release notes source at `features/changelog/changelog.catalog.ts`.
-- In-app version banner shown after a version bump with `View Changelog` and `Dismiss`.
-- Dedicated changelog page at `/changelog`, covering versions `v0.1.0` through current.
-- Version label rendered in the app shell footer for quick reference.
+- Version source: `features/version/version.ts`.
+- Changelog source: `features/changelog/changelog.catalog.ts`.
+- In-app version banner appears after version bumps.
+- Dedicated changelog page: `/changelog`.
+- Current version label is visible in the app shell.
 
-## Latest Release (`v0.9.4-experimental`)
+## Current Focus (`v0.9.4-experimental` + rolling updates)
 
-- Unified CommandCenter folder scoping around one breadcrumb-driven scope model.
-- Added cross-repository semantic suggestions in global scope with confidence thresholding and dedicated rendering.
-- Expanded intelligence indexing/scoping behavior for deep nested repository trees.
-- Improved model download/indexing setup dialog UX with clearer step progress and richer progress animations.
+- Personal Repository evolved into a local-first workspace layer.
+- Added Smart Collections, pinned files shelf, and Study Sets.
+- Added local device folder support with reconnect/permission flows.
+- Added unified link import flow for Studytrix shared links and Drive links.
+- Added code-aware preview and organization improvements.
+- Refined action hierarchy and dialog/sheet continuity in Personal Repository.
 
-## Dashboard and Navigation
+## Local-First Personal Repository
 
-- Department- and semester-scoped academic browsing.
-- Folder-first file manager for course material discovery.
-- Command-centered interactions with global and local folder modes.
-- Time-based greeting panel with theme-based secondary message behavior.
-- Weather-aware greeting enhancement via Open-Meteo weather code mapping.
-- Contextual item actions via mobile-friendly menus and long-press support.
-- Sort modes and starred-priority presentation.
+- No user login/auth flow is required for app usage.
+- Folder sources:
+  - Link import (Studytrix share link or Drive folder link via one input flow).
+  - Local device folder (File System Access API + PWA support gate).
+  - App-created local virtual folders.
+- Permission-aware local folder reconnect banners.
+- Visibility-based auto-refresh for stale local folder scans.
+- Folder health states for sync freshness/offline readiness/error guidance.
 
-## Greeting Personalization
+## Personal Organization Layers
 
-- Persistent `greetingPreferences` object in settings store:
-  - `enabled`
-  - `includeWeather`
-  - `useName`
-  - `greetingTheme` (`study` | `motivational` | `minimal`)
-- Greeting settings section with:
-  - `Show Greeting` master toggle
-  - `Weather Forecast` toggle
-  - `Use My Name` toggle
-  - `Greeting Style` segmented control
-- Study theme supports six time periods with study-specific secondary message pools.
-- Motivational theme provides generic encouragement alternatives.
-- Minimal theme suppresses secondary line and shows primary greeting only.
+- Smart Collections generated from personal embeddings and clustering.
+- Pinned files shelf with ordering and max-pin guardrails.
+- Study Sets for cross-folder custom bundles.
+- Tag suggestions and accepted-tag filtering in Personal Repository context.
 
-## Command Center and Scope System
+## Personal Primary Actions UX
 
-- Scope prefixes for fast intent switching:
-  - `/` for folder scope
-  - `#` for tag scope
-  - `:` for domain/academic scope
-  - `>` for actions scope
-  - `@` for recents scope
-- Sticky prefix interaction model with deterministic mixed-prefix parsing and predictable cancel behavior.
-- Single essential scope bar in idle command state (`Folder`, `Tag`, `Actions`, `Clear`) to reduce UI clutter.
-- Nested folder-aware search resolution for both local and global search scopes.
-- Command suggestions aligned to active scope context.
-- Improved scope switching UX for quick mode transitions on desktop and mobile.
+- Header-first primary action strip for:
+  - Add Folder
+  - Create Folder
+  - Quick Capture
+  - New Study Set
+- Folder Health treated as secondary action.
+- Dialogs/sheets use a consistent mobile bottom-sheet pattern and centered desktop modal behavior.
+
+## Quick Capture
+
+- Modes:
+  - Photo
+  - Text note
+  - Voice note
+- Save destination picker tied to personal folders.
+- Local-first persistence path for captures.
+- Draft/restore behavior for note capture.
+- Voice recording preview and limit safeguards.
+
+## Code File Experience
+
+- Extension-based code detection and language labeling.
+- In-app code preview with lazy-loaded `highlight.js`.
+- Safer notebook (`.ipynb`) rendering behavior with constrained output handling.
+- Code-aware search/result rendering improvements for personal files.
+
+## Command Center and Search Scope
+
+- Scope prefixes:
+  - `/` folder scope
+  - `#` tag scope
+  - `:` domain scope
+  - `>` actions scope
+  - `@` recents scope
+- Breadcrumb-driven scope state for predictable navigation/search behavior.
+- Cross-repository semantic suggestions in global scope.
+- Deep nested indexing coverage for repository structures.
 
 ## Offline and Storage Engine
 
-- Dual-provider storage abstraction:
-  - File System Access API when available
-  - IndexedDB fallback for broader compatibility
-- Storage location configuration, migration, relink, and fallback handling.
-- Offline metadata/index updates with nested coverage visibility.
-- Integrity checks and stale-file invalidation workflows.
-- Offline diagnostics and storage health surfaces.
-- Offline Library static fallback (`/offline-library.html`) for guaranteed offline access when app route bundles are unavailable.
-- Offline-aware navigation handoff between fallback and full app route when connectivity changes.
+- Storage abstraction:
+  - File System Access API (when available)
+  - IndexedDB fallback
+- Offline Library fallback page: `/offline-library.html`.
+- Storage setup, relink, migration, and diagnostics.
+- Local queue persistence for background operation bookkeeping.
 
 ## AI and Local Intelligence
 
-- Full-content extraction (`Copy Contents` pipeline) for PDFs, DOCXs, PPTXs, and images.
-- Extractor routers orchestrate native Mammoth (DOCX), `<a:t>` tags (PPTX), native PDF text, and `Tesseract.js` image OCR fallbacks.
-- AI Cleanup Engine powered by local T5 models via `@huggingface/transformers` to denoise and format garbled OCR output.
-- Configurable intelligence profiles in settings mapped to Xenova's model tiers (Lite, Balanced, Pro).
-- Semantic search embedding model can be switched live from Settings (auto/manual mode aware).
-- Settings includes a responsive Model Activity panel with animated download/provisioning indicators for semantic and cleanup models.
-- Worker-backed model lifecycle emits progress + status events used for visible UX feedback without blocking interactions.
-- Cleanup pipeline applies strict output-safety fallback to original OCR text when generated output is too short.
-- Fully private, on-device compute via Web Workers, utilizing WebGPU and multi-threading where available.
+- On-device semantic search model runtime.
+- On-device cleanup model runtime for OCR text post-processing.
+- Worker-based indexing and model lifecycle progress updates.
+- Incremental indexing paths for personal repository additions/changes.
 
-## Bulk Operations, Zip, and Share
+## Bulk Operations, Sharing, and Transfer Safety
 
-- Reliable zip preparation for:
-  - single folders
-  - multiple folders
-  - mixed file/folder selections
-  - file-only selections
-- Explicit pre-flight resolution pipeline for nested folder expansion.
-- Dialog-based progress UX for zip/share preparation and execution.
-- Reduced perceived latency by opening preparation dialogs immediately.
-- Native share via Web Share API with graceful fallback behavior.
-- Copy/download actions for files and folders with local-first behavior.
-- Unified large-file safeguards across download entrypoints (warn at `>=25MB`, confirm at `>=100MB`).
-- Shared risk-gate pipeline for download, share, offline-save, and retry actions.
-- Transient failure retry policy for downloads (up to 3 attempts) with normalized task error states.
+- Mixed file/folder selection expansion for reliable zip/share pipelines.
+- Dialog-driven transfer preparation/progress feedback.
+- Large-file risk gates for download/share flows.
+- Personal folder share-link generation and import handling.
+- Local analytics for share-link copy/open actions.
 
-## Page-Level Sharing
+## API and Runtime Safety
 
-- Header top-right share action for current page URL.
-- Share link preserves active filters and query customizations.
-- Copy-link fallback for platforms without native share support.
-- File Manager top-right menu includes contextual share/open utilities.
+- Drive-backed global repository routes run through server handlers.
+- Identifier validation and normalized error responses across route handlers.
+- Request dedupe and cache-first behavior where appropriate.
+- Type-safe stores, strict TypeScript, and defensive client runtime guards.
 
-## Mobile, PWA, and SEO
-
-- Floating dock behavior tuned for better mobile/PWA touch interactions.
-- Updated favicon set wired for browser tabs, PWA install, and Apple touch icon.
-- Improved manifest metadata with richer install fields and shortcut entries.
-- Expanded page-level metadata (title, description, canonical) for better discoverability.
-
-## Tags and Organization
-
-- Dedicated tags management page and tag-centric organization workflows.
-- Multi-entity assignment tools for files/folders.
-- Improved tag filtering and selection controls.
-
-## Settings, Guides, and Discoverability
-
-- Settings quick links section (`Guides & References`) for:
-  - Changelog
-  - Features
-  - Shortcut Hints
-- Shortcut hints page at `/shortcuts` with keyboard and prefix guidance.
-- Features overview page at `/features` with curated capability breakdowns.
-
-## API, Safety, and Performance
-
-- Server-only Google Drive access using service-account JWT credentials.
-- Request deduplication and cache-first behavior where safe.
-- Streaming file responses to reduce memory spikes.
-- Redis-first rate limit/cache design with local fallback support.
-- Strict TypeScript and defensive error normalization.

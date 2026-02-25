@@ -24,7 +24,7 @@ export function CollectionDetailView({
 }: CollectionDetailViewProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="fixed inset-0 h-dvh w-screen max-w-none rounded-none border-0 p-0">
+      <DialogContent className="fixed inset-0 top-0 left-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0">
         <div className="flex h-full flex-col bg-background">
           <DialogHeader className="border-b border-border px-4 py-3 text-left">
             <DialogTitle>{collection?.name ?? "Collection"}</DialogTitle>

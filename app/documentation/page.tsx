@@ -25,7 +25,7 @@ type ApiDoc = {
 export const metadata: Metadata = {
   title: "Documentation",
   description:
-    "Detailed Studytrix documentation covering architecture, APIs, offline/storage behavior, command scope search, sharing, and platform limitations.",
+    "Detailed Studytrix documentation covering local-first Personal Repository architecture, APIs, offline/storage behavior, command scope search, and platform limitations.",
   alternates: {
     canonical: "/documentation",
   },
@@ -50,12 +50,12 @@ const GUIDE_LINKS = [
 ] as const;
 
 const CORE_FLOW: string[] = [
-  "Catalog APIs provide department, semester, and course metadata mapped to Drive roots.",
-  "File Manager loads folder contents from Drive proxy routes with cache and dedupe.",
+  "Catalog APIs provide department, semester, and course metadata for global repository navigation.",
+  "Personal Repository workflows run local-first with persisted state, local scans, and IndexedDB-backed stores.",
+  "Add Folder uses a unified link-input flow (Studytrix import link or Drive folder link) plus optional device-folder source.",
   "Command Center indexes files/folders and switches scopes using `/`, `#`, `:`, `>`, and `@`.",
-  "Dashboard greeting runtime computes time-aware messages with optional weather-aware context.",
   "Offline actions persist file blobs using File System Access API or IndexedDB fallback.",
-  "Bulk copy/download/share pipelines resolve nested folder selections before execution.",
+  "Smart shelves (Smart Collections, pinned files, Study Sets) are generated from personal index/store state.",
   "Version and changelog modules inform users when a new build is available.",
 ];
 
@@ -70,15 +70,28 @@ const MODULE_SECTIONS: DocSection[] = [
       "Dialogs are used for long-running operations to provide persistent progress and completion feedback.",
       "The Settings system is schema-driven and searchable by category.",
       "Greeting preferences are persisted as a typed object in the settings store.",
+      "No user account/login/authentication runtime is required for app usage.",
+    ],
+  },
+  {
+    title: "Personal Repository Runtime",
+    summary: "Local-first orchestration for personal folders, shelves, and capture flows.",
+    points: [
+      "Folder sources include unified link import, device folders, and app-created local folders.",
+      "Source kind is tracked per folder (`drive`, `local`, `local-virtual`) with safe hydration defaults.",
+      "Local handles are persisted in IndexedDB and re-verified on app init/visibility.",
+      "Smart Collections, pinned files, and Study Sets are store-driven and persisted locally.",
+      "Quick Capture flows write locally first and update personal indexing paths incrementally.",
+      "Folder health and reconnect UX are derived from sync metadata and permission status.",
     ],
   },
   {
     title: "Server Runtime and Proxy Layer",
-    summary: "How server routes securely connect client interactions to Drive and catalog data.",
+    summary: "How server routes proxy global repository/catalog operations and link validation.",
     points: [
-      "Drive and file APIs run in Node.js runtime route handlers.",
-      "Service account credentials stay server-side and are never sent to the browser.",
-      "Folder listing and file retrieval routes validate identifiers and normalize error responses.",
+      "Global repository Drive and file APIs run in Node.js runtime route handlers.",
+      "Route handlers validate identifiers and normalize error responses.",
+      "Custom-folder link resolve endpoint decodes and validates import link payloads.",
       "Catalog routes read and validate `data/catalog.json` before returning course data.",
       "Response errors are intentionally generic for internal failures.",
     ],
@@ -114,6 +127,7 @@ const MODULE_SECTIONS: DocSection[] = [
       "Local scope narrows results to current folder hierarchy context.",
       "Prefix shortcuts map to scoped intents: folder (`/`), tag (`#`), domain (`:`), actions (`>`), recents (`@`).",
       "Nested folder indexing improves deep file discovery in local and global flows.",
+      "Code-aware result rendering and actions improve developer/stem file workflows.",
       "Keyboard-first navigation supports fast command execution across pages.",
     ],
   },
@@ -179,6 +193,34 @@ const API_REFERENCE: ApiDoc[] = [
     notes: [
       "Department and semester params are decoded and strictly validated.",
       "Catalog schema is checked before returning data.",
+    ],
+  },
+  {
+    method: "GET",
+    path: "/api/custom-folders/resolve?fid=<base64url>",
+    purpose: "Decodes and validates a Studytrix share/import `fid` into a Drive folder ID.",
+    success: "200 with `{ folderId }`.",
+    errors: ["400 `{ error: 'INVALID_LINK' }`"],
+    notes: [
+      "Validates base64url payload and Drive-folder-id shape.",
+      "Performs decode/validation only; no Drive API call is executed in this route.",
+    ],
+  },
+  {
+    method: "POST",
+    path: "/api/custom-folders/verify",
+    purpose: "Runs folder verification checks for Personal Repository Drive-link imports.",
+    success:
+      "200 with verification payload: `folderId`, `folderName`, `fileCount`, `folderCount`, `permissionLevel`, and safety flags.",
+    errors: [
+      "400 invalid or unsupported folder ID",
+      "403 access denied/private folder",
+      "404 folder not found",
+      "502 upstream Drive error",
+    ],
+    notes: [
+      "Verification route is read-only and does not write to Drive.",
+      "Used by Add Folder and import-link flows before a folder is added locally.",
     ],
   },
   {
@@ -333,7 +375,7 @@ export default function DocumentationPage() {
                 End-to-End System Flow
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Request path from catalog discovery to offline and share operations.
+                Request path from catalog/personal discovery to offline and organization operations.
               </p>
             </CardHeader>
             <CardContent className="pt-0">

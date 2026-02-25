@@ -72,7 +72,7 @@ export function StudySetDetailView({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="fixed inset-0 h-dvh w-screen max-w-none rounded-none border-0 p-0">
+      <DialogContent className="fixed inset-0 top-0 left-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0">
         <div className="flex h-full flex-col bg-background">
           <DialogHeader className="border-b border-border px-4 py-3 text-left">
             <DialogTitle>{setItem?.name ?? "Study Set"}</DialogTitle>
@@ -169,64 +169,70 @@ export function StudySetDetailView({
         </div>
 
         <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Add Files</DialogTitle>
-              <DialogDescription>Select files from your Personal Repository.</DialogDescription>
-            </DialogHeader>
+          <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto w-full max-w-none translate-x-0 translate-y-0 rounded-t-3xl border-t border-border/70 p-0 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border">
+            <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-muted" />
 
-            <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
-              {allPersonalFiles.map((file) => {
-                const checked = selectedFileIds.includes(file.id);
-                return (
-                  <label key={file.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-2.5">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => {
-                        const isChecked = event.target.checked;
-                        setSelectedFileIds((current) => {
-                          if (isChecked) {
-                            if (current.includes(file.id)) {
-                              return current;
+            <div className="max-h-[72dvh] overflow-y-auto px-4 pb-3 pt-2 sm:px-5">
+              <DialogHeader>
+                <DialogTitle>Add Files</DialogTitle>
+                <DialogDescription>Select files from your Personal Repository.</DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-3 max-h-[55dvh] space-y-2 overflow-y-auto pr-1">
+                {allPersonalFiles.map((file) => {
+                  const checked = selectedFileIds.includes(file.id);
+                  return (
+                    <label key={file.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-border p-2.5">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          const isChecked = event.target.checked;
+                          setSelectedFileIds((current) => {
+                            if (isChecked) {
+                              if (current.includes(file.id)) {
+                                return current;
+                              }
+                              return [...current, file.id];
                             }
-                            return [...current, file.id];
-                          }
-                          return current.filter((id) => id !== file.id);
-                        });
-                      }}
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-foreground">{file.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{file.sourceLabel}</span>
-                    </span>
-                  </label>
-                );
-              })}
+                            return current.filter((id) => id !== file.id);
+                          });
+                        }}
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-foreground">{file.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{file.sourceLabel}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPickerOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  if (!setItem) {
-                    return;
-                  }
+            <div className="border-t border-border/70 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 sm:px-5 sm:pb-4">
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setPickerOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (!setItem) {
+                      return;
+                    }
 
-                  const existing = new Set(setItem.fileIds);
-                  const toAdd = selectedFileIds.filter((fileId) => !existing.has(fileId));
-                  if (toAdd.length > 0) {
-                    onAddFiles(setItem.id, toAdd);
-                  }
-                  setPickerOpen(false);
-                }}
-              >
-                Apply
-              </Button>
-            </DialogFooter>
+                    const existing = new Set(setItem.fileIds);
+                    const toAdd = selectedFileIds.filter((fileId) => !existing.has(fileId));
+                    if (toAdd.length > 0) {
+                      onAddFiles(setItem.id, toAdd);
+                    }
+                    setPickerOpen(false);
+                  }}
+                >
+                  Apply
+                </Button>
+              </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </DialogContent>

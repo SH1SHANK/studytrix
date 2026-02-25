@@ -12,13 +12,33 @@ type FeatureSection = {
 export const metadata: Metadata = {
   title: "Features",
   description:
-    "Explore Studytrix features across breadcrumb-aware scoped search, cross-repository semantic suggestions, offline storage, sharing, and mobile-first workflows.",
+    "Explore Studytrix features across local-first Personal Repository workflows, smart organization shelves, scoped search, offline storage, and mobile-first UX.",
   alternates: {
     canonical: "/features",
   },
 };
 
 const FEATURE_SECTIONS: FeatureSection[] = [
+  {
+    title: "Personal Repository (Local-First)",
+    summary: "Your private study workspace with no user login/auth flow required.",
+    points: [
+      "Add folders from a unified link flow (Studytrix shared link or Drive folder link).",
+      "Add local device folders (PWA/File System Access supported devices).",
+      "Create app-native local folders and organize content without leaving Personal Repository.",
+      "Permission reconnect banners and folder health states for local folders.",
+    ],
+  },
+  {
+    title: "Primary Actions and UX",
+    summary: "Action-priority layout designed for speed on mobile and desktop.",
+    points: [
+      "Primary header actions: Add Folder, Create Folder, Quick Capture, New Study Set.",
+      "Folder Health is intentionally secondary.",
+      "Consistent bottom-sheet dialog behavior on mobile with centered desktop modals.",
+      "Reduced duplicate entry points to keep flows clearer and faster.",
+    ],
+  },
   {
     title: "Navigation and Discovery",
     summary: "Fast access to courses, folders, and actions with breadcrumb-aware scoped search.",
@@ -31,12 +51,32 @@ const FEATURE_SECTIONS: FeatureSection[] = [
   },
   {
     title: "Smart Search Intelligence",
-    summary: "On-device semantic retrieval with deeper indexing and clearer setup status.",
+    summary: "On-device semantic retrieval with deeper indexing and contextual suggestions.",
     points: [
       "Cross-repository semantic suggestions in global scope for high-confidence Personal Repository matches.",
       "Repository-partitioned index metadata with ancestry-aware folder-subtree filtering for semantic queries.",
       "Incremental semantic index updates from Service Worker file-cache broadcasts (without full recollection).",
-      "Redesigned model download/indexing setup dialog with friendlier staged progress and richer progress visuals.",
+      "Tag suggestion and code-aware indexing improvements in Personal Repository flows.",
+    ],
+  },
+  {
+    title: "Smart Organization Shelves",
+    summary: "Automatic and manual grouping for rapid file access.",
+    points: [
+      "Smart Collections auto-cluster personal files by topic.",
+      "Pinned shelf keeps most-used files at the top with reorder support.",
+      "Study Sets combine files across folders into focused exam/work bundles.",
+      "Collection and Study Set detail views support fast list operations.",
+    ],
+  },
+  {
+    title: "Quick Capture and Personal File Actions",
+    summary: "Capture and manage study assets directly inside Personal Repository.",
+    points: [
+      "Quick Capture supports photo, text note, and voice note flows.",
+      "Add files from device with validation and local-first save behavior.",
+      "Duplicate and move actions are available in Personal file flows.",
+      "Code files open in an in-app syntax-highlighted preview.",
     ],
   },
   {
@@ -69,11 +109,12 @@ const FEATURE_SECTIONS: FeatureSection[] = [
   },
   {
     title: "Sharing Workflows",
-    summary: "Share from file actions, bulk selection, and page-level context links.",
+    summary: "Share from file actions, personal folder links, and page-level context links.",
     points: [
       "Native file sharing with fallback behavior for unsupported devices.",
       "Dialog-driven preparation/progress for share and zip operations.",
       "Page share actions preserve active route/query context.",
+      "Personal folder share links can be imported directly into Personal Repository.",
     ],
   },
   {

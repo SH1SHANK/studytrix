@@ -3,15 +3,42 @@
 > **Status**: Beta / Experimental
 > **Current app version**: `v0.9.4-experimental` (released on `2026-02-23`)
 
-Studytrix is an offline-first academic workspace built with Next.js 16, React 19, and TypeScript. It combines Drive-backed content browsing, local persistence, on-device AI for semantic search and OCR denoising, command-driven navigation, and mobile/PWA-aware workflows into a single high-performance interface.
+Studytrix is an offline-first academic workspace built with Next.js 16, React 19, and TypeScript. It combines global academic browsing, a local-first Personal Repository, on-device AI for semantic search and OCR denoising, command-driven navigation, and mobile/PWA-aware workflows into a single high-performance interface.
 
 ## Product Goals
 
 - Provide reliable, offline-first access to study material, even with unstable connectivity.
-- Keep cloud credentials and privileged access server-side to ensure maximum security.
+- Keep user workflows local-first with no account/login requirement.
+- Keep privileged data-access credentials server-side only where global repository routes require them.
 - Improve content discovery with command scopes, tags, semantic embedding search, and contextual navigation.
 - Empower learning through completely local, privacy-first AI text cleanup and extraction.
 - Support fast, safe bulk actions for download, zip, and share workflows.
+
+## Personal Repository Highlights
+
+- No user authentication/login flow; app usage is local-first.
+- Add folders from:
+  - Studytrix import links or Google Drive folder links (single unified link flow)
+  - Local device folders (PWA/File System Access supported devices)
+- Smart organization layers:
+  - Smart Collections (auto-grouped clusters)
+  - Pinned files shelf
+  - Study Sets (cross-folder custom bundles)
+- Quick Capture:
+  - Photo
+  - Text note
+  - Voice note
+- Code-aware file experience:
+  - Language detection by extension
+  - In-app syntax-highlighted code preview (`highlight.js`)
+  - Notebook-safe preview behavior for `.ipynb`
+- Folder health + reconnect UX:
+  - Permission reconnect banners for local folders
+  - Health states for sync freshness and offline readiness
+  - Visibility-based auto-refresh for stale local scans
+- Action-priority header in Personal Repository:
+  - Primary: Add Folder, Create Folder, Quick Capture, New Study Set
+  - Secondary: Folder Health
 
 ## In-App Guide Pages
 
@@ -51,6 +78,15 @@ Scope prefixes:
 - Added cross-repository semantic suggestions in global scope, surfacing high-confidence Personal Repository matches in a dedicated section.
 - Expanded intelligence indexing coverage and scope filtering behavior for deeper nested repository structures.
 - Upgraded model download + indexing setup UX with clearer staged progress, richer animated bars, and improved current-file feedback.
+
+### Rolling Updates After v0.9.4 (`2026-02-24` to `2026-02-26`)
+
+- Added local device folder support with permission-aware reconnect handling and background refresh triggers.
+- Added Smart Collections, pinned files shelf, and Study Sets for Personal Repository organization.
+- Added Quick Capture flows (photo, note, voice) with local-first persistence.
+- Added code file support and in-app code preview with lazy-loaded `highlight.js`.
+- Added classmate import/share link handling with local share tracking.
+- Redesigned Personal Repository action header and normalized mobile dialog/sheet behavior for a more seamless UX.
 
 ### v0.9.3-experimental - Intelligence UX Polish + Local Model Switching (`2026-02-23`)
 
@@ -181,7 +217,7 @@ Scope prefixes:
 | State | Zustand |
 | Persistence | IndexedDB, File System Access API |
 | Local AI | `@huggingface/transformers` (Web Worker + WebAssembly/WebGPU) |
-| Cloud | Google Drive API, Open-Meteo (greeting weather context) |
+| Cloud | Google Drive API (global repository read proxy), Open-Meteo (optional greeting weather context) |
 | Caching | Redis + in-memory fallback |
 | Compression | `fflate` (client zip generation) |
 
@@ -191,7 +227,7 @@ Scope prefixes:
 
 - Node.js 20+
 - Redis (recommended for production cache/rate-limit behavior)
-- Google Cloud service account with Drive read permissions
+- Google Cloud service account with Drive read permissions (only needed for Drive-backed global repository APIs)
 
 ### Install
 
@@ -203,7 +239,9 @@ npm install
 
 ### Configure
 
-Create `.env.local` from `.env.local.example`. Keep Google private key line breaks intact.
+Create `.env.local` from `.env.local.example`.
+
+If you use global repository Drive APIs, keep Google private key line breaks intact in env configuration.
 
 ### Run
 
