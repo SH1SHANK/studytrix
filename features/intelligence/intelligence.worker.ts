@@ -18,6 +18,7 @@ import {
   INTELLIGENCE_FALLBACK_MODEL_ID,
   INTELLIGENCE_MAX_QUERY_CACHE_ENTRIES,
 } from "./intelligence.constants";
+import { TAG_SEEDS } from "./intelligence.tag-seeds";
 
 type MaybeFeatureExtractionResult = {
   data?: ArrayLike<number>;
@@ -96,6 +97,8 @@ let transformersModulePromise: Promise<TransformersModule> | null = null;
 
 const embeddingIndex = new Map<string, IndexedEntry>();
 const queryVectorCache = new Map<string, number[]>();
+const tagSeedVectors = new Map<string, number[]>();
+let seedsEmbedded = false;
 
 let isIndexing = false;
 const indexingQueue: IndexableEntity[][] = [];
@@ -187,7 +190,63 @@ function fileSizeLabel(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function getExtension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) {
+    return "";
+  }
+  return name.slice(dot + 1).trim().toLowerCase();
+}
+
+const CODE_LANGUAGE_BY_EXTENSION: Record<string, string> = {
+  py: "Python",
+  c: "C",
+  h: "C",
+  cpp: "C++",
+  cc: "C++",
+  cxx: "C++",
+  hpp: "C++",
+  java: "Java",
+  js: "JavaScript",
+  mjs: "JavaScript",
+  cjs: "JavaScript",
+  ts: "TypeScript",
+  tsx: "TypeScript",
+  html: "HTML",
+  htm: "HTML",
+  css: "CSS",
+  scss: "CSS",
+  sass: "CSS",
+  m: "MATLAB",
+  r: "R",
+  sh: "Shell Script",
+  bash: "Shell Script",
+  zsh: "Shell Script",
+  sql: "SQL",
+  vhd: "VHDL",
+  vhdl: "VHDL",
+  v: "Verilog",
+  s: "Assembly",
+  asm: "Assembly",
+};
+
+function isCodeFileName(name: string): boolean {
+  const extension = getExtension(name);
+  return Boolean(CODE_LANGUAGE_BY_EXTENSION[extension]);
+}
+
+function getCodeLanguageFromName(name: string): string | null {
+  const extension = getExtension(name);
+  return CODE_LANGUAGE_BY_EXTENSION[extension] ?? null;
+}
+
 function buildEmbeddingInput(entity: IndexableEntity): string {
+  const additionalSignals: string[] = [];
+  if (!entity.isFolder && isCodeFileName(entity.name)) {
+    const language = getCodeLanguageFromName(entity.name);
+    additionalSignals.push(language ?? "", "source code", "implementation");
+  }
+
   const typeSignal = entity.isFolder
     ? "folder directory"
     : mimeToLabel(entity.mimeType ?? "");
@@ -198,6 +257,7 @@ function buildEmbeddingInput(entity: IndexableEntity): string {
     entity.name,
     typeSignal,
     entity.tags?.join(" ") ?? "",
+    additionalSignals.join(" "),
     entity.mimeType ? mimeToLabel(entity.mimeType) : "",
     typeof entity.size === "number" ? fileSizeLabel(entity.size) : "",
     entity.modifiedTime ? new Date(entity.modifiedTime).getFullYear().toString() : "",
@@ -231,6 +291,161 @@ function cosineSimilarity(left: readonly number[], right: readonly number[]): nu
 
   const score = dot / (Math.sqrt(leftMag) * Math.sqrt(rightMag));
   return Math.max(0, Math.min(1, score));
+}
+
+function squaredDistance(left: readonly number[], right: readonly number[]): number {
+  const length = Math.min(left.length, right.length);
+  if (length === 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let sum = 0;
+  for (let i = 0; i < length; i += 1) {
+    const delta = (left[i] ?? 0) - (right[i] ?? 0);
+    sum += delta * delta;
+  }
+
+  return sum;
+}
+
+function runKMeans(fileIds: string[], requestedK: number): Array<{ memberIds: string[] }> {
+  const candidates = fileIds
+    .map((fileId) => embeddingIndex.get(fileId))
+    .filter((entry): entry is IndexedEntry => Boolean(entry))
+    .map((entry) => ({
+      fileId: entry.fileId,
+      vector: entry.vector,
+    }));
+
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const uniqueCandidates = new Map<string, { fileId: string; vector: number[] }>();
+  for (const candidate of candidates) {
+    if (!uniqueCandidates.has(candidate.fileId)) {
+      uniqueCandidates.set(candidate.fileId, candidate);
+    }
+  }
+
+  const points = Array.from(uniqueCandidates.values());
+  const k = Math.max(1, Math.min(Math.floor(requestedK), points.length));
+  const assignments = new Array<number>(points.length).fill(-1);
+  const centroids = points.slice(0, k).map((point) => [...point.vector]);
+  const dimension = centroids[0]?.length ?? 0;
+
+  for (let iteration = 0; iteration < 20; iteration += 1) {
+    let changed = false;
+
+    for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+      const point = points[pointIndex];
+      let bestCluster = 0;
+      let bestDistance = Number.POSITIVE_INFINITY;
+
+      for (let clusterIndex = 0; clusterIndex < centroids.length; clusterIndex += 1) {
+        const distance = squaredDistance(point.vector, centroids[clusterIndex]);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestCluster = clusterIndex;
+        }
+      }
+
+      if (assignments[pointIndex] !== bestCluster) {
+        assignments[pointIndex] = bestCluster;
+        changed = true;
+      }
+    }
+
+    if (!changed && iteration > 0) {
+      break;
+    }
+
+    const sums = Array.from({ length: k }, () => new Array<number>(dimension).fill(0));
+    const counts = new Array<number>(k).fill(0);
+
+    for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+      const cluster = assignments[pointIndex];
+      if (cluster < 0 || cluster >= k) {
+        continue;
+      }
+
+      counts[cluster] += 1;
+      const point = points[pointIndex];
+      for (let dim = 0; dim < dimension; dim += 1) {
+        sums[cluster][dim] += point.vector[dim] ?? 0;
+      }
+    }
+
+    for (let clusterIndex = 0; clusterIndex < k; clusterIndex += 1) {
+      if (counts[clusterIndex] <= 0) {
+        continue;
+      }
+
+      const mean = sums[clusterIndex].map((value) => value / counts[clusterIndex]);
+      centroids[clusterIndex] = normalizeL2(mean);
+    }
+  }
+
+  const memberIdsByCluster = new Map<number, string[]>();
+  for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+    const cluster = assignments[pointIndex];
+    if (cluster < 0) {
+      continue;
+    }
+
+    const current = memberIdsByCluster.get(cluster) ?? [];
+    current.push(points[pointIndex].fileId);
+    memberIdsByCluster.set(cluster, current);
+  }
+
+  return Array.from(memberIdsByCluster.values())
+    .filter((memberIds) => memberIds.length > 0)
+    .map((memberIds) => ({ memberIds }))
+    .sort((left, right) => right.memberIds.length - left.memberIds.length);
+}
+
+async function ensureTagSeedsEmbedded(): Promise<void> {
+  if (seedsEmbedded) {
+    return;
+  }
+
+  const activeEmbedder = embedder;
+  if (!activeEmbedder) {
+    return;
+  }
+
+  for (const seed of TAG_SEEDS) {
+    if (tagSeedVectors.has(seed)) {
+      continue;
+    }
+    const vector = await activeEmbedder(seed);
+    tagSeedVectors.set(seed, vector);
+  }
+
+  seedsEmbedded = true;
+}
+
+function suggestTags(fileId: string, topK: number): string[] {
+  const entry = embeddingIndex.get(fileId);
+  if (!entry || tagSeedVectors.size === 0) {
+    return [];
+  }
+
+  const ranked = Array.from(tagSeedVectors.entries())
+    .map(([tag, vector]) => ({
+      tag,
+      score: cosineSimilarity(entry.vector, vector),
+    }))
+    .filter((item) => item.score > 0.55)
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+      return left.tag.localeCompare(right.tag);
+    })
+    .slice(0, topK);
+
+  return ranked.map((item) => item.tag);
 }
 
 function postWorkerEvent(message: IntelligenceWorkerEventMessage): void {
@@ -420,7 +635,10 @@ async function ensureEmbedder(modelId: string): Promise<void> {
 
   dimension = resolveVectorDimension(modelId);
   queryVectorCache.clear();
+  tagSeedVectors.clear();
+  seedsEmbedded = false;
   postWorkerEvent({ type: "MODEL_READY", modelId });
+  void ensureTagSeedsEmbedded().catch(() => undefined);
 }
 
 async function getQueryVector(query: string): Promise<number[]> {
@@ -823,6 +1041,45 @@ async function handleRequest(message: IntelligenceWorkerAnyRequestEnvelope): Pro
         semanticScore: hit.score,
       })),
       tookMs: Math.max(0, nowMs() - startedAt),
+    };
+  }
+
+  if (type === "CLUSTER") {
+    const clusterPayload = payload as IntelligenceWorkerRequestMap["CLUSTER"];
+    const fileIds = Array.isArray(clusterPayload?.fileIds)
+      ? clusterPayload.fileIds
+        .filter((fileId): fileId is string => typeof fileId === "string")
+        .map((fileId) => fileId.trim())
+        .filter((fileId) => fileId.length > 0)
+      : [];
+    const k = typeof clusterPayload?.k === "number" && Number.isFinite(clusterPayload.k)
+      ? Math.max(1, Math.floor(clusterPayload.k))
+      : 1;
+
+    return {
+      clusters: runKMeans(fileIds, k),
+    };
+  }
+
+  if (type === "SUGGEST_TAGS") {
+    const tagPayload = payload as IntelligenceWorkerRequestMap["SUGGEST_TAGS"];
+    const fileId = typeof tagPayload?.fileId === "string" ? tagPayload.fileId.trim() : "";
+    const topK = typeof tagPayload?.topK === "number" && Number.isFinite(tagPayload.topK)
+      ? Math.max(1, Math.floor(tagPayload.topK))
+      : 3;
+
+    if (!fileId) {
+      return {
+        fileId: "",
+        tags: [],
+      };
+    }
+
+    await ensureTagSeedsEmbedded();
+
+    return {
+      fileId,
+      tags: suggestTags(fileId, topK),
     };
   }
 

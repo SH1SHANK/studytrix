@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { IconCopy, IconDownload, IconShare, IconStar, IconStarFilled, IconTag } from "@tabler/icons-react";
+import { IconCopy, IconDownload, IconLink, IconShare, IconStar, IconStarFilled, IconTag } from "@tabler/icons-react";
 import { PencilLine, RefreshCw, Settings2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
@@ -10,20 +10,25 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { expandFolders } from "@/features/bulk/bulk.service";
 import { downloadAsZip, shareAsZip } from "@/features/bulk/bulk.share";
+import { useCustomFoldersStore } from "@/features/custom-folders/custom-folders.store";
+import { FolderShareSheet } from "@/features/custom-folders/ui/FolderShareSheet";
 import { useShareStore } from "@/features/share/share.store";
 import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { useTagStore } from "@/features/tags/tag.store";
 import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
 import { cn } from "@/lib/utils";
+import type { CustomFolder } from "@/features/custom-folders/custom-folders.types";
 
 type PersonalFolderMenuProps = {
   entityId: string;
   folderLabel: string;
   itemCountLabel: string;
+  sourceKind?: CustomFolder["sourceKind"];
   refreshing: boolean;
   onRename: () => void;
   onRefresh: () => Promise<void> | void;
@@ -151,6 +156,7 @@ export function PersonalFolderMenu({
   entityId,
   folderLabel,
   itemCountLabel,
+  sourceKind = "drive",
   refreshing,
   onRename,
   onRefresh,
@@ -158,8 +164,10 @@ export function PersonalFolderMenu({
   onRemove,
 }: PersonalFolderMenuProps) {
   const [open, setOpen] = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const hydrationRequestedRef = useRef(false);
   const gateDownloadRisk = useDownloadRiskGate();
+  const shareCount = useCustomFoldersStore((state) => state.shareLinkCopiedCount[entityId] ?? 0);
 
   const {
     assignments,
@@ -364,6 +372,15 @@ export function PersonalFolderMenu({
     });
   }, [entityId, folderLabel, gateDownloadRisk, runAction]);
 
+  const handleOpenShareSheet = useCallback(() => {
+    if (sourceKind !== "drive") {
+      return;
+    }
+    triggerHaptic(8);
+    setOpen(false);
+    setShareSheetOpen(true);
+  }, [sourceKind]);
+
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
@@ -430,6 +447,19 @@ export function PersonalFolderMenu({
             disabled={refreshing}
             onSelect={() => runAction(onRefresh)}
           />
+          {sourceKind === "drive" ? (
+            <MenuAction
+              icon={<IconLink className="size-4 text-violet-500" />}
+              label="Share Folder Link"
+              description="Create a Studytrix import link"
+              onSelect={handleOpenShareSheet}
+            />
+          ) : null}
+          {sourceKind === "drive" && shareCount > 0 ? (
+            <DropdownMenuLabel className="px-2.5 py-1 text-[11px] text-muted-foreground">
+              Shared {shareCount} {shareCount === 1 ? "time" : "times"}
+            </DropdownMenuLabel>
+          ) : null}
           <MenuAction
             icon={<Settings2 className="size-4 text-indigo-500" />}
             label="Edit"
@@ -445,26 +475,34 @@ export function PersonalFolderMenu({
           />
         </section>
 
-        <section className="mt-1.5 rounded-xl border border-border/75 bg-muted/35 px-2 pb-2 pt-1.5">
-          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
-            <DockActionButton
-              icon={<IconDownload className="size-5 text-sky-500" />}
-              label="Download"
-              onSelect={handleDownload}
-            />
-            <DockActionButton
-              icon={<IconCopy className="size-5 text-slate-500" />}
-              label="Copy Link"
-              onSelect={handleCopyLink}
-            />
-            <DockActionButton
-              icon={<IconShare className="size-5 text-violet-500" />}
-              label="Share"
-              onSelect={handleShare}
-            />
-          </div>
-        </section>
+        {sourceKind === "drive" ? (
+          <section className="mt-1.5 rounded-xl border border-border/75 bg-muted/35 px-2 pb-2 pt-1.5">
+            <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+              <DockActionButton
+                icon={<IconDownload className="size-5 text-sky-500" />}
+                label="Download"
+                onSelect={handleDownload}
+              />
+              <DockActionButton
+                icon={<IconCopy className="size-5 text-slate-500" />}
+                label="Copy Link"
+                onSelect={handleCopyLink}
+              />
+              <DockActionButton
+                icon={<IconShare className="size-5 text-violet-500" />}
+                label="Share"
+                onSelect={handleShare}
+              />
+            </div>
+          </section>
+        ) : null}
       </DropdownMenuContent>
+      <FolderShareSheet
+        open={shareSheetOpen}
+        onOpenChange={setShareSheetOpen}
+        folderId={entityId}
+        folderLabel={folderLabel}
+      />
     </DropdownMenu>
   );
 }

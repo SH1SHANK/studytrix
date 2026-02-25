@@ -10,6 +10,7 @@ import { ScrollLockRecovery } from "@/components/layout/ScrollLockRecovery";
 import { OfflineRuntime } from "@/features/offline/ui/OfflineRuntime";
 import { StorageInit } from "@/features/offline/ui/StorageInit";
 import { RootRuntimeMounts } from "@/components/layout/RootRuntimeMounts";
+import { CustomFoldersInit } from "@/features/custom-folders/ui/CustomFoldersInit";
 import "./globals.css";
 
 const DEFAULT_SITE_URL = "https://learn.attendrix.app";
@@ -138,6 +139,7 @@ export default function RootLayout({
           <ThemeStatusBarSync />
           <SettingsProvider>
             <StorageInit />
+            <CustomFoldersInit />
             <OfflineRuntime />
             <ScrollLockRecovery />
             {children}

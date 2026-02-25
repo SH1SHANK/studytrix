@@ -4,6 +4,8 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
 
+const PUBLISHED_DATE = "February 23, 2026";
+
 export const metadata: Metadata = {
   title: "The Command Center: Your Study Cockpit",
   description:
@@ -16,146 +18,200 @@ export const metadata: Metadata = {
 export default function CommandCenterPage() {
   return (
     <AppShell headerTitle="Blog" hideHeaderFilters={true}>
-      <article className="px-4 py-5 sm:px-5">
-        <header className="rounded-2xl border border-border/80 bg-card/85 p-4 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>February 23, 2026</span>
+      <article className="mx-auto max-w-3xl px-4 py-6 sm:px-6 lg:py-8">
+        <header className="rounded-2xl border border-border/80 bg-card/85 p-6 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <time dateTime="2026-02-23">{PUBLISHED_DATE}</time>
             <span aria-hidden="true">·</span>
-            <Badge variant="outline" className="border-border/70 bg-muted/40">Feature</Badge>
+            <Badge
+              variant="outline"
+              className="border-border/70 bg-muted/40 text-xs"
+            >
+              Feature Deep Dive
+            </Badge>
             <span aria-hidden="true">·</span>
             <span>6 min read</span>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
             The Command Center: Your Study Cockpit
           </h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            The Command Center is the single most powerful interface in Studytrix. It's where you search, navigate,
-            and take action — all without leaving the keyboard. Think of it as a study cockpit that understands
-            what you mean, not just what you type.
+          <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Every great workflow needs a home base. The Command Center is the
+            single most powerful interface in Studytrix. It's where you search,
+            navigate, and take action—all without ever leaving the keyboard.
+            Think of it as a high-tech study cockpit that understands what you
+            mean, not just what you type.
           </p>
         </header>
 
-        <section className="mt-4 space-y-5 rounded-2xl border border-border/80 bg-card/80 p-4 shadow-sm">
+        <div className="mt-8 space-y-8 rounded-2xl border border-border/80 bg-card/80 p-6 shadow-sm sm:p-8">
           <section>
-            <h2 className="text-base font-semibold text-foreground">More Than a Search Bar</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              At first glance, the Command Center looks like a simple search bar. But beneath the surface,
-              it's running two search engines simultaneously, managing an on-device AI model, tracking folder
-              and tag scopes, and maintaining a responsive live-result interface — all in real time.
+            <h2 className="text-xl font-semibold text-foreground">
+              Way More Than a Search Bar
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              At first glance, the Command Center looks like a simple,
+              unassuming search box. But beneath the surface, it's an absolute
+              powerhouse. It runs two search engines simultaneously, manages an
+              on-device AI model, tracks your folder locations, and maintains a
+              lightning-fast live-result interface.
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Every keystroke triggers a debounced pipeline that queries your files across multiple dimensions.
-              Results appear instantly, ranked by relevance, with highlighted match fragments so you can
-              spot the right file at a glance.
+
+            <div className="my-6 overflow-hidden rounded-xl border border-border/50 bg-muted/20 p-4 text-center"></div>
+
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              As your fingers fly across the keyboard, the Command Center
+              instantly queries your files across multiple dimensions. Results
+              appear in real-time, perfectly ranked, with your matching words
+              highlighted so you can spot the right file at a single glance.
             </p>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-foreground">Dual-Engine Search</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              The Command Center runs two search engines in parallel:
+            <h2 className="text-xl font-semibold text-foreground">
+              Under the Hood: Dual-Engine Search
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              Why settle for one way to search when you can have two? The
+              Command Center runs two distinct search engines in parallel to
+              make sure you never lose a file again:
             </p>
-            <ul className="mt-3 space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
-              <li className="list-disc">
-                <strong>Keyword Search</strong> — Fast, exact-match search across file names, folder paths,
-                and tags. This is what runs when Smart Search is off or while the AI model is loading.
-              </li>
-              <li className="list-disc">
-                <strong>Semantic Search</strong> — Uses an on-device AI model (all-MiniLM-L6-v2) to understand
-                the <em>meaning</em> behind your query. A search for "photosynthesis" will find a file titled
-                "Plant Energy Conversion Notes" even though the words don't overlap.
-              </li>
-            </ul>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Results from both engines are blended together using a configurable balance. By default, semantic
-              results are weighted at 60%, but you can adjust this in Settings → Intelligence → Search Balance.
-              Moving the slider toward "Keyword" gives you exact-match precision; moving it toward "Meaning"
-              gives you conceptual breadth.
-            </p>
-          </section>
 
-          <section>
-            <h2 className="text-base font-semibold text-foreground">Scoped Search</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              You can narrow your search to a specific folder or tag. When you enter a scope, the search
-              results automatically filter to only include files within that context. This is especially
-              useful when you have hundreds of files across multiple subjects and want to focus on a
-              particular topic.
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Scopes are shown as breadcrumbs in the search bar, and you can exit a scope anytime by
-              pressing backspace or tapping the close icon.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-semibold text-foreground">Smart Search Status Indicators</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              The Command Center keeps you informed about what's happening behind the scenes:
-            </p>
-            <ul className="mt-3 space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
-              <li className="list-disc">
-                <strong>Warming up…</strong> — The AI model is being loaded for the first time. This
-                happens once per session and takes a few seconds.
+            <ul className="mt-4 space-y-4 pl-2 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              <li className="flex gap-3">
+                <span className="mt-0.5 text-primary">🔍</span>
+                <div>
+                  <strong className="text-foreground">
+                    Keyword Search (The Exact Match):
+                  </strong>{" "}
+                  Fast, literal search across file names, folder paths, and
+                  tags. Perfect for when you know exactly what you named a file.
+                </div>
               </li>
-              <li className="list-disc">
-                <strong>Learning your files…</strong> — The model is indexing your file library to create
-                semantic vectors. This runs in the background and doesn't block searching.
-              </li>
-              <li className="list-disc">
-                <strong>Smart search active</strong> — Everything is ready. Both keyword and semantic
-                results will appear.
-              </li>
-              <li className="list-disc">
-                <strong>Keyword fallback</strong> — The semantic engine couldn't run (e.g., model failed to
-                load), so results are keyword-only.
+              <li className="flex gap-3">
+                <span className="mt-0.5 text-primary">🧠</span>
+                <div>
+                  <strong className="text-foreground">
+                    Semantic Search (The Meaning Match):
+                  </strong>{" "}
+                  Uses an on-device AI model to understand the <em>concept</em>{" "}
+                  behind your query. A search for "photosynthesis" will find a
+                  file titled "Plant Energy Conversion Notes," even if the words
+                  don't overlap.
+                </div>
               </li>
             </ul>
+
+            <div className="my-6 overflow-hidden rounded-xl border border-border/50 bg-muted/20 p-4 text-center"></div>
+
+            <blockquote className="my-5 border-l-4 border-primary pl-4 italic text-foreground/90">
+              <strong>Pro Tip:</strong> You control the mix! Head to Settings →
+              Intelligence → Search Balance. Move the slider toward "Keyword"
+              for exact-match precision, or toward "Meaning" for conceptual
+              breadth.
+            </blockquote>
+          </section>
+
+          <hr className="border-border/60" />
+
+          <section>
+            <h2 className="text-xl font-semibold text-foreground">
+              Laser Focus with Scoped Search
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              When you have hundreds of files, sometimes you need to block out
+              the noise. By entering a "scope" (like a specific folder or tag),
+              the Command Center instantly filters results to only include files
+              within that context. Searching for "mitosis" inside your "Biology
+              101" scope ensures your "History" notes won't clutter the results.
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              Scopes appear as clean, visual breadcrumbs right inside the search
+              bar. Done with a scope? Just hit Backspace to zoom back out to
+              your entire library.
+            </p>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-foreground">The Sparkle Toggle</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Next to the search input, you'll notice a small sparkle (✦) icon. This is your per-session
-              Smart Search toggle. Tapping it turns semantic search on or off for the current session without
-              changing your global settings. It's useful when you want exact keyword matches temporarily.
+            <h2 className="text-xl font-semibold text-foreground">
+              The Magic Sparkle Toggle (✦)
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              Next to the search input, you'll notice a small sparkle icon. This
+              is your per-session Smart Search toggle. Sometimes you just want a
+              strict keyword search without the AI stepping in. Tapping the
+              sparkle turns semantic search off (or back on) for your current
+              session without messing up your global settings.
             </p>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-foreground">Match Highlighting</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              As you type, matching fragments in file titles and subtitles are highlighted. This makes it
-              easy to scan through results and understand <em>why</em> each file appeared. The highlighting
-              supports multi-word queries — each word is highlighted independently, so even partial matches
-              are visible.
+            <h2 className="text-xl font-semibold text-foreground">
+              Action Without Distraction
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              Finding your file is only half the battle; what you do next
+              matters just as much. The Command Center is built for action. From
+              any search result, you can instantly:
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-center text-foreground">
+                ⬇️ Download
+              </div>
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-center text-foreground">
+                🔗 Share Link
+              </div>
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-center text-foreground">
+                ⭐ Star Item
+              </div>
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 text-center text-foreground">
+                📋 Copy Content
+              </div>
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              With our new <strong>Copy Contents</strong> feature, you can even
+              extract a file's text directly from the search results without
+              ever opening the document.
             </p>
           </section>
 
-          <section>
-            <h2 className="text-base font-semibold text-foreground">Quick Actions</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              The Command Center isn't limited to search. From any file result, you can access the full
-              action menu: download, share, copy link, star, tag, make offline, view info, and — with
-              the new Copy Contents feature — extract and copy the file's text content.
-            </p>
-          </section>
-
-          <aside className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 text-sm text-foreground">
-            <p>
-              Open the Command Center by tapping the search bar on the floating dock, or by pressing
-              <kbd className="mx-1 rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 text-xs font-mono">/</kbd>
-              on desktop.
-            </p>
+          <aside className="mt-8 flex flex-col gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="font-semibold text-foreground">
+                Ready for takeoff?
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Open the Command Center anywhere in the app by tapping the
+                floating dock search bar.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center rounded-lg border border-border/80 bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm">
+              Desktop Shortcut:
+              <kbd className="ml-2 rounded border border-border/80 bg-muted px-2 py-1 font-mono text-xs text-primary shadow-sm">
+                /
+              </kbd>
+            </div>
           </aside>
-        </section>
+        </div>
 
-        <nav className="mt-4 flex items-center justify-between rounded-xl border border-border/80 bg-card/70 px-3 py-3 text-sm">
-          <Link href="/blog" className="text-muted-foreground transition-colors hover:text-foreground">
-            ← All articles
+        <nav className="mt-6 flex flex-col items-center justify-between gap-4 rounded-xl border border-border/80 bg-card/70 px-4 py-4 text-sm sm:flex-row sm:px-6">
+          <Link
+            href="/blog"
+            className="flex items-center text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <span aria-hidden="true" className="mr-2">
+              ←
+            </span>
+            Back to all articles
           </Link>
-          <Link href="/blog/how-semantic-search-works" className="font-medium text-primary transition-colors hover:text-primary/80">
-            Next: How Smart Search Works →
+          <Link
+            href="/blog/how-semantic-search-works"
+            className="flex items-center font-medium text-primary transition-colors hover:text-primary/80"
+          >
+            Read next: How Smart Search Works
+            <span aria-hidden="true" className="ml-2">
+              →
+            </span>
           </Link>
         </nav>
       </article>

@@ -261,6 +261,12 @@ const rawSettingsSchema: SettingsSchema = {
       category: "Repositories",
     },
     {
+      id: "personal_repository_local_folder_info",
+      label: "Local folder support requires Studytrix to be installed as an app.",
+      type: "info",
+      category: "Repositories",
+    },
+    {
       id: "personal_repository_clear_all",
       label: "Delete All Personal Folders",
       description: "Remove every folder saved in Personal Repository.",

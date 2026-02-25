@@ -92,6 +92,8 @@ export function getSettingIcon(id: string): ReactNode {
       return <IconEye {...props} />;
     case "personal_repository":
       return <IconFolderHeart {...props} />;
+    case "personal_repository_local_folder_info":
+      return <IconInfoCircle {...props} />;
     case "personal_repository_clear_all":
       return <IconTrash {...dangerProps} />;
     case "default_view_mode":

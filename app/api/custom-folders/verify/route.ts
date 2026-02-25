@@ -25,7 +25,7 @@ const OWNER_DOMAIN_BLOCKLIST = new Set([
 ]);
 
 const EXECUTABLE_NAME_PATTERN = /\.(exe|msi|bat|cmd|js|vbs|ps1|scr)$/i;
-const PHISHING_KEYWORD_PATTERN = /(verify account|urgent login|bank update|crypto giveaway|exam leak|password reset)/i;
+const PHISHING_KEYWORD_PATTERN = /(verify account|urgent access|bank update|crypto giveaway|exam leak|password reset)/i;
 const MISLEADING_KEYWORD_PATTERN = /(official|verified|support|urgent|security|admin|exam leak)/i;
 
 type VerifyRequestBody = {

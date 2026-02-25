@@ -33,6 +33,7 @@ import {
   IconStarFilled,
   IconTag,
 } from "@tabler/icons-react";
+import { BookPlus, Pin } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@/lib/utils";
@@ -42,6 +43,8 @@ import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
 import { useSelectionStore } from "@/features/selection/selection.store";
 import { Button } from "@/components/ui/button";
 import { EntityActionsMenu } from "@/features/file/ui/file-manager/EntityActionsMenu";
+import { useCustomFoldersStore } from "@/features/custom-folders/custom-folders.store";
+import { useStudySetsStore } from "@/features/custom-folders/study-sets.store";
 
 type FileRowProps = {
   id: string;
@@ -54,6 +57,8 @@ type FileRowProps = {
   webViewLink: string | null;
   isOffline?: boolean;
   isDownloading?: boolean;
+  repositoryKind?: "global" | "personal";
+  sourceKind?: "drive" | "local";
   viewMode: "grid" | "list";
   isOpen: boolean;
   swipeEnabled: boolean;
@@ -154,6 +159,8 @@ function FileRowComponent({
   webViewLink,
   isOffline = false,
   isDownloading = false,
+  repositoryKind = "global",
+  sourceKind = "drive",
   viewMode,
   isOpen,
   swipeEnabled,
@@ -191,6 +198,10 @@ function FileRowComponent({
       openDrawer: state.openDrawer,
     })),
   );
+  const pinnedFileIds = useCustomFoldersStore((state) => state.pinnedFileIds);
+  const pinFile = useCustomFoldersStore((state) => state.pinFile);
+  const unpinFile = useCustomFoldersStore((state) => state.unpinFile);
+  const openStudySetPicker = useStudySetsStore((state) => state.openPicker);
 
   const isSelected = selectedIds.has(id);
   const [showOfflinePulse, setShowOfflinePulse] = useState(false);
@@ -200,7 +211,11 @@ function FileRowComponent({
       ? "Downloading offline copy"
       : isFolder
         ? "Folder actions"
-        : "Online only";
+        : sourceKind === "local"
+          ? "Stored on this device"
+          : "Online only";
+  const isPinned = pinnedFileIds.includes(id);
+  const showPersonalFileActions = !isFolder && repositoryKind === "personal";
   const fileTags = useMemo<FileTagBadge[]>(() => {
     if (isFolder || assignedTagIds.length === 0) {
       return [];
@@ -278,6 +293,8 @@ function FileRowComponent({
       entityType={isFolder ? "folder" : "file"}
       title={title}
       description={menuStatus}
+      repositoryKind={repositoryKind}
+      sourceKind={sourceKind}
       entityDetails={{
         mimeType,
         sizeBytes,
@@ -292,6 +309,33 @@ function FileRowComponent({
       onRemoveOffline={handleRemoveOfflineAction}
       isOffline={isOffline}
       isDownloading={isDownloading}
+      customActions={showPersonalFileActions
+        ? [
+          {
+            id: isPinned ? "unpin_personal_file" : "pin_personal_file",
+            icon: <Pin className="size-4 text-primary" />,
+            label: isPinned ? "Unpin from Personal Repository" : "Pin to Personal Repository",
+            description: isPinned ? "Remove this file from pinned shelf" : "Keep this file on the pinned shelf",
+            onSelect: () => {
+              if (isPinned) {
+                unpinFile(id);
+                return;
+              }
+              pinFile(id);
+            },
+          },
+          {
+            id: "add_to_study_set",
+            icon: <BookPlus className="size-4 text-indigo-500" />,
+            label: "Add to Study Set",
+            description: "Choose an existing set or create a new one",
+            onSelect: () => {
+              openStudySetPicker(id);
+            },
+          },
+        ]
+        : []}
+      customActionsLabel="Personal Repository"
     />
   );
 

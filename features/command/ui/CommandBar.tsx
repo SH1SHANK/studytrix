@@ -93,6 +93,7 @@ import { mergeSemanticKeywordResults } from "@/features/intelligence/intelligenc
 import { expandSemanticQuery } from "@/features/intelligence/intelligence.synonyms";
 import { useIntelligenceStore } from "@/features/intelligence/intelligence.store";
 import { useOnboardingStore } from "@/features/onboarding/onboarding.store";
+import { useCommandCenterStore } from "@/features/command/command-center.store";
 import type {
   IntelligenceSearchHit,
   SearchScope as NavigationSearchScope,
@@ -163,6 +164,7 @@ export function CommandBar({
     [personalFolders],
   );
   const [open, setOpen] = useState(false);
+  const setCommandCenterOpen = useCommandCenterStore((state) => state.setOpen);
   const [query, setQuery] = useState("");
   const [driveItems, setDriveItems] = useState<DriveItem[]>([]);
   const [isDriveLoading, setIsDriveLoading] = useState(false);
@@ -238,6 +240,13 @@ export function CommandBar({
   const replaceUrl = useCallback((nextUrl: string) => {
     router.replace(nextUrl, { scroll: false });
   }, [router]);
+
+  useEffect(() => {
+    setCommandCenterOpen(open);
+    return () => {
+      setCommandCenterOpen(false);
+    };
+  }, [open, setCommandCenterOpen]);
   const {
     activeNavigationScope,
     setActiveNavigationScope,

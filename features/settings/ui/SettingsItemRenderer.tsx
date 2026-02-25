@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { SettingAction } from "./SettingAction";
 import { SettingRowShell } from "./SettingCardShell";
@@ -19,6 +19,7 @@ import {
   IntelligenceModelStatusRow,
   IntelligenceRemoveModelRow,
 } from "@/features/intelligence/ui/IntelligenceSettingsRows";
+import { deviceFolderSupported } from "@/features/custom-folders/custom-folders.device";
 import { getSettingIcon } from "./setting-icons";
 import type { SettingItem } from "@/features/settings/settings.types";
 
@@ -33,6 +34,12 @@ function SettingsItemRendererComponent({
   onAction,
   onDangerAction,
 }: SettingsItemRendererProps) {
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   if (setting.id === "storage_location") {
     return <SettingStorageLocation setting={setting} />;
   }
@@ -57,6 +64,15 @@ function SettingsItemRendererComponent({
   }
   if (setting.id === "semantic_search_experimental_notice") {
     return <IntelligenceExperimentalNoticeRow />;
+  }
+
+  if (setting.id === "personal_repository_local_folder_info") {
+    if (!hasMounted) {
+      return null;
+    }
+    if (deviceFolderSupported) {
+      return null;
+    }
   }
 
   // Internal state flag; never render in settings UI.

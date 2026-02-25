@@ -4,14 +4,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconPlus } from "@tabler/icons-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
 
 import { AddFolderCard } from "@/features/custom-folders/ui/AddFolderCard";
 import { AddFolderDialog } from "@/features/custom-folders/ui/AddFolderDialog";
 import { EditFolderSheet } from "@/features/custom-folders/ui/EditFolderSheet";
+import { LocalFolderReconnectBanner } from "@/features/custom-folders/ui/LocalFolderReconnectBanner";
 import { PersonalFolderCard } from "@/features/custom-folders/ui/PersonalFolderCard";
 import { PersonalFolderListRow } from "@/features/custom-folders/ui/PersonalFolderListRow";
+import { SmartCollectionsShelf } from "@/features/custom-folders/ui/SmartCollectionsShelf";
+import { PinnedFilesShelf } from "@/features/custom-folders/ui/PinnedFilesShelf";
+import { StudySetsShelf } from "@/features/custom-folders/ui/StudySetsShelf";
+import { StudySetDetailView } from "@/features/custom-folders/ui/StudySetDetailView";
+import { CollectionDetailView } from "@/features/custom-folders/ui/CollectionDetailView";
+import { useSmartCollectionsStore } from "@/features/custom-folders/smart-collections.store";
+import { useStudySetsStore } from "@/features/custom-folders/study-sets.store";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +31,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   getSortedPersonalFolders,
   useCustomFoldersStore,
 } from "@/features/custom-folders/custom-folders.store";
@@ -30,6 +45,7 @@ import {
   useDashboardToolbarStore,
 } from "@/features/dashboard/dashboard.toolbar.store";
 import type { CustomFolder } from "@/features/custom-folders/custom-folders.types";
+import { useIntelligenceStore } from "@/features/intelligence/intelligence.store";
 import { buildPersonalFolderRouteHref } from "@/features/navigation/repository-route";
 import { useTagStore } from "@/features/tags/tag.store";
 import type { FilterMode, TagAssignment } from "@/features/tags/tag.types";
@@ -49,6 +65,13 @@ type FolderTagPreview = {
   id: string;
   name: string;
   color: string;
+};
+
+type PersonalFileView = {
+  id: string;
+  name: string;
+  sourceLabel: string;
+  mimeType?: string;
 };
 
 function resolvePersonalAssignment(
@@ -86,7 +109,12 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   const removeFolder = useCustomFoldersStore((state) => state.removeFolder);
   const renameFolder = useCustomFoldersStore((state) => state.renameFolder);
   const refreshFolder = useCustomFoldersStore((state) => state.refreshFolder);
+  const refreshLocalFolder = useCustomFoldersStore((state) => state.refreshLocalFolder);
   const updateFolder = useCustomFoldersStore((state) => state.updateFolder);
+  const needsReconnect = useCustomFoldersStore((state) => state.needsReconnect);
+  const pinnedFileIds = useCustomFoldersStore((state) => state.pinnedFileIds);
+  const unpinFile = useCustomFoldersStore((state) => state.unpinFile);
+  const reorderPinnedFiles = useCustomFoldersStore((state) => state.reorderPinnedFiles);
   const [defaultSortValue] = useSetting("default_sort_order");
   const [defaultDashboardView] = useSetting("dashboard_default_view");
   const sortKey = useDashboardToolbarStore((state) => state.sortKey);
@@ -95,6 +123,19 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   const setViewMode = useDashboardToolbarStore((state) => state.setViewMode);
   const personalFilterMode = useDashboardToolbarStore((state) => state.personalFilterMode);
   const setPersonalFilterMode = useDashboardToolbarStore((state) => state.setPersonalFilterMode);
+  const indexedEntries = useIntelligenceStore((state) => state.indexedEntries);
+  const collections = useSmartCollectionsStore((state) => state.collections);
+  const lastGeneratedAt = useSmartCollectionsStore((state) => state.lastGeneratedAt);
+  const generateCollections = useSmartCollectionsStore((state) => state.generateCollections);
+  const dismissCollection = useSmartCollectionsStore((state) => state.dismissCollection);
+  const pinCollection = useSmartCollectionsStore((state) => state.pinCollection);
+  const sets = useStudySetsStore((state) => state.sets);
+  const createSet = useStudySetsStore((state) => state.createSet);
+  const addFileToSet = useStudySetsStore((state) => state.addFileToSet);
+  const removeFileFromSet = useStudySetsStore((state) => state.removeFileFromSet);
+  const reorderSetFiles = useStudySetsStore((state) => state.reorderSetFiles);
+  const renameSet = useStudySetsStore((state) => state.renameSet);
+  const deleteSet = useStudySetsStore((state) => state.deleteSet);
   const {
     assignments,
     tags,
@@ -119,6 +160,8 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   const [editingFolder, setEditingFolder] = useState<CustomFolder | null>(null);
   const [removeTarget, setRemoveTarget] = useState<CustomFolder | null>(null);
   const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+  const [activeStudySetId, setActiveStudySetId] = useState<string | null>(null);
 
   useEffect(() => {
     if (defaultDashboardView === "grid" || defaultDashboardView === "list") {
@@ -198,6 +241,11 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
     });
   }, [activeFilters, filterMode, orderedFolders, personalFilterMode, sortKey]);
 
+  const localFolders = useMemo(
+    () => orderedFolders.filter((folder) => (folder.sourceKind ?? "drive") === "local"),
+    [orderedFolders],
+  );
+
   const tagMap = useMemo(
     () => new Map(tags.map((tag) => [tag.id, { id: tag.id, name: tag.name, color: tag.color }])),
     [tags],
@@ -220,6 +268,83 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
 
   const hasFolders = orderedFolders.length > 0;
   const hasActivePersonalFilters = personalFilterMode !== "all" || activeFilters.length > 0;
+  const reconnectFolderIds = useMemo(() => Array.from(needsReconnect), [needsReconnect]);
+
+  const folderNameById = useMemo(
+    () => new Map(orderedFolders.map((folder) => [folder.id, folder.label])),
+    [orderedFolders],
+  );
+
+  const personalFileViewsById = useMemo(() => {
+    const map = new Map<string, PersonalFileView>();
+
+    for (const entry of indexedEntries) {
+      if (entry.repoKind !== "personal" || entry.isFolder) {
+        continue;
+      }
+
+      const sourceLabel = entry.customFolderId
+        ? (folderNameById.get(entry.customFolderId) ?? "Personal Repository")
+        : "Personal Repository";
+
+      map.set(entry.fileId, {
+        id: entry.fileId,
+        name: entry.name,
+        sourceLabel,
+        mimeType: entry.mimeType,
+      });
+    }
+
+    return map;
+  }, [folderNameById, indexedEntries]);
+
+  const allPersonalFiles = useMemo(
+    () => Array.from(personalFileViewsById.values()).sort((left, right) => left.name.localeCompare(right.name)),
+    [personalFileViewsById],
+  );
+
+  const activeCollection = useMemo(
+    () => collections.find((collection) => collection.id === activeCollectionId) ?? null,
+    [activeCollectionId, collections],
+  );
+  const activeCollectionFiles = useMemo(() => {
+    if (!activeCollection) {
+      return [] as Array<{ id: string; name: string; sourceLabel: string }>;
+    }
+
+    return activeCollection.fileIds
+      .map((fileId) => personalFileViewsById.get(fileId))
+      .filter((file): file is PersonalFileView => Boolean(file))
+      .map((file) => ({ id: file.id, name: file.name, sourceLabel: file.sourceLabel }));
+  }, [activeCollection, personalFileViewsById]);
+
+  const activeStudySet = useMemo(
+    () => sets.find((setItem) => setItem.id === activeStudySetId) ?? null,
+    [activeStudySetId, sets],
+  );
+
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      localFolders.forEach((folder) => {
+        const lastScanned = folder.syncStatus?.lastScannedAt ?? 0;
+        if (Date.now() - lastScanned > 30_000) {
+          void refreshLocalFolder(folder.id);
+        }
+      });
+
+      if (lastGeneratedAt === null || Date.now() - lastGeneratedAt > 86_400_000) {
+        void generateCollections();
+      }
+    };
+
+    handler();
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [generateCollections, lastGeneratedAt, localFolders, refreshLocalFolder]);
 
   return (
     <section
@@ -234,6 +359,55 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
       <header className="sr-only">
         <h2>Personal Repository</h2>
       </header>
+
+      <div className="mb-2 flex items-center justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button type="button" size="icon" variant="ghost" aria-label="Personal Repository actions" />}
+          >
+            <MoreHorizontal className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem
+              onClick={() => {
+                const nextName = `Study Set ${sets.length + 1}`;
+                const setId = createSet(nextName);
+                setActiveStudySetId(setId);
+                toast.success(`${nextName} created`);
+              }}
+            >
+              Create Study Set
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {reconnectFolderIds.length > 0 ? (
+        <div className="mb-2">
+          {reconnectFolderIds.map((folderId) => (
+            <LocalFolderReconnectBanner key={folderId} folderId={folderId} />
+          ))}
+        </div>
+      ) : null}
+
+      <SmartCollectionsShelf
+        collections={collections}
+        onOpenCollection={setActiveCollectionId}
+        onPinCollection={pinCollection}
+        onDismissCollection={dismissCollection}
+      />
+
+      <PinnedFilesShelf
+        pinnedFileIds={pinnedFileIds}
+        filesById={personalFileViewsById}
+        onUnpin={unpinFile}
+        onReorder={reorderPinnedFiles}
+      />
+
+      <StudySetsShelf
+        sets={sets}
+        onOpenSet={setActiveStudySetId}
+      />
 
       {!hasFolders ? (
         <div className="mt-4 rounded-2xl border border-dashed border-border/70 bg-card/50 px-5 py-8 text-center">
@@ -326,7 +500,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
             </span>
             <span>
               <span className="block text-sm font-semibold text-foreground">Add Folder</span>
-              <span className="block text-xs text-muted-foreground">Connect another Drive folder</span>
+              <span className="block text-xs text-muted-foreground">Connect another Drive folder or local folder</span>
             </span>
           </button>
 
@@ -345,6 +519,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                   title={folder.label}
                   meta={`${folder.fileCount} files · ${folder.folderCount} folders`}
                   folderColor={folder.colour}
+                  sourceKind={folder.sourceKind}
                   starred={folder.starred}
                   tags={folderTagPreviewById.get(folder.id) ?? []}
                   onOpen={() => {
@@ -402,6 +577,36 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
           toast.success(`${patch.label} updated in your Personal Repository`);
           setEditingFolder(null);
         }}
+      />
+
+      <CollectionDetailView
+        open={activeCollection !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setActiveCollectionId(null);
+          }
+        }}
+        collection={activeCollection}
+        files={activeCollectionFiles}
+      />
+
+      <StudySetDetailView
+        open={activeStudySet !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setActiveStudySetId(null);
+          }
+        }}
+        setItem={activeStudySet}
+        filesById={personalFileViewsById}
+        allPersonalFiles={allPersonalFiles}
+        onReorderFiles={reorderSetFiles}
+        onRemoveFile={removeFileFromSet}
+        onAddFiles={(setId, fileIds) => {
+          fileIds.forEach((fileId) => addFileToSet(setId, fileId));
+        }}
+        onRenameSet={renameSet}
+        onDeleteSet={deleteSet}
       />
 
       <Dialog open={removeTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setRemoveTarget(null)}>

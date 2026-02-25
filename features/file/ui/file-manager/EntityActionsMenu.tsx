@@ -38,6 +38,8 @@ type EntityActionsMenuProps = {
   entityType: EntityType;
   title: string;
   description?: string;
+  repositoryKind?: "global" | "personal";
+  sourceKind?: "drive" | "local";
   entityDetails?: {
     mimeType?: string | null;
     sizeBytes?: number | null;
@@ -327,6 +329,8 @@ export function EntityActionsMenu({
   entityType,
   title,
   description,
+  repositoryKind = "global",
+  sourceKind = "drive",
   entityDetails,
   align = "end",
   triggerClassName,
@@ -366,6 +370,8 @@ export function EntityActionsMenu({
 
   const assignment = assignments[entityId];
   const isStarred = assignment?.starred ?? false;
+  const showCloudActions = sourceKind !== "local";
+  const canUseOfflineActions = sourceKind !== "local";
 
   const handleToggleStar = useCallback(() => {
     triggerHaptic();
@@ -379,6 +385,9 @@ export function EntityActionsMenu({
   }, []);
 
   const handleCopyAction = useCallback(() => {
+    if (!showCloudActions) {
+      return;
+    }
     triggerHaptic(6);
     closeMenu();
 
@@ -404,9 +413,12 @@ export function EntityActionsMenu({
 
       toast.error("Clipboard is not available in this browser.");
     });
-  }, [closeMenu, entityDetails?.webViewLink, entityId, entityType]);
+  }, [closeMenu, entityDetails?.webViewLink, entityId, entityType, showCloudActions]);
 
   const handleShare = useCallback(() => {
+    if (!showCloudActions) {
+      return;
+    }
     triggerHaptic();
     closeMenu();
 
@@ -511,9 +523,12 @@ export function EntityActionsMenu({
         entityDetails?.mimeType ?? "application/octet-stream",
       );
     })();
-  }, [closeMenu, entityDetails?.mimeType, entityDetails?.sizeBytes, entityId, entityType, gateDownloadRisk, title]);
+  }, [closeMenu, entityDetails?.mimeType, entityDetails?.sizeBytes, entityId, entityType, gateDownloadRisk, showCloudActions, title]);
 
   const handleDownload = useCallback(() => {
+    if (!showCloudActions) {
+      return;
+    }
     triggerHaptic();
     closeMenu();
 
@@ -614,7 +629,7 @@ export function EntityActionsMenu({
 
       toast.error(`Could not download "${title}"`);
     })();
-  }, [closeMenu, entityDetails?.sizeBytes, entityId, entityType, fileStreamPath, gateDownloadRisk, title]);
+  }, [closeMenu, entityDetails?.sizeBytes, entityId, entityType, fileStreamPath, gateDownloadRisk, showCloudActions, title]);
 
   const handleManageTags = useCallback(() => {
     triggerHaptic(8);
@@ -625,6 +640,9 @@ export function EntityActionsMenu({
   }, [closeMenu, entityId, entityType]);
 
   const handleOfflineToggle = useCallback(() => {
+    if (!canUseOfflineActions) {
+      return;
+    }
     emitOfflineDebug(`Action tapped for ${entityType}: "${title}"`);
 
     if (isDownloading) {
@@ -733,7 +751,7 @@ export function EntityActionsMenu({
         );
       }
     })();
-  }, [closeMenu, entityDetails?.sizeBytes, entityId, entityType, gateDownloadRisk, isDownloading, isOffline, onRemoveOffline, title]);
+  }, [canUseOfflineActions, closeMenu, entityDetails?.sizeBytes, entityId, entityType, gateDownloadRisk, isDownloading, isOffline, onRemoveOffline, title]);
 
   const offlineActionLabel = isOffline
     ? "Remove Offline Copy"
@@ -793,7 +811,7 @@ export function EntityActionsMenu({
                   </span>
                 ) : (
                   <span className="inline-flex items-center rounded-full border border-border/80 bg-card/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    Cloud only
+                    {sourceKind === "local" ? "On device" : repositoryKind === "personal" ? "Personal" : "Cloud only"}
                   </span>
                 )}
               </div>
@@ -812,19 +830,21 @@ export function EntityActionsMenu({
                 description="Categorize and organize"
                 onSelect={handleManageTags}
               />
-              <MenuActionRow
-                icon={isOffline ? (
-                  <IconCloudDown className="size-4 text-rose-500 dark:text-rose-300" />
-                ) : isDownloading ? (
-                  <IconDeviceFloppy className="size-4 text-sky-500 dark:text-sky-300" />
-                ) : (
-                  <IconDeviceFloppy className="size-4 text-sky-500 dark:text-sky-300" />
-                )}
-                label={offlineActionLabel}
-                description={offlineActionDescription}
-                onSelect={handleOfflineToggle}
-                disabled={isDownloading}
-              />
+              {canUseOfflineActions ? (
+                <MenuActionRow
+                  icon={isOffline ? (
+                    <IconCloudDown className="size-4 text-rose-500 dark:text-rose-300" />
+                  ) : isDownloading ? (
+                    <IconDeviceFloppy className="size-4 text-sky-500 dark:text-sky-300" />
+                  ) : (
+                    <IconDeviceFloppy className="size-4 text-sky-500 dark:text-sky-300" />
+                  )}
+                  label={offlineActionLabel}
+                  description={offlineActionDescription}
+                  onSelect={handleOfflineToggle}
+                  disabled={isDownloading}
+                />
+              ) : null}
             </section>
 
             {hasCustomActions ? (
@@ -849,25 +869,27 @@ export function EntityActionsMenu({
               </section>
             ) : null}
 
-            <section className="rounded-xl border border-border/75 bg-muted/35 px-2 pb-2 pt-1.5">
-              <div className="mt-1.5 grid grid-cols-3 gap-1.5">
-                <DockActionButton
-                  icon={<IconDownload className="size-5 text-sky-500 dark:text-sky-300" />}
-                  label="Download"
-                  onSelect={handleDownload}
-                />
-                <DockActionButton
-                  icon={<IconCopy className="size-5 text-slate-500 dark:text-slate-300" />}
-                  label="Copy Link"
-                  onSelect={handleCopyAction}
-                />
-                <DockActionButton
-                  icon={<IconShare className="size-5 text-violet-500 dark:text-violet-300" />}
-                  label="Share"
-                  onSelect={handleShare}
-                />
-              </div>
-            </section>
+            {showCloudActions ? (
+              <section className="rounded-xl border border-border/75 bg-muted/35 px-2 pb-2 pt-1.5">
+                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                  <DockActionButton
+                    icon={<IconDownload className="size-5 text-sky-500 dark:text-sky-300" />}
+                    label="Download"
+                    onSelect={handleDownload}
+                  />
+                  <DockActionButton
+                    icon={<IconCopy className="size-5 text-slate-500 dark:text-slate-300" />}
+                    label="Copy Link"
+                    onSelect={handleCopyAction}
+                  />
+                  <DockActionButton
+                    icon={<IconShare className="size-5 text-violet-500 dark:text-violet-300" />}
+                    label="Share"
+                    onSelect={handleShare}
+                  />
+                </div>
+              </section>
+            ) : null}
           </div>
         </DropdownMenuContent>
       </DropdownMenu>

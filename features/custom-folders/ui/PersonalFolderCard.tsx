@@ -78,6 +78,7 @@ export function PersonalFolderCard({
           entityId={folder.id}
           folderLabel={folder.label}
           itemCountLabel={itemCountLabel}
+          sourceKind={folder.sourceKind}
           refreshing={refreshing}
           onRename={() => {
             setRenameDraft(folder.label);

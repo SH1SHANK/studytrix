@@ -4,6 +4,7 @@ import { useState } from "react";
 import { IconFolder, IconStarFilled } from "@tabler/icons-react";
 
 import { PersonalFolderMenu } from "@/features/custom-folders/ui/PersonalFolderMenu";
+import type { CustomFolder } from "@/features/custom-folders/custom-folders.types";
 import { cn } from "@/lib/utils";
 import { getTagChipStyle } from "@/features/tags/tag.filter";
 
@@ -18,6 +19,7 @@ type PersonalFolderListRowProps = {
   title: string;
   meta: string;
   folderColor: string;
+  sourceKind?: CustomFolder["sourceKind"];
   starred?: boolean;
   tags?: PersonalFolderListRowTag[];
   onOpen: () => void;
@@ -32,6 +34,7 @@ export function PersonalFolderListRow({
   title,
   meta,
   folderColor,
+  sourceKind = "drive",
   starred = false,
   tags = [],
   onOpen,
@@ -111,6 +114,7 @@ export function PersonalFolderListRow({
           entityId={entityId}
           folderLabel={title}
           itemCountLabel={meta}
+          sourceKind={sourceKind}
           refreshing={refreshing}
           onRename={onRename}
           onRefresh={async () => {

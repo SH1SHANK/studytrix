@@ -9,7 +9,6 @@ import { CommandInput } from "@/components/ui/command";
 import type { PrefixMode } from "@/features/command/command.prefix";
 import { ScopeChip } from "@/features/command/ui/ScopeChip";
 import type { SearchScope as NavigationSearchScope } from "@/features/intelligence/intelligence.types";
-import { ExperimentalNotice } from "@/features/intelligence/ui/ExperimentalNotice";
 import { IntelligenceStatusBox } from "@/features/intelligence/ui/IntelligenceStatusBox";
 import { SemanticSearchToggleRow } from "@/features/intelligence/ui/SemanticSearchToggleRow";
 import { cn } from "@/lib/utils";
@@ -190,7 +189,6 @@ export function CommandInputSection({
 
       <IntelligenceStatusBox />
       <SemanticSearchToggleRow />
-      <ExperimentalNotice />
     </>
   );
 }

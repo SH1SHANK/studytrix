@@ -32,6 +32,8 @@ import {
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
 import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
 import { useSelectionStore } from "@/features/selection/selection.store";
+import { useCustomFoldersStore } from "@/features/custom-folders/custom-folders.store";
+import { useIntelligenceStore } from "@/features/intelligence/intelligence.store";
 import {
   parseFolderTrailParam,
   FOLDER_TRAIL_IDS_QUERY_PARAM,
@@ -54,6 +56,8 @@ type FileListRow = {
   type: "folder" | "file";
   title: string;
   subtitle: string;
+  sourceKind: "drive" | "local";
+  customFolderId?: string;
   mimeType: string | null;
   sizeBytes: number;
   modifiedTime: string | null;
@@ -203,12 +207,95 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const { tasks: downloadTasks, startDownload, animateDownload, openDrawer } = useDownloadManager();
   const gateDownloadRisk = useDownloadRiskGate();
   const setContextItems = useSelectionStore((state) => state.setContextItems);
+  const customFolders = useCustomFoldersStore((state) => state.folders);
+  const indexedEntries = useIntelligenceStore((state) => state.indexedEntries);
+  const routeContext = useMemo(
+    () => parseRepositoryRoute({ pathname, searchParams }),
+    [pathname, searchParams],
+  );
+  const currentTrailLabels = useMemo(() => {
+    const labels = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_QUERY_PARAM));
+    if (labels.length > 0) {
+      return labels;
+    }
+    const fallback = courseName.trim();
+    return fallback ? [fallback] : [];
+  }, [courseName, searchParams]);
+  const currentTrailIds = useMemo(() => {
+    const ids = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_IDS_QUERY_PARAM));
+    if (ids.length > 0) {
+      return ids;
+    }
+    if (driveFolderId && driveFolderId.trim().length > 0) {
+      return [driveFolderId];
+    }
+    return [];
+  }, [driveFolderId, searchParams]);
+  const localRootFolderId = routeContext.repoKind === "personal"
+    ? (currentTrailIds[0] ?? (driveFolderId?.trim() || null))
+    : null;
+  const localRootFolder = useMemo(
+    () => customFolders.find((folder) =>
+      folder.id === localRootFolderId
+      && (folder.sourceKind ?? "drive") === "local") ?? null,
+    [customFolders, localRootFolderId],
+  );
+  const isLocalFolderContext = routeContext.repoKind === "personal" && localRootFolder !== null;
+  const localCurrentFolderId = routeContext.repoKind === "personal"
+    ? (routeContext.folderId?.trim() || driveFolderId?.trim() || "")
+    : "";
+  const localContextSourceEntries = useMemo(() => {
+    if (!isLocalFolderContext || !localRootFolder || !localCurrentFolderId) {
+      return [] as FileListRow[];
+    }
 
-  const { folders, files, isLoading, error, isStale, lastUpdatedAt } = useDriveFolder(driveFolderId);
+    const rows = indexedEntries
+      .filter((entry) =>
+        entry.repoKind === "personal"
+        && entry.customFolderId === localRootFolder.id
+        && entry.ancestorIds[entry.ancestorIds.length - 1] === localCurrentFolderId)
+      .map((entry): FileListRow => {
+        const sizeLabel = formatFileSize(entry.size ?? null);
+        const mimeLabel = getMimeLabel(entry.mimeType ?? "", entry.name);
+        const subtitle = entry.isFolder
+          ? "Folder"
+          : showFileMetadata
+            ? [sizeLabel, mimeLabel].filter(Boolean).join(" · ")
+            : "File";
+
+        return {
+          id: entry.fileId,
+          type: entry.isFolder ? "folder" : "file",
+          title: entry.name,
+          subtitle,
+          sourceKind: "local",
+          customFolderId: entry.customFolderId,
+          mimeType: entry.mimeType ?? null,
+          sizeBytes: entry.size ?? 0,
+          modifiedTime: entry.modifiedTime ?? null,
+          webViewLink: null,
+        };
+      })
+      .sort((left, right) => {
+        if (left.type !== right.type) {
+          return left.type === "folder" ? -1 : 1;
+        }
+        return left.title.localeCompare(right.title);
+      });
+
+    return rows;
+  }, [indexedEntries, isLocalFolderContext, localCurrentFolderId, localRootFolder, showFileMetadata]);
+  const driveFolderIdForQuery = isLocalFolderContext ? null : driveFolderId;
+  const { folders, files, isLoading, error, isStale, lastUpdatedAt } = useDriveFolder(driveFolderIdForQuery);
 
   useEffect(() => {
+    if (isLocalFolderContext) {
+      setContextItems([]);
+      return;
+    }
+
     setContextItems([...folders, ...files]);
-  }, [files, folders, setContextItems]);
+  }, [files, folders, isLocalFolderContext, setContextItems]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(pointer: coarse)");
@@ -263,23 +350,33 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   }, [offlineSnapshotUpdatedAt]);
 
   const folderRows = useMemo<FileListRow[]>(
-    () =>
-      folders.map((item): FileListRow => ({
+    () => {
+      if (isLocalFolderContext) {
+        return localContextSourceEntries.filter((entry) => entry.type === "folder");
+      }
+
+      return folders.map((item): FileListRow => ({
         id: item.id,
         type: "folder",
         title: item.name,
         subtitle: "Folder",
+        sourceKind: "drive",
         mimeType: item.mimeType,
         sizeBytes: 0,
         modifiedTime: item.modifiedTime,
         webViewLink: item.webViewLink,
-      })),
-    [folders],
+      }));
+    },
+    [folders, isLocalFolderContext, localContextSourceEntries],
   );
 
   const fileRows = useMemo<FileListRow[]>(
-    () =>
-      files.map((item): FileListRow => {
+    () => {
+      if (isLocalFolderContext) {
+        return localContextSourceEntries.filter((entry) => entry.type === "file");
+      }
+
+      return files.map((item): FileListRow => {
         const sizeLabel = formatFileSize(item.size);
         const mimeLabel = getMimeLabel(item.mimeType, item.name);
         const subtitle = showFileMetadata
@@ -291,13 +388,15 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           type: "file",
           title: item.name,
           subtitle,
+          sourceKind: "drive",
           mimeType: item.mimeType,
           sizeBytes: item.size ?? 0,
           modifiedTime: item.modifiedTime,
           webViewLink: item.webViewLink,
         };
-      }),
-    [files, showFileMetadata],
+      });
+    },
+    [files, isLocalFolderContext, localContextSourceEntries, showFileMetadata],
   );
 
   const allRows = useMemo<FileListRow[]>(() => [...folderRows, ...fileRows], [folderRows, fileRows]);
@@ -328,28 +427,6 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const rowContainerClass = isGridView
     ? cn("grid grid-cols-2", compactModeEnabled ? "gap-2" : "gap-3")
     : cn("flex flex-col", compactModeEnabled ? "gap-1" : "gap-2");
-  const routeContext = useMemo(
-    () => parseRepositoryRoute({ pathname, searchParams }),
-    [pathname, searchParams],
-  );
-  const currentTrailLabels = useMemo(() => {
-    const labels = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_QUERY_PARAM));
-    if (labels.length > 0) {
-      return labels;
-    }
-    const fallback = courseName.trim();
-    return fallback ? [fallback] : [];
-  }, [courseName, searchParams]);
-  const currentTrailIds = useMemo(() => {
-    const ids = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_IDS_QUERY_PARAM));
-    if (ids.length > 0) {
-      return ids;
-    }
-    if (driveFolderId && driveFolderId.trim().length > 0) {
-      return [driveFolderId];
-    }
-    return [];
-  }, [driveFolderId, searchParams]);
 
   const onToggleOpen = useCallback((id: string | null) => {
     setOpenRowId(id);
@@ -358,6 +435,9 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const handleMakeOffline = useCallback(
     async (item: FileListRow, sourceElement?: HTMLElement): Promise<void> => {
       if (item.type !== "file") {
+        return;
+      }
+      if (item.sourceKind === "local" || isLocalFolderContext) {
         return;
       }
 
@@ -385,7 +465,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         openDrawer();
       }
     },
-    [animateDownload, gateDownloadRisk, openDrawer, startDownload],
+    [animateDownload, gateDownloadRisk, isLocalFolderContext, openDrawer, startDownload],
   );
 
   const handleRemoveOffline = useCallback(
@@ -393,10 +473,13 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
       if (item.type !== "file") {
         return;
       }
+      if (item.sourceKind === "local" || isLocalFolderContext) {
+        return;
+      }
 
       await removeOffline(item.id);
     },
-    [removeOffline],
+    [isLocalFolderContext, removeOffline],
   );
 
   const activeDownloadsByFileId = useMemo(() => {
@@ -446,6 +529,13 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   }, [downloadTasks]);
 
   const getRowOfflineState = useCallback((item: FileListRow) => {
+    if (item.sourceKind === "local" || isLocalFolderContext) {
+      return {
+        isOffline: false,
+        isDownloading: false,
+      };
+    }
+
     if (item.type === "file") {
       const groupedFolderDownloadActive =
         typeof driveFolderId === "string"
@@ -474,7 +564,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
       isOffline: isFolderCompletedInGroup || offlineFolderIds.has(item.id),
       isDownloading: Boolean(folderStatus?.hasActive),
     };
-  }, [activeDownloadsByFileId, driveFolderId, folderGroupStatusByFolderId, offlineFiles, offlineFolderIds, offlineLibraryFileIds]);
+  }, [activeDownloadsByFileId, driveFolderId, folderGroupStatusByFolderId, isLocalFolderContext, offlineFiles, offlineFolderIds, offlineLibraryFileIds]);
 
   const getRowSubtitle = useCallback(
     (item: FileListRow): string => {
@@ -487,6 +577,10 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           return "Available Offline";
         }
 
+        return item.subtitle;
+      }
+
+      if (item.sourceKind === "local" || isLocalFolderContext) {
         return item.subtitle;
       }
 
@@ -510,7 +604,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
 
       return item.subtitle;
     },
-    [activeDownloadsByFileId, getRowOfflineState, offlineFiles],
+    [activeDownloadsByFileId, getRowOfflineState, isLocalFolderContext, offlineFiles],
   );
 
   const handleOpenRow = useCallback(
@@ -620,7 +714,9 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           {error}
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
-          Could not load files for {courseName}.
+          {isLocalFolderContext
+            ? "Could not load this local folder."
+            : `Could not load files for ${courseName}.`}
         </p>
       </div>
     );
@@ -637,7 +733,9 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           This folder is empty.
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
-          No files found in Drive for this course.
+          {isLocalFolderContext
+            ? "No indexed files found in this local folder."
+            : "No files found in Drive for this course."}
         </p>
       </div>
     );
@@ -694,6 +792,8 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                           webViewLink={item.webViewLink}
                           isOffline={rowState.isOffline}
                           isDownloading={rowState.isDownloading}
+                          repositoryKind={routeContext.repoKind}
+                          sourceKind={item.sourceKind}
                           viewMode={viewMode}
                           isOpen={openRowId === item.id}
                           swipeEnabled={swipeEnabled && !isGridView}
@@ -750,6 +850,8 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                           webViewLink={item.webViewLink}
                           isOffline={rowState.isOffline}
                           isDownloading={rowState.isDownloading}
+                          repositoryKind={routeContext.repoKind}
+                          sourceKind={item.sourceKind}
                           viewMode={viewMode}
                           isOpen={openRowId === item.id}
                           swipeEnabled={swipeEnabled && !isGridView}
@@ -788,6 +890,8 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                   webViewLink={item.webViewLink}
                   isOffline={rowState.isOffline}
                   isDownloading={rowState.isDownloading}
+                  repositoryKind={routeContext.repoKind}
+                  sourceKind={item.sourceKind}
                   viewMode={viewMode}
                   isOpen={openRowId === item.id}
                   swipeEnabled={swipeEnabled && !isGridView}

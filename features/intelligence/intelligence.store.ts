@@ -64,6 +64,7 @@ interface IntelligenceState {
   transientStatusCount: number;
   showExperimentalNoticeSession: boolean;
   activeSnapshotKey: string | null;
+  indexedEntries: IndexableEntity[];
   setEnabled: (enabled: boolean) => void;
   setRuntimeStatus: (status: IntelligenceRuntimeStatus, error?: string | null) => void;
   setModelDownloaded: (downloaded: boolean) => void;
@@ -123,6 +124,7 @@ const initialState = {
   transientStatusCount: 0,
   showExperimentalNoticeSession: false,
   activeSnapshotKey: null,
+  indexedEntries: [] as IndexableEntity[],
 };
 
 const INDEX_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
@@ -253,6 +255,20 @@ function resolveRepoCounts(files: IndexableEntity[]): RepoCounts {
     personalCount,
     folderCount,
   };
+}
+
+function mergeIndexedEntries(
+  current: IndexableEntity[],
+  incoming: IndexableEntity[],
+): IndexableEntity[] {
+  const merged = new Map<string, IndexableEntity>();
+  for (const entry of current) {
+    merged.set(entry.fileId, entry);
+  }
+  for (const entry of incoming) {
+    merged.set(entry.fileId, entry);
+  }
+  return Array.from(merged.values());
 }
 
 let workerBridgeBound = false;
@@ -518,6 +534,7 @@ export const useIntelligenceStore = create<IntelligenceState>()(
           lastError: null,
           transientStatus: null,
           transientStatusCount: 0,
+          indexedEntries: [],
         });
       },
 
@@ -596,6 +613,7 @@ export const useIntelligenceStore = create<IntelligenceState>()(
             indexGlobalCount: repoCounts.globalCount,
             indexPersonalCount: repoCounts.personalCount,
             indexFolderCount: repoCounts.folderCount,
+            indexedEntries: filesToIndex,
           });
 
           const corpusSignature = providedSignature ?? buildCorpusSignature(filesToIndex);
@@ -779,6 +797,7 @@ export const useIntelligenceStore = create<IntelligenceState>()(
             indexSize: stats.indexSize,
             lastIndexedAt: stats.updatedAt,
             indexLastCompletedAt: stats.updatedAt,
+            indexedEntries: mergeIndexedEntries(get().indexedEntries, validFiles),
           });
         }
       },
@@ -831,6 +850,7 @@ export const useIntelligenceStore = create<IntelligenceState>()(
           indexGlobalCount: Math.max(state.indexGlobalCount, repoCounts.globalCount),
           indexPersonalCount: Math.max(state.indexPersonalCount, repoCounts.personalCount),
           indexFolderCount: Math.max(state.indexFolderCount, repoCounts.folderCount),
+          indexedEntries: mergeIndexedEntries(state.indexedEntries, filesToIndex),
         }));
 
         const stats = await getIntelligenceClient().getStats().catch(() => null);
@@ -841,6 +861,7 @@ export const useIntelligenceStore = create<IntelligenceState>()(
             indexSize: stats.indexSize,
             lastIndexedAt: stats.updatedAt,
             indexLastCompletedAt: stats.updatedAt,
+            indexedEntries: mergeIndexedEntries(get().indexedEntries, filesToIndex),
           });
         }
       },
@@ -857,6 +878,7 @@ export const useIntelligenceStore = create<IntelligenceState>()(
           lastError: null,
           transientStatus: null,
           transientStatusCount: 0,
+          indexedEntries: [],
         });
       },
 
@@ -915,6 +937,7 @@ export const useIntelligenceStore = create<IntelligenceState>()(
           downloadProgress: null,
           transientStatus: null,
           transientStatusCount: 0,
+          indexedEntries: [],
         });
 
         await clearIntelligenceSnapshots().catch(() => undefined);

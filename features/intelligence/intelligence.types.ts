@@ -136,6 +136,14 @@ export interface IntelligenceWorkerRequestMap {
     scope: SearchScope;
     repoFilter?: "global" | "personal" | "both";
   };
+  CLUSTER: {
+    fileIds: string[];
+    k: number;
+  };
+  SUGGEST_TAGS: {
+    fileId: string;
+    topK?: number;
+  };
   PERSIST: {
     key: string;
   };
@@ -155,6 +163,15 @@ export interface IntelligenceWorkerResponseMap {
   QUERY: {
     hits: IntelligenceSearchHit[];
     tookMs: number;
+  };
+  CLUSTER: {
+    clusters: Array<{
+      memberIds: string[];
+    }>;
+  };
+  SUGGEST_TAGS: {
+    fileId: string;
+    tags: string[];
   };
   PERSIST: {
     snapshot: IntelligenceIndexSnapshot;

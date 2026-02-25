@@ -6,6 +6,10 @@ import {
 } from "@/features/offline/offline.query-cache.db";
 import { QUERY_CACHE_KEYS } from "@/features/offline/offline.query-cache.keys";
 import type { CustomFolder } from "@/features/custom-folders/custom-folders.types";
+import {
+  loadDirectoryHandle,
+  verifyHandlePermission,
+} from "@/features/custom-folders/local-handle.db";
 
 import { getAllQueryCacheKeysForFolder } from "./intelligence.db";
 import type { IndexableEntity } from "./intelligence.types";
@@ -31,6 +35,53 @@ type CachedDriveFolder = {
 
 const MAX_NETWORK_PAGES_PER_FOLDER = 120;
 const MAX_NETWORK_ITEMS_PER_FOLDER = 20_000;
+const LOCAL_FOLDER_MIME = "application/vnd.google-apps.folder";
+
+const EXTENSION_MIME_MAP: Record<string, string> = {
+  pdf: "application/pdf",
+  txt: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  json: "application/json",
+  html: "text/html",
+  css: "text/css",
+  js: "text/javascript",
+  ts: "text/typescript",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+  zip: "application/zip",
+};
+
+type LocalFileEntry = {
+  kind: "file";
+  name: string;
+  getFile: () => Promise<File>;
+};
+
+type LocalDirectoryEntry = {
+  kind: "directory";
+  name: string;
+  entries: () => AsyncIterable<[string, LocalEntry]>;
+};
+
+type LocalEntry = LocalFileEntry | LocalDirectoryEntry;
+
+type LocalDirectoryHandleLike = {
+  entries: () => AsyncIterable<[string, LocalEntry]>;
+};
 
 function normalizeFolderId(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -73,6 +124,37 @@ function normalizePageToken(value: unknown): string | undefined {
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function localStableHash(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function toLocalEntityId(
+  customFolderId: string,
+  fullPath: string,
+  kind: "file" | "folder",
+): string {
+  return `local_${kind}_${localStableHash(`${customFolderId}|${fullPath}|${kind}`)}`;
+}
+
+function guessMimeTypeFromFileName(name: string): string {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) {
+    return "application/octet-stream";
+  }
+
+  const extension = name.slice(dot + 1).trim().toLowerCase();
+  if (!extension) {
+    return "application/octet-stream";
+  }
+
+  return EXTENSION_MIME_MAP[extension] ?? "application/octet-stream";
 }
 
 async function fetchFolderItemsFromNetwork(folderId: string): Promise<DriveItem[]> {
@@ -362,6 +444,7 @@ export async function collectPersonalRepository(
 
   await Promise.all(customFolders.map(async (folder) => {
     try {
+      const sourceKind = folder.sourceKind ?? "drive";
       collected.set(folder.id, {
         fileId: folder.id,
         name: folder.label,
@@ -374,14 +457,28 @@ export async function collectPersonalRepository(
         customFolderId: folder.id,
       });
 
-      const entities = await collectFolderRecursive(
-        folder.id,
-        [folder.label],
-        [],
-        0,
-        "personal",
-        folder.id,
-      );
+      let entities: IndexableEntity[] = [];
+      if (sourceKind === "local") {
+        const handleKey = folder.localHandleKey?.trim();
+        if (handleKey) {
+          const handle = await loadDirectoryHandle(handleKey);
+          if (handle) {
+            const permission = await verifyHandlePermission(handle);
+            if (permission === "granted") {
+              entities = await collectLocalFolder(handle, folder.label, folder.id);
+            }
+          }
+        }
+      } else {
+        entities = await collectFolderRecursive(
+          folder.id,
+          [folder.label],
+          [],
+          0,
+          "personal",
+          folder.id,
+        );
+      }
 
       for (const entity of entities) {
         if (!collected.has(entity.fileId)) {
@@ -394,6 +491,86 @@ export async function collectPersonalRepository(
   }));
 
   return Array.from(collected.values());
+}
+
+export async function collectLocalFolder(
+  handle: FileSystemDirectoryHandle,
+  label: string,
+  customFolderId: string,
+  visited: Set<string> = new Set(),
+): Promise<IndexableEntity[]> {
+  const rootLabel = label.trim() || "Local Folder";
+  const entities: IndexableEntity[] = [];
+
+  const walk = async (
+    dirHandle: FileSystemDirectoryHandle,
+    parentPath: string,
+    ancestorIds: string[],
+    parentDepth: number,
+  ): Promise<void> => {
+    for await (const [, entry] of (dirHandle as unknown as LocalDirectoryHandleLike).entries()) {
+      const visitKey = `${entry.name}|${parentPath}`;
+      if (visited.has(visitKey)) {
+        continue;
+      }
+      visited.add(visitKey);
+
+      const fullPath = `${parentPath} > ${entry.name}`;
+      const depth = parentDepth + 1;
+
+      if (entry.kind === "directory") {
+        const folderId = toLocalEntityId(customFolderId, fullPath, "folder");
+        entities.push({
+          fileId: folderId,
+          name: entry.name,
+          fullPath,
+          ancestorIds: [...ancestorIds],
+          depth,
+          isFolder: true,
+          repoKind: "personal",
+          customFolderId,
+          mimeType: LOCAL_FOLDER_MIME,
+        });
+
+        await walk(
+          entry as unknown as FileSystemDirectoryHandle,
+          fullPath,
+          [...ancestorIds, folderId],
+          depth,
+        );
+
+        continue;
+      }
+
+      let size: number | undefined;
+      let modifiedTime: string | undefined;
+      try {
+        const file = await (entry as LocalFileEntry).getFile();
+        size = Number.isFinite(file.size) ? file.size : undefined;
+        modifiedTime = file.lastModified > 0
+          ? new Date(file.lastModified).toISOString()
+          : undefined;
+      } catch {
+      }
+
+      entities.push({
+        fileId: toLocalEntityId(customFolderId, fullPath, "file"),
+        name: entry.name,
+        fullPath,
+        ancestorIds: [...ancestorIds],
+        depth,
+        isFolder: false,
+        repoKind: "personal",
+        customFolderId,
+        mimeType: guessMimeTypeFromFileName(entry.name),
+        size,
+        modifiedTime,
+      });
+    }
+  };
+
+  await walk(handle, rootLabel, [customFolderId], 0);
+  return entities;
 }
 
 export async function collectAllEntities(customFolders: CustomFolder[] = []): Promise<IndexableEntity[]> {

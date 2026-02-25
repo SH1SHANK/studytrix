@@ -259,6 +259,36 @@ export class IntelligenceClient {
     return this.request("GET_STATS", undefined);
   }
 
+  async cluster(params: {
+    fileIds: string[];
+    k: number;
+  }): Promise<IntelligenceWorkerResponseMap["CLUSTER"]> {
+    const fileIds = params.fileIds
+      .filter((fileId) => typeof fileId === "string")
+      .map((fileId) => fileId.trim())
+      .filter((fileId) => fileId.length > 0);
+
+    return this.request("CLUSTER", {
+      fileIds,
+      k: Math.max(1, Math.floor(params.k)),
+    });
+  }
+
+  async suggestTags(params: {
+    fileId: string;
+    topK?: number;
+  }): Promise<IntelligenceWorkerResponseMap["SUGGEST_TAGS"]> {
+    const fileId = params.fileId.trim();
+    if (!fileId) {
+      return { fileId: "", tags: [] };
+    }
+
+    return this.request("SUGGEST_TAGS", {
+      fileId,
+      topK: typeof params.topK === "number" ? Math.max(1, Math.floor(params.topK)) : undefined,
+    });
+  }
+
   async persist(snapshotKey: string): Promise<void> {
     const result = await this.request("PERSIST", { key: snapshotKey });
     await setIntelligenceSnapshot(result.snapshot);

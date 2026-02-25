@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Files,
@@ -10,6 +10,9 @@ import {
   ShieldAlert,
   ShieldCheck,
   ClipboardPaste,
+  Cloud,
+  HardDrive,
+  Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,9 +29,15 @@ import { Switch } from "@/components/ui/switch";
 import {
   getPersonalRepositoryErrorMessage,
   normalizeDriveFolderInput,
+  normalizeImportFolderInput,
 } from "@/features/custom-folders/custom-folders.constants";
 import { useCustomFoldersStore } from "@/features/custom-folders/custom-folders.store";
 import type { CustomFolderVerifyResponse } from "@/features/custom-folders/custom-folders.types";
+import { deviceFolderSupported } from "@/features/custom-folders/custom-folders.device";
+import {
+  saveDirectoryHandle,
+  scanHandleShallow,
+} from "@/features/custom-folders/local-handle.db";
 import { ColourSwatchPicker } from "./ColourSwatchPicker";
 import { VerificationProgress } from "./VerificationProgress";
 import { VerificationStage, type VerificationStageStatus } from "./VerificationStage";
@@ -37,15 +46,25 @@ type AddFolderDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onFolderAdded?: (folderId: string) => void;
+  prefilledImportValue?: string | null;
+  onPrefilledImportConsumed?: () => void;
 };
 
 type VerifyPhase = "input" | "verifying" | "customize";
 type StageKey = "format" | "access" | "permission" | "contents" | "safety";
+type FolderSource = "drive" | "local" | "import";
 
 type StageDefinition = {
   key: StageKey;
   icon: ComponentType<{ className?: string }>;
   runningLabel: string;
+};
+
+type LocalSelection = {
+  name: string;
+  key: string;
+  fileCount: number;
+  folderCount: number;
 };
 
 const STAGES: readonly StageDefinition[] = [
@@ -64,15 +83,38 @@ function isTerminalStageStatus(status: VerificationStageStatus): boolean {
   return status === "success" || status === "warning" || status === "failed";
 }
 
+function createLocalFolderId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `local_folder_${crypto.randomUUID()}`;
+  }
+
+  return `local_folder_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+}
+
+function createLocalHandleKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `local_handle_${crypto.randomUUID()}`;
+  }
+
+  return `local_handle_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+}
+
 export function AddFolderDialog({
   open,
   onOpenChange,
   onFolderAdded,
+  prefilledImportValue = null,
+  onPrefilledImportConsumed,
 }: AddFolderDialogProps) {
   const addFolder = useCustomFoldersStore((state) => state.addFolder);
+  const prefilledImportHandledRef = useRef<string | null>(null);
+  const [deviceSourceAvailable, setDeviceSourceAvailable] = useState(false);
+  const [source, setSource] = useState<FolderSource>("drive");
   const [phase, setPhase] = useState<VerifyPhase>("input");
   const [inputValue, setInputValue] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
+  const [localPickerError, setLocalPickerError] = useState<string | null>(null);
+  const [localSelection, setLocalSelection] = useState<LocalSelection | null>(null);
   const [stageStatus, setStageStatus] = useState<Record<StageKey, VerificationStageStatus>>({
     format: "pending",
     access: "pending",
@@ -100,16 +142,27 @@ export function AddFolderDialog({
     [stageStatus],
   );
 
-  const hasSafetyWarning = Boolean(verifiedFolder?.safetyFlags.length);
+  const hasSafetyWarning = source !== "local" && Boolean(verifiedFolder?.safetyFlags.length);
   const labelCount = customLabel.trim().length;
   const canAdd = labelCount > 0 && labelCount <= 40 && (!hasSafetyWarning || safetyAcknowledged);
-  const normalizedFolderInput = useMemo(() => normalizeDriveFolderInput(inputValue), [inputValue]);
-  const canVerify = phase === "input" && normalizedFolderInput !== null;
+  const normalizedFolderInput = useMemo(() => {
+    if (source === "import") {
+      return normalizeImportFolderInput(inputValue);
+    }
+    return normalizeDriveFolderInput(inputValue);
+  }, [inputValue, source]);
+  const canVerify = (source === "drive" || source === "import")
+    && phase === "input"
+    && normalizedFolderInput !== null;
 
   const resetState = useCallback(() => {
+    prefilledImportHandledRef.current = null;
+    setSource("drive");
     setPhase("input");
     setInputValue("");
     setInputError(null);
+    setLocalPickerError(null);
+    setLocalSelection(null);
     setStageStatus({
       format: "pending",
       access: "pending",
@@ -139,6 +192,26 @@ export function AddFolderDialog({
     }
   }, [open, resetState]);
 
+  useEffect(() => {
+    setDeviceSourceAvailable(deviceFolderSupported);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !prefilledImportValue) {
+      return;
+    }
+
+    setSource("import");
+    setPhase("input");
+    setInputError(null);
+    setLocalPickerError(null);
+    setLocalSelection(null);
+    setInputValue(prefilledImportValue);
+    if (prefilledImportHandledRef.current !== prefilledImportValue) {
+      prefilledImportHandledRef.current = null;
+    }
+  }, [open, prefilledImportValue]);
+
   const setStage = useCallback((key: StageKey, status: VerificationStageStatus, label: string) => {
     setStageStatus((current) => ({ ...current, [key]: status }));
     setStageLabel((current) => ({ ...current, [key]: label }));
@@ -159,7 +232,11 @@ export function AddFolderDialog({
   const runVerification = useCallback(async () => {
     const folderId = normalizedFolderInput;
     if (!folderId) {
-      setInputError("This doesn't look like a valid Drive folder link.");
+      setInputError(
+        source === "import"
+          ? "Paste a valid Studytrix share link or Drive folder link."
+          : "This doesn't look like a valid Drive folder link.",
+      );
       return;
     }
 
@@ -265,19 +342,131 @@ export function AddFolderDialog({
     }
 
     setVerifiedFolder(payload);
+    setLocalSelection(null);
     setCustomLabel(payload.name.slice(0, 40));
     setSafetyAcknowledged(payload.safetyFlags.length === 0);
     setPhase("customize");
-  }, [normalizedFolderInput, setStage]);
+  }, [normalizedFolderInput, setStage, source]);
+
+  const handleChooseLocalFolder = useCallback(async () => {
+    if (!deviceSourceAvailable) {
+      return;
+    }
+
+    try {
+      const picker = (window as Window & {
+        showDirectoryPicker?: (options?: {
+          mode?: "read" | "readwrite";
+          startIn?: unknown;
+        }) => Promise<FileSystemDirectoryHandle>;
+      }).showDirectoryPicker;
+
+      if (!picker) {
+        throw new Error("Directory picker unavailable");
+      }
+
+      const handle = await picker({ mode: "read", startIn: "documents" });
+      const key = createLocalHandleKey();
+      await saveDirectoryHandle(key, handle);
+      const counts = await scanHandleShallow(handle);
+
+      setLocalSelection({
+        name: handle.name,
+        key,
+        fileCount: counts.fileCount,
+        folderCount: counts.folderCount,
+      });
+      setVerifiedFolder(null);
+      setVerifiedFolderId("");
+      setLocalPickerError(null);
+      setCustomLabel(handle.name.slice(0, 40));
+      setSafetyAcknowledged(true);
+      setPhase("customize");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setLocalPickerError(null);
+        setPhase("input");
+        return;
+      }
+
+      setLocalPickerError("Couldn't access this folder. Try again.");
+    }
+  }, [deviceSourceAvailable]);
+
+  useEffect(() => {
+    if (!open || !prefilledImportValue) {
+      return;
+    }
+
+    if (source !== "import" || phase !== "input") {
+      return;
+    }
+
+    if (!normalizedFolderInput) {
+      return;
+    }
+
+    if (prefilledImportHandledRef.current === prefilledImportValue) {
+      return;
+    }
+
+    prefilledImportHandledRef.current = prefilledImportValue;
+    onPrefilledImportConsumed?.();
+    void runVerification();
+  }, [
+    normalizedFolderInput,
+    onPrefilledImportConsumed,
+    open,
+    phase,
+    prefilledImportValue,
+    runVerification,
+    source,
+  ]);
 
   const addToPersonalRepository = useCallback(() => {
-    if (!verifiedFolder || !verifiedFolderId || !canAdd || isSubmitting) {
+    if (!canAdd || isSubmitting) {
+      return;
+    }
+
+    const now = Date.now();
+    const trimmedLabel = customLabel.trim().slice(0, 40);
+
+    if (source === "local") {
+      if (!localSelection) {
+        return;
+      }
+
+      const localFolderId = createLocalFolderId();
+      setIsSubmitting(true);
+      addFolder({
+        id: localFolderId,
+        label: trimmedLabel,
+        colour: customColour,
+        pinnedToTop,
+        addedAt: now,
+        lastRefreshedAt: now,
+        fileCount: localSelection.fileCount,
+        folderCount: localSelection.folderCount,
+        accessVerifiedAt: now,
+        sourceKind: "local",
+        localHandleKey: localSelection.key,
+        syncStatus: {
+          lastScannedAt: 0,
+          fileCount: localSelection.fileCount,
+          lastSyncError: null,
+        },
+      });
+      toast.success(`${trimmedLabel} added to your Personal Repository`);
+      onFolderAdded?.(localFolderId);
+      onOpenChange(false);
+      return;
+    }
+
+    if (!verifiedFolder || !verifiedFolderId) {
       return;
     }
 
     setIsSubmitting(true);
-    const now = Date.now();
-    const trimmedLabel = customLabel.trim().slice(0, 40);
     addFolder({
       id: verifiedFolderId,
       label: trimmedLabel,
@@ -288,6 +477,7 @@ export function AddFolderDialog({
       fileCount: verifiedFolder.fileCount,
       folderCount: verifiedFolder.folderCount,
       accessVerifiedAt: now,
+      sourceKind: "drive",
     });
     toast.success(`${trimmedLabel} added to your Personal Repository`);
     onFolderAdded?.(verifiedFolderId);
@@ -298,12 +488,76 @@ export function AddFolderDialog({
     customColour,
     customLabel,
     isSubmitting,
+    localSelection,
     onFolderAdded,
     onOpenChange,
     pinnedToTop,
+    source,
     verifiedFolder,
     verifiedFolderId,
   ]);
+
+  const sourceSelector = (
+    <div
+      className={`grid gap-2 rounded-xl border border-border/70 bg-muted/35 p-1.5 ${
+        deviceSourceAvailable ? "grid-cols-3" : "grid-cols-2"
+      }`}
+    >
+      <button
+        type="button"
+        className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors ${
+          source === "drive"
+            ? "bg-card text-foreground shadow-sm"
+            : "text-muted-foreground hover:bg-card/70"
+        }`}
+        onClick={() => {
+          setSource("drive");
+          setPhase("input");
+          setLocalPickerError(null);
+          setLocalSelection(null);
+        }}
+      >
+        <Cloud className="size-4" />
+        Google Drive
+      </button>
+      {deviceSourceAvailable ? (
+        <button
+          type="button"
+          className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors ${
+            source === "local"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground hover:bg-card/70"
+          }`}
+          onClick={() => {
+            setSource("local");
+            setPhase("input");
+            setInputError(null);
+          }}
+        >
+          <HardDrive className="size-4" />
+          This Device
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors ${
+          source === "import"
+            ? "bg-card text-foreground shadow-sm"
+            : "text-muted-foreground hover:bg-card/70"
+        }`}
+        onClick={() => {
+          setSource("import");
+          setPhase("input");
+          setInputError(null);
+          setLocalPickerError(null);
+          setLocalSelection(null);
+        }}
+      >
+        <Link2 className="size-4" />
+        Import Link
+      </button>
+    </div>
+  );
 
   return (
     <Dialog
@@ -321,10 +575,14 @@ export function AddFolderDialog({
             <DialogTitle>Add to Personal Repository</DialogTitle>
             <DialogDescription>
               {phase === "input"
-                ? "Paste a Google Drive folder link to verify and add it."
+                ? source === "drive"
+                  ? "Paste a Google Drive folder link to verify and add it."
+                  : source === "import"
+                    ? "Import a shared folder from a Studytrix link or a Drive folder link."
+                  : "Add a folder from your device. Your files stay on your device. Nothing is uploaded."
                 : phase === "verifying"
                   ? "Verifying folder access and safety checks."
-                  : "Folder verified. Customize how it appears in your Personal Repository."}
+                  : "Folder ready. Customize how it appears in your Personal Repository."}
             </DialogDescription>
           </DialogHeader>
 
@@ -338,52 +596,82 @@ export function AddFolderDialog({
                 transition={{ duration: 0.16 }}
                 className="mt-5 space-y-3"
               >
-                <div className="space-y-1.5">
-                  <label htmlFor="add-personal-folder-input" className="text-xs font-medium text-muted-foreground">
-                    Google Drive folder link
-                  </label>
-                  <div className="relative">
-                    <Input
-                      id="add-personal-folder-input"
-                      value={inputValue}
-                      autoFocus
-                      onChange={(event) => {
-                        setInputValue(event.target.value);
-                        if (inputError) {
-                          setInputError(null);
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && canVerify) {
-                          event.preventDefault();
-                          void runVerification();
-                        }
-                      }}
-                      placeholder="Paste a Google Drive folder link"
-                      className="h-11 pr-22"
-                    />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void handlePaste()}
-                      className="absolute right-1.5 top-1/2 h-8 -translate-y-1/2 rounded-lg px-2.5"
-                    >
-                      <ClipboardPaste className="size-3.5" />
-                      Paste
-                    </Button>
-                  </div>
-                </div>
-                {inputError ? (
-                  <p className="text-xs text-destructive">{inputError}</p>
-                ) : normalizedFolderInput ? (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                    Valid folder detected
+                {sourceSelector}
+                {!deviceSourceAvailable ? (
+                  <p className="text-xs text-muted-foreground">
+                    Local folder support requires Studytrix to be installed as an app.
                   </p>
                 ) : null}
-                <div className="rounded-xl border border-border/70 bg-card/45 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                  We only add folders after verifying access and basic safety checks.
-                </div>
+
+                {source === "drive" || source === "import" ? (
+                  <>
+                    {source === "import" ? (
+                      <div className="rounded-xl border border-border/70 bg-card/45 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                        Import a shared folder. Paste a Studytrix share link or a Google Drive folder link.
+                      </div>
+                    ) : null}
+                    <div className="space-y-1.5">
+                      <label htmlFor="add-personal-folder-input" className="text-xs font-medium text-muted-foreground">
+                        {source === "drive" ? "Google Drive folder link" : "Shared or Drive folder link"}
+                      </label>
+                      <div className="relative">
+                        <Input
+                          id="add-personal-folder-input"
+                          value={inputValue}
+                          autoFocus
+                          onChange={(event) => {
+                            setInputValue(event.target.value);
+                            if (inputError) {
+                              setInputError(null);
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" && canVerify) {
+                              event.preventDefault();
+                              void runVerification();
+                            }
+                          }}
+                          placeholder={source === "drive" ? "Paste a Google Drive folder link" : "Paste link here"}
+                          className="h-11 pr-22"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void handlePaste()}
+                          className="absolute right-1.5 top-1/2 h-8 -translate-y-1/2 rounded-lg px-2.5"
+                        >
+                          <ClipboardPaste className="size-3.5" />
+                          Paste
+                        </Button>
+                      </div>
+                    </div>
+                    {inputError ? (
+                      <p className="text-xs text-destructive">{inputError}</p>
+                    ) : normalizedFolderInput ? (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                        Valid folder detected
+                      </p>
+                    ) : null}
+                    <div className="rounded-xl border border-border/70 bg-card/45 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                      {source === "drive"
+                        ? "We only add folders after verifying access and basic safety checks."
+                        : "Import a shared folder. A copy will be added to your Personal Repository after verification."}
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-3 rounded-xl border border-border/70 bg-card/45 p-3.5">
+                    <p className="text-sm font-medium text-foreground">Add a folder from your device</p>
+                    <p className="text-xs text-muted-foreground">Your files stay on your device. Nothing is uploaded.</p>
+                    <Button type="button" onClick={() => void handleChooseLocalFolder()} className="w-full sm:w-auto">
+                      Choose Folder
+                    </Button>
+                    <p className="text-[11px] text-muted-foreground">Available when Studytrix is installed as an app.</p>
+                    {localPickerError ? (
+                      <p className="text-xs text-destructive">{localPickerError}</p>
+                    ) : null}
+                  </div>
+                )}
               </motion.div>
             ) : null}
 
@@ -424,7 +712,7 @@ export function AddFolderDialog({
             ) : null}
           </AnimatePresence>
 
-          {phase === "customize" && verifiedFolder ? (
+          {phase === "customize" ? (
             <AnimatePresence mode="wait">
               <motion.div
                 key="customize-view"
@@ -435,10 +723,9 @@ export function AddFolderDialog({
                 className="mt-5 space-y-4"
               >
                 <div className="rounded-2xl border border-primary/30 bg-primary/10 p-4">
-                  <p className="text-sm font-semibold text-primary">Folder verified</p>
+                  <p className="text-sm font-semibold text-primary">Folder ready</p>
                   <div className="mt-3 flex items-center gap-3">
                     <motion.div
-                      layoutId={`personal-folder-icon-${verifiedFolderId}`}
                       className="flex size-11 items-center justify-center rounded-xl border border-primary/30 bg-card text-primary"
                       initial={{ scale: 0.9, opacity: 0.8 }}
                       animate={{ scale: 1, opacity: 1 }}
@@ -447,9 +734,13 @@ export function AddFolderDialog({
                       <FolderOpen className="size-5" />
                     </motion.div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{verifiedFolder.name}</p>
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {source === "local" ? localSelection?.name : verifiedFolder?.name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        {verifiedFolder.fileCount} files · {verifiedFolder.folderCount} subfolders
+                        {source === "local"
+                          ? `${localSelection?.fileCount ?? 0} files · ${localSelection?.folderCount ?? 0} subfolders`
+                          : `${verifiedFolder?.fileCount ?? 0} files · ${verifiedFolder?.folderCount ?? 0} subfolders`}
                       </p>
                     </div>
                   </div>
@@ -508,9 +799,11 @@ export function AddFolderDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="button" disabled={!canVerify} onClick={() => void runVerification()}>
-                Verify Folder
-              </Button>
+              {source === "drive" || source === "import" ? (
+                <Button type="button" disabled={!canVerify} onClick={() => void runVerification()}>
+                  {source === "import" ? "Verify" : "Verify Folder"}
+                </Button>
+              ) : null}
             </div>
           ) : null}
 
