@@ -20,6 +20,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -41,6 +44,10 @@ export function SettingsMenu({ className }: SettingsMenuProps) {
   const { theme } = useTheme();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
 
+  const goTo = (href: string) => {
+    router.push(href);
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -59,16 +66,25 @@ export function SettingsMenu({ className }: SettingsMenuProps) {
         >
           <IconSettings className="size-[18px] text-muted-foreground" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[260px] p-2">
-          <div className="mb-2 px-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+        <DropdownMenuContent align="end" className="w-[280px] p-2">
+          <div className="mb-1.5 px-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Quick Panel
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Core controls and shortcuts
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-border/70 bg-card/70 p-2.5">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Appearance
             </p>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-10 w-full justify-start rounded-lg border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors"
+              className="h-10 w-full justify-start rounded-lg border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors"
               onClick={() => setThemeSheetOpen(true)}
             >
               <div className="flex w-full items-center gap-3">
@@ -79,101 +95,88 @@ export function SettingsMenu({ className }: SettingsMenuProps) {
               </div>
             </Button>
           </div>
-          
-          <DropdownMenuSeparator />
 
-          <div className="mt-1.5 flex flex-col gap-0.5">
-            {pathname !== "/settings" && (
-              <DropdownMenuItem
-                onClick={() => router.push("/settings")}
-                className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            {pathname !== "/settings" ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 justify-start rounded-lg border-border bg-card px-3 text-sm"
+                onClick={() => goTo("/settings")}
               >
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
-                  <IconSettings className="size-4 text-muted-foreground" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium leading-none text-foreground">Settings</span>
-                </div>
-              </DropdownMenuItem>
-            )}
-            
-            <DropdownMenuItem
-              onClick={() => router.push("/storage")}
-              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
+                <IconSettings className="size-3.5 text-muted-foreground" />
+                Settings
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-10 justify-start rounded-lg border-border bg-card px-3 text-sm"
+              onClick={() => goTo("/storage")}
             >
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
-                <IconDatabase className="size-4 text-primary" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium leading-none text-foreground">Storage Manager</span>
-                <span className="text-[10px] leading-none text-muted-foreground">Review offline data</span>
-              </div>
-            </DropdownMenuItem>
-            
-            <DropdownMenuItem
-              onClick={() => router.push("/tags")}
-              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
+              <IconDatabase className="size-3.5 text-primary" />
+              Storage
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-10 justify-start rounded-lg border-border bg-card px-3 text-sm"
+              onClick={() => goTo("/tags")}
             >
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
-                <IconTag className="size-4 text-muted-foreground" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium leading-none text-foreground">Manage Tags</span>
-                <span className="text-[10px] leading-none text-muted-foreground">Organize your files</span>
-              </div>
-            </DropdownMenuItem>
+              <IconTag className="size-3.5 text-muted-foreground" />
+              Tags
+            </Button>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger
+                className="!h-10 !rounded-lg border border-border bg-card px-3 text-sm"
+              >
+                <IconBook2 className="size-3.5 text-muted-foreground" />
+                Guides
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent align="end" className="w-52 p-1.5">
+                <DropdownMenuItem onClick={() => goTo("/changelog")} className="rounded-md py-2">
+                  <IconHistory className="size-3.5 text-muted-foreground" />
+                  Changelog
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => goTo("/features")} className="rounded-md py-2">
+                  <IconBolt className="size-3.5 text-muted-foreground" />
+                  Features
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => goTo("/shortcuts")} className="rounded-md py-2">
+                  <IconKeyboard className="size-3.5 text-muted-foreground" />
+                  Shortcut Hints
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => goTo("/documentation")} className="rounded-md py-2">
+                  <IconBook2 className="size-3.5 text-muted-foreground" />
+                  Documentation
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => goTo("/blog")} className="rounded-md py-2">
+                  <IconBook2 className="size-3.5 text-muted-foreground" />
+                  Blog
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => goTo("/data-handling")} className="rounded-md py-2">
+                  <IconBook2 className="size-3.5 text-muted-foreground" />
+                  Data Handling
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => goTo("/privacy")} className="rounded-md py-2">
+                  <IconBook2 className="size-3.5 text-muted-foreground" />
+                  Privacy
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => goTo("/terms")} className="rounded-md py-2">
+                  <IconBook2 className="size-3.5 text-muted-foreground" />
+                  Terms
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </div>
 
-            <DropdownMenuItem
-              onClick={() => router.push("/changelog")}
-              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
-            >
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
-                <IconHistory className="size-4 text-muted-foreground" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium leading-none text-foreground">Changelog</span>
-                <span className="text-[10px] leading-none text-muted-foreground">What changed in each release</span>
-              </div>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              onClick={() => router.push("/features")}
-              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
-            >
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
-                <IconBolt className="size-4 text-muted-foreground" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium leading-none text-foreground">Features</span>
-                <span className="text-[10px] leading-none text-muted-foreground">Platform capability overview</span>
-              </div>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              onClick={() => router.push("/shortcuts")}
-              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
-            >
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
-                <IconKeyboard className="size-4 text-muted-foreground" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium leading-none text-foreground">Shortcut Hints</span>
-                <span className="text-[10px] leading-none text-muted-foreground">Command and keyboard guide</span>
-              </div>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              onClick={() => router.push("/documentation")}
-              className="flex items-center gap-3 rounded-lg py-2.5 cursor-pointer"
-            >
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
-                <IconBook2 className="size-4 text-muted-foreground" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium leading-none text-foreground">Documentation</span>
-                <span className="text-[10px] leading-none text-muted-foreground">Detailed product and technical reference</span>
-              </div>
-            </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <div className="px-1 pb-0.5 pt-0.5 text-[10px] text-muted-foreground">
+            Reduced quick menu. Open Guides for release notes and docs.
           </div>
         </DropdownMenuContent>
       </DropdownMenu>

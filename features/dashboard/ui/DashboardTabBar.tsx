@@ -32,6 +32,10 @@ export function DashboardTabBar({
   onChange,
   showPersonalRepository,
 }: DashboardTabBarProps) {
+  if (!showPersonalRepository) {
+    return null;
+  }
+
   const tabs = showPersonalRepository ? TABS : [TABS[0]];
 
   return (

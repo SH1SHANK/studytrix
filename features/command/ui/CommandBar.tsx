@@ -70,11 +70,17 @@ import {
 } from "@/features/offline/offline.library";
 import { buildNestedRootSignature } from "@/features/offline/offline.query-cache.keys";
 import {
-  buildFolderRouteHref,
   parseFolderTrailParam,
   FOLDER_TRAIL_IDS_QUERY_PARAM,
   FOLDER_TRAIL_QUERY_PARAM,
 } from "@/features/navigation/folder-trail";
+import {
+  buildGlobalFolderRouteHref,
+  buildPersonalFolderRouteHref,
+  parseRepositoryRoute,
+  type RepositoryKind,
+} from "@/features/navigation/repository-route";
+import { hasExplicitRepositoryContext } from "@/features/command/command.repository-context";
 import { useSetting } from "@/ui/hooks/useSettings";
 import {
   isEssentialActionActive,
@@ -284,7 +290,19 @@ export function CommandBar({
     ? (parsedPathSemester as number)
     : dashboardSemester;
   const semesterId = String(effectiveSemester);
-  const folderId = isAcademicPath ? pathSegments[2] : undefined;
+  const routeContext = useMemo(
+    () => parseRepositoryRoute({ pathname, searchParams }),
+    [pathname, searchParams],
+  );
+  const hasRepoQueryParam = searchParams.has("repo");
+  const isPersonalPath = pathname.startsWith("/personal");
+  const hasExplicitRepoContext = hasExplicitRepositoryContext({
+    pathname,
+    isPersonalPath,
+    isAcademicPath,
+    hasRepoQueryParam,
+  });
+  const folderId = routeContext.folderId ?? undefined;
   const isFolderScope = Boolean(folderId);
 
   const {
@@ -297,6 +315,17 @@ export function CommandBar({
       setActiveRepositoryPage("global");
     }
   }, [activeRepositoryPage, personalRepositoryVisible, setActiveRepositoryPage]);
+
+  useEffect(() => {
+    if (!hasExplicitRepoContext) {
+      return;
+    }
+
+    const nextPage = routeContext.repoKind === "personal" ? "personal" : "global";
+    if (nextPage !== activeRepositoryPage) {
+      setActiveRepositoryPage(nextPage);
+    }
+  }, [activeRepositoryPage, hasExplicitRepoContext, routeContext.repoKind, setActiveRepositoryPage]);
 
   const nestedRoots = useMemo<NestedRootPayload[]>(
     () => {
@@ -337,12 +366,16 @@ export function CommandBar({
       return null;
     }
 
+    if (routeContext.repoKind === "personal") {
+      return folderId;
+    }
+
     const course = catalogCourses.find(
       (item) => item.courseCode === folderId || item.driveFolderId === folderId,
     );
 
     return course?.driveFolderId ?? folderId;
-  }, [catalogCourses, folderId]);
+  }, [catalogCourses, folderId, routeContext.repoKind]);
   const activeTrailLabels = useMemo(() => {
     const labels = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_QUERY_PARAM));
     if (labels.length > 0) {
@@ -378,6 +411,36 @@ export function CommandBar({
       activeNavigationScope.folderName,
     ].join(" > ");
   }, [activeNavigationScope]);
+
+  const activeRouteRepoKind: RepositoryKind = routeContext.folderId
+    ? routeContext.repoKind
+    : (activeRepositoryPage === "personal" ? "personal" : "global");
+  const buildRepositoryFolderRoute = useCallback((input: {
+    folderId: string;
+    folderName: string;
+    trailLabels?: readonly string[];
+    trailIds?: readonly string[];
+    repoKind?: RepositoryKind;
+  }): string => {
+    const repoKind = input.repoKind ?? activeRouteRepoKind;
+    if (repoKind === "personal") {
+      return buildPersonalFolderRouteHref({
+        folderId: input.folderId,
+        folderName: input.folderName,
+        trailLabels: input.trailLabels,
+        trailIds: input.trailIds,
+      });
+    }
+
+    return buildGlobalFolderRouteHref({
+      departmentId,
+      semesterId,
+      folderId: input.folderId,
+      folderName: input.folderName,
+      trailLabels: input.trailLabels,
+      trailIds: input.trailIds,
+    });
+  }, [activeRouteRepoKind, departmentId, semesterId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -500,15 +563,17 @@ export function CommandBar({
 
     if (nestedRoots.length === 0) {
       setIsNestedIndexing(false);
-      setNestedFileEntries([]);
-      const updatedAt = Date.now();
-      setNestedIndexUpdatedAt(updatedAt);
-      void setNestedCommandSnapshot({
-        scopeKey: nestedScopeKey,
-        rootSignature: nestedRootSignature,
-        updatedAt,
-        entries: [],
-      });
+      setNestedFileEntries((current) => (current.length === 0 ? current : []));
+      if (nestedIndexUpdatedAt <= 0) {
+        const updatedAt = Date.now();
+        setNestedIndexUpdatedAt(updatedAt);
+        void setNestedCommandSnapshot({
+          scopeKey: nestedScopeKey,
+          rootSignature: nestedRootSignature,
+          updatedAt,
+          entries: [],
+        });
+      }
       return;
     }
 
@@ -694,9 +759,7 @@ export function CommandBar({
         scope: "folder",
         entityId: item.id,
         payload: {
-          route: buildFolderRouteHref({
-            departmentId,
-            semesterId,
+          route: buildRepositoryFolderRoute({
             folderId: item.id,
             folderName: item.name,
             trailLabels: [...activeTrailLabels, item.name],
@@ -717,13 +780,12 @@ export function CommandBar({
           scope: "global",
           entityId: folder.id,
           payload: {
-            route: buildFolderRouteHref({
-              departmentId,
-              semesterId,
+            route: buildRepositoryFolderRoute({
               folderId: folder.id,
               folderName: folder.label,
               trailLabels: [folder.label],
               trailIds: [folder.id],
+              repoKind: "personal",
             }),
             departmentId,
             semesterId,
@@ -738,13 +800,12 @@ export function CommandBar({
           scope: "global",
           entityId: course.driveFolderId,
           payload: {
-            route: buildFolderRouteHref({
-              departmentId,
-              semesterId,
+            route: buildRepositoryFolderRoute({
               folderId: course.driveFolderId,
               folderName: course.courseName,
               trailLabels: [course.courseName],
               trailIds: [course.driveFolderId],
+              repoKind: "global",
             }),
             departmentId,
             semesterId,
@@ -810,9 +871,7 @@ export function CommandBar({
         scope: "global",
         entityId: option.folderId,
         payload: {
-          route: buildFolderRouteHref({
-            departmentId,
-            semesterId,
+          route: buildRepositoryFolderRoute({
             folderId: option.folderId,
             folderName: option.label,
             trailLabels: option.path
@@ -854,6 +913,7 @@ export function CommandBar({
     activeDriveFolderId,
     activeTrailIds,
     activeTrailLabels,
+    buildRepositoryFolderRoute,
     catalogCourses,
     departmentId,
     driveItems,
@@ -989,9 +1049,7 @@ export function CommandBar({
         .filter(Boolean)
         .join(" · ");
 
-      const route = buildFolderRouteHref({
-        departmentId,
-        semesterId,
+      const route = buildRepositoryFolderRoute({
         folderId: entry.parentFolderId,
         folderName: entry.parentFolderName,
         trailLabels: entry.ancestorFolderNames,
@@ -1030,7 +1088,7 @@ export function CommandBar({
         },
       };
     });
-  }, [departmentId, nestedFileEntries, semesterId]);
+  }, [buildRepositoryFolderRoute, departmentId, nestedFileEntries, semesterId]);
 
   const fileCommands = useMemo<EngineCommandItem[]>(() => {
     const merged = new Map<string, EngineCommandItem>();
@@ -2113,9 +2171,7 @@ export function CommandBar({
           ? payloadTrailLabels
           : [item.title];
 
-        const fallbackRoute = buildFolderRouteHref({
-          departmentId,
-          semesterId,
+        const fallbackRoute = buildRepositoryFolderRoute({
           folderId,
           folderName: item.title,
           trailIds,
@@ -2130,7 +2186,6 @@ export function CommandBar({
       setOpen(false);
     },
     [
-      departmentId,
       dispatcher,
       offlineFiles,
       pushRecentCommandId,
@@ -2138,8 +2193,8 @@ export function CommandBar({
       pushScopeHistory,
       router,
       searchScope,
-      semesterId,
       trimmedDeferredQuery,
+      buildRepositoryFolderRoute,
     ],
   );
 
@@ -2306,25 +2361,23 @@ export function CommandBar({
       .filter(Boolean);
     const trailLabels = fullSegments.slice(0, Math.max(0, fullSegments.length - 1));
     const parentLabel = trailLabels[trailLabels.length - 1] ?? targetFolderId;
-    const route = buildFolderRouteHref({
-      departmentId,
-      semesterId,
+    const route = buildRepositoryFolderRoute({
       folderId: targetFolderId,
       folderName: parentLabel,
       trailLabels,
       trailIds: hit.ancestorIds ?? [],
+      repoKind,
     });
 
     router.push(route);
     setOpen(false);
   }, [
-    departmentId,
     displayResults,
     handleItemSelect,
     router,
     semanticCommandByEntityId,
-    semesterId,
     setActiveRepositoryPage,
+    buildRepositoryFolderRoute,
   ]);
 
   useEffect(() => {

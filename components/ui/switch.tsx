@@ -4,26 +4,74 @@ import { Switch as SwitchPrimitive } from "@base-ui/react/switch"
 
 import { cn } from "@/lib/utils"
 
-function Switch({
-  className,
-  size = "default",
-  ...props
-}: SwitchPrimitive.Root.Props & {
-  size?: "sm" | "default"
-}) {
+type SwitchSize = "sm" | "default"
+
+type BaseSwitchProps = Omit<SwitchPrimitive.Root.Props, "checked" | "defaultChecked" | "onCheckedChange"> & {
+  size?: SwitchSize
+}
+
+type ControlledSwitchProps = {
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+  defaultChecked?: never
+}
+
+type UncontrolledSwitchProps = {
+  checked?: never
+  defaultChecked?: boolean
+  onCheckedChange?: (checked: boolean) => void
+}
+
+type SwitchProps = BaseSwitchProps & (ControlledSwitchProps | UncontrolledSwitchProps)
+
+function resolveTrackSizeClass(size: SwitchSize): string {
+  if (size === "sm") {
+    return "h-4 w-7"
+  }
+
+  return "h-5 w-9"
+}
+
+function resolveThumbSizeClass(size: SwitchSize): string {
+  if (size === "sm") {
+    return "size-3"
+  }
+
+  return "size-4"
+}
+
+function resolveThumbOffsetClass(size: SwitchSize): string {
+  if (size === "sm") {
+    return "data-unchecked:translate-x-[1px] data-checked:translate-x-[calc(100%+1px)]"
+  }
+
+  return "data-unchecked:translate-x-[1px] data-checked:translate-x-[calc(100%+1px)]"
+}
+
+function Switch({ className, size = "default", ...props }: SwitchProps) {
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
       data-size={size}
       className={cn(
-        "data-checked:bg-primary data-unchecked:bg-input focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 dark:data-unchecked:bg-input/80 shrink-0 rounded-full border border-transparent focus-visible:ring-2 aria-invalid:ring-2 data-[size=default]:h-[16.6px] data-[size=default]:w-[28px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] peer group/switch relative inline-flex items-center transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 data-disabled:cursor-not-allowed data-disabled:opacity-50",
-        className
+        "peer inline-flex shrink-0 items-center rounded-full border border-transparent transition-colors outline-none",
+        "data-checked:bg-primary data-unchecked:bg-input/80",
+        "focus-visible:ring-2 focus-visible:ring-ring/50",
+        "data-disabled:cursor-not-allowed data-disabled:opacity-50",
+        "aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/30",
+        resolveTrackSizeClass(size),
+        className,
       )}
       {...props}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
-        className="bg-background dark:data-unchecked:bg-foreground dark:data-checked:bg-primary-foreground rounded-full group-data-[size=default]/switch:size-3.5 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 pointer-events-none block ring-0 transition-transform"
+        className={cn(
+          "pointer-events-none block rounded-full bg-background shadow-sm ring-0 transition-transform duration-200",
+          "dark:data-unchecked:bg-foreground dark:data-checked:bg-primary-foreground",
+          resolveThumbSizeClass(size),
+          resolveThumbOffsetClass(size),
+        )}
       />
     </SwitchPrimitive.Root>
   )

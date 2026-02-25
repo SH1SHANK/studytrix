@@ -37,8 +37,8 @@ export const PERSONAL_REPOSITORY_SWATCHES: readonly PersonalRepositorySwatch[] =
   },
 ];
 
-export const PERSONAL_REPOSITORY_STORAGE_KEY = "studytrix_personal_repository";
-export const PERSONAL_REPOSITORY_TABS_STORAGE_KEY = "studytrix_personal_repository_tabs";
+export const PERSONAL_REPOSITORY_STORAGE_KEY = "studytrix_personal_repository_v2";
+export const PERSONAL_REPOSITORY_TABS_STORAGE_KEY = "studytrix_personal_repository_tabs_v2";
 
 export const DRIVE_FOLDER_ID_PATTERN = /^[A-Za-z0-9_-]{28,44}$/;
 

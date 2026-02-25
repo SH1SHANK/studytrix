@@ -35,7 +35,7 @@ import {
   useDashboardToolbarStore,
 } from "@/features/dashboard/dashboard.toolbar.store";
 import { resolveUserProfileSettings } from "@/features/profile/user-profile";
-import { buildFolderRouteHref } from "@/features/navigation/folder-trail";
+import { buildGlobalFolderRouteHref } from "@/features/navigation/repository-route";
 import { type Course } from "@/features/catalog/catalog.types";
 import { useTagStore } from "@/features/tags/tag.store";
 import type { FilterMode, TagAssignment } from "@/features/tags/tag.types";
@@ -441,7 +441,7 @@ export function DashboardGrid({ showSharedChrome = true }: DashboardGridProps) {
   const handleOpenFolder = useCallback(
     (driveFolderId: string, courseName: string) => {
       router.push(
-        buildFolderRouteHref({
+        buildGlobalFolderRouteHref({
           departmentId: department,
           semesterId: String(semester),
           folderId: driveFolderId,

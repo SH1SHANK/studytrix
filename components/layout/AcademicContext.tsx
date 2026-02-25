@@ -18,7 +18,7 @@ type AcademicProviderProps = {
   children: React.ReactNode;
 };
 
-const ACADEMIC_CONTEXT_STORAGE_KEY = "studytrix_academic_context";
+const ACADEMIC_CONTEXT_STORAGE_KEY = "studytrix_academic_context_v2";
 const DEFAULT_DEPARTMENT = "ME";
 const DEFAULT_SEMESTER = 4;
 

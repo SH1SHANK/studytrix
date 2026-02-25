@@ -13,10 +13,9 @@ import { RootRuntimeMounts } from "@/components/layout/RootRuntimeMounts";
 import "./globals.css";
 
 const DEFAULT_SITE_URL = "https://learn.attendrix.app";
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL?.trim().length
-    ? process.env.NEXT_PUBLIC_SITE_URL.trim()
-    : DEFAULT_SITE_URL;
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().length
+  ? process.env.NEXT_PUBLIC_SITE_URL.trim()
+  : DEFAULT_SITE_URL;
 
 const outfit = localFont({
   src: [
@@ -58,9 +57,9 @@ export const metadata: Metadata = {
     "file manager",
     "study materials",
   ],
-  authors: [{ name: "Attendrix Team" }],
-  creator: "Attendrix Team",
-  publisher: "Attendrix Team",
+  authors: [{ name: "Attendrix" }],
+  creator: "Attendrix",
+  publisher: "Attendrix",
   alternates: {
     canonical: "/",
   },
@@ -72,7 +71,9 @@ export const metadata: Metadata = {
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
     ],
     shortcut: [{ url: "/favicon.ico" }],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
   openGraph: {
     type: "website",
@@ -125,11 +126,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={outfit.variable}
-    >
+    <html lang="en" suppressHydrationWarning className={outfit.variable}>
       <body className="min-h-screen bg-background text-foreground antialiased transition-colors">
         <Script id="studytrix-theme-bootstrap" strategy="beforeInteractive">
           {`(function(){try{var storageKey="studytrix-theme";var palette={classic:"#ffffff",midnight:"#0f172a",forest:"#f0fdf4",sunset:"#fff7ed",minimal:"#f8fafc",eclipse:"#0d0a1a",graphite:"#111111",aurora:"#000000"};var stored=localStorage.getItem(storageKey);var theme=(stored&&palette[stored])?stored:"classic";var color=palette[theme];var root=document.documentElement;root.setAttribute("data-theme",theme);root.style.backgroundColor=color;var applyMeta=function(selector,name,content){var node=document.head.querySelector(selector);if(!node){node=document.createElement("meta");node.setAttribute("name",name);document.head.appendChild(node);}node.setAttribute("content",content);};applyMeta('meta[name="theme-color"]:not([media])',"theme-color",color);var mediaNodes=document.head.querySelectorAll('meta[name="theme-color"][media]');mediaNodes.forEach(function(node){node.setAttribute("content",color);});applyMeta('meta[name="apple-mobile-web-app-status-bar-style"]',"apple-mobile-web-app-status-bar-style","black-translucent");}catch(_){}})();`}

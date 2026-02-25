@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import { useOnboardingStore } from "@/features/onboarding/onboarding.store";
 import { OnboardingDialog } from "@/features/onboarding/ui/OnboardingDialog";
 import { useSettingsStore } from "@/features/settings/settings.store";
+
+const MAX_LOADING_MS = 3000;
 
 export function OnboardingGate() {
   const pathname = usePathname();
@@ -15,7 +17,22 @@ export function OnboardingGate() {
   const setActive = useOnboardingStore((state) => state.setActive);
   const markCompleted = useOnboardingStore((state) => state.markCompleted);
 
-  const shouldShow = pathname === "/" && settingsInitialized && !completed;
+  const [loadingTimeoutElapsed, setLoadingTimeoutElapsed] = useState(false);
+
+  useEffect(() => {
+    if (settingsInitialized) {
+      setLoadingTimeoutElapsed(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setLoadingTimeoutElapsed(true);
+    }, MAX_LOADING_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [settingsInitialized]);
+
+  const shouldShow = pathname === "/" && !completed && (settingsInitialized || loadingTimeoutElapsed);
 
   useEffect(() => {
     if (active !== shouldShow) {
@@ -28,7 +45,7 @@ export function OnboardingGate() {
     setActive(false);
   }, [markCompleted, setActive]);
 
-  if (!settingsInitialized) {
+  if (pathname !== "/") {
     return null;
   }
 

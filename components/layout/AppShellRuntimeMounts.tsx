@@ -2,7 +2,6 @@
 
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
 
 import { Toaster } from "@/components/ui/sonner";
 import { useStorageLocationStore } from "@/features/offline/offline.storage-location.store";
@@ -23,17 +22,11 @@ const GlobalStorageSetupSheet = dynamic(
   { ssr: false },
 );
 
-const OnboardingGate = dynamic(
-  () => import("@/features/onboarding/ui/OnboardingGate").then((mod) => mod.OnboardingGate),
-  { ssr: false },
-);
-
 type AppShellRuntimeMountsProps = {
   commandPlaceholder?: string;
 };
 
 export function AppShellRuntimeMounts({ commandPlaceholder }: AppShellRuntimeMountsProps) {
-  const pathname = usePathname();
   const shareOpen = useShareStore((state) => state.isOpen);
   const storageSetupOpen = useStorageLocationStore((state) => state.isSetupSheetOpen);
 
@@ -45,7 +38,6 @@ export function AppShellRuntimeMounts({ commandPlaceholder }: AppShellRuntimeMou
       {shareOpen ? <ShareProgressDrawer /> : null}
       <Toaster />
       {storageSetupOpen ? <GlobalStorageSetupSheet /> : null}
-      {pathname === "/" ? <OnboardingGate /> : null}
     </>
   );
 }

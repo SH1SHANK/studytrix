@@ -397,13 +397,15 @@ export function DashboardSharedChrome({
         </div>
       ) : null}
 
-      <div className="mt-4">
-        <DashboardTabBar
-          activePage={activePage}
-          onChange={onPageChange}
-          showPersonalRepository={showPersonalRepository}
-        />
-      </div>
+      {showPersonalRepository ? (
+        <div className="mt-4">
+          <DashboardTabBar
+            activePage={activePage}
+            onChange={onPageChange}
+            showPersonalRepository={showPersonalRepository}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">

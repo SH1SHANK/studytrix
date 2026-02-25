@@ -91,15 +91,15 @@ export const GROUP_META: Record<
 };
 
 export const DEPARTMENT_SEGMENT_PATTERN = /^[A-Z]{2,5}$/;
-export const RECENT_QUERY_STORAGE_KEY = "studytrix.command.recentQueries.v1";
+export const RECENT_QUERY_STORAGE_KEY = "studytrix.command.recentQueries.v2";
 export const MAX_RECENT_QUERIES = 6;
-export const RECENT_COMMAND_STORAGE_KEY = "studytrix.command.recentCommands.v1";
+export const RECENT_COMMAND_STORAGE_KEY = "studytrix.command.recentCommands.v2";
 export const MAX_RECENT_COMMANDS = 24;
-export const SCOPE_STATE_STORAGE_KEY = "studytrix.command.scope.v1";
-export const SCOPE_HISTORY_STORAGE_KEY = "studytrix.command.scopeHistory.v1";
+export const SCOPE_STATE_STORAGE_KEY = "studytrix.command.scope.v2";
+export const SCOPE_HISTORY_STORAGE_KEY = "studytrix.command.scopeHistory.v2";
 export const MAX_SCOPE_HISTORY = 20;
-export const SCOPE_HINT_USED_KEY = "studytrix.command.scopeHintUsed.v1";
-export const SCOPE_SUMMARY_STORAGE_KEY = "studytrix.command.scopeSummary.v1";
+export const SCOPE_HINT_USED_KEY = "studytrix.command.scopeHintUsed.v2";
+export const SCOPE_SUMMARY_STORAGE_KEY = "studytrix.command.scopeSummary.v2";
 export const SCOPE_SUMMARY_EVENT = "studytrix:command-scope-summary";
 export const CMD_QUERY_PARAM = "cmd";
 export const CMD_SCOPE_PARAM = "scope";

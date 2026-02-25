@@ -33,6 +33,10 @@ function normalizeSegments(values: readonly unknown[]): string[] {
   return normalized;
 }
 
+export function normalizeFolderTrailSegments(values: readonly unknown[]): string[] {
+  return normalizeSegments(values);
+}
+
 export function serializeFolderTrailParam(segments: readonly string[]): string {
   return JSON.stringify(normalizeSegments(segments));
 }
@@ -55,14 +59,13 @@ export function parseFolderTrailParam(raw: string | null | undefined): string[] 
   return normalizeSegments([decoded]);
 }
 
-export function buildFolderRouteHref(input: {
-  departmentId: string;
-  semesterId: string;
-  folderId: string;
+type FolderRouteQueryInput = {
   folderName: string;
   trailLabels?: readonly string[];
   trailIds?: readonly string[];
-}): string {
+};
+
+export function buildFolderRouteQueryString(input: FolderRouteQueryInput): string {
   const params = new URLSearchParams();
   params.set("name", input.folderName);
 
@@ -76,7 +79,6 @@ export function buildFolderRouteHref(input: {
     params.set(FOLDER_TRAIL_IDS_QUERY_PARAM, serializeFolderTrailParam(trailIds));
   }
 
-  const basePath = `/${encodeURIComponent(input.departmentId)}/${encodeURIComponent(input.semesterId)}/${encodeURIComponent(input.folderId)}`;
   const query = params.toString();
-  return query.length > 0 ? `${basePath}?${query}` : basePath;
+  return query.length > 0 ? `?${query}` : "";
 }

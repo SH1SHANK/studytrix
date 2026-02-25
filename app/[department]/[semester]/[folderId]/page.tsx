@@ -10,11 +10,11 @@ import { FileList } from "@/features/file/ui/file-manager/FileList";
 import { StickyHeader } from "@/features/file/ui/file-manager/StickyHeader";
 import { type CatalogResponse, type Course } from "@/features/catalog/catalog.types";
 import {
-  buildFolderRouteHref,
   parseFolderTrailParam,
   FOLDER_TRAIL_IDS_QUERY_PARAM,
   FOLDER_TRAIL_QUERY_PARAM,
 } from "@/features/navigation/folder-trail";
+import { buildGlobalFolderRouteHref } from "@/features/navigation/repository-route";
 import { getDepartmentName } from "@/lib/academic";
 
 type FileManagerPageProps = {
@@ -180,7 +180,7 @@ export default async function Page({
       return {
         label,
         href: folderIdForSegment
-          ? buildFolderRouteHref({
+          ? buildGlobalFolderRouteHref({
             departmentId,
             semesterId: semester,
             folderId: folderIdForSegment,
@@ -201,6 +201,8 @@ export default async function Page({
       <div className="min-h-full bg-background">
         <StickyHeader
           folderName={folderName}
+          folderId={routeFolderId}
+          repositoryKind="global"
           breadcrumbSegments={breadcrumbSegments}
         />
         <FileManagerViewModeProvider>

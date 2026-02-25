@@ -21,7 +21,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAcademicContext } from "@/components/layout/AcademicContext";
 import {
   getSortedPersonalFolders,
   useCustomFoldersStore,
@@ -31,7 +30,7 @@ import {
   useDashboardToolbarStore,
 } from "@/features/dashboard/dashboard.toolbar.store";
 import type { CustomFolder } from "@/features/custom-folders/custom-folders.types";
-import { buildFolderRouteHref } from "@/features/navigation/folder-trail";
+import { buildPersonalFolderRouteHref } from "@/features/navigation/repository-route";
 import { useTagStore } from "@/features/tags/tag.store";
 import type { FilterMode, TagAssignment } from "@/features/tags/tag.types";
 import { useSetting } from "@/ui/hooks/useSettings";
@@ -83,7 +82,6 @@ function matchesTagFilters(
 export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepositoryGridProps) {
   const router = useRouter();
   const hydrationRef = useRef(false);
-  const { department, semester } = useAcademicContext();
   const folders = useCustomFoldersStore((state) => state.folders);
   const removeFolder = useCustomFoldersStore((state) => state.removeFolder);
   const renameFolder = useCustomFoldersStore((state) => state.renameFolder);
@@ -287,9 +285,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                   iconLayoutId={newlyAddedId === folder.id ? `personal-folder-icon-${folder.id}` : undefined}
                   onOpen={() => {
                     router.push(
-                      buildFolderRouteHref({
-                        departmentId: department,
-                        semesterId: String(semester),
+                      buildPersonalFolderRouteHref({
                         folderId: folder.id,
                         folderName: folder.label,
                         trailLabels: [folder.label],
@@ -353,9 +349,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                   tags={folderTagPreviewById.get(folder.id) ?? []}
                   onOpen={() => {
                     router.push(
-                      buildFolderRouteHref({
-                        departmentId: department,
-                        semesterId: String(semester),
+                      buildPersonalFolderRouteHref({
                         folderId: folder.id,
                         folderName: folder.label,
                         trailLabels: [folder.label],

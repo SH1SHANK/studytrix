@@ -11,8 +11,15 @@ type SharePageOptions = {
   semester?: number;
 };
 
+type ShareDriveFolderOptions = {
+  folderId: string;
+  title?: string;
+  text?: string;
+};
+
 type PageSharePreference = "native_share" | "copy_link";
 const DEPARTMENT_SEGMENT_PATTERN = /^[A-Z]{2,5}$/i;
+const DRIVE_FOLDER_ID_PATTERN = /^[A-Za-z0-9_-]{10,}$/;
 
 function resolvePageSharePreference(raw: unknown): PageSharePreference {
   return raw === "copy_link" ? "copy_link" : "native_share";
@@ -97,6 +104,19 @@ export function sanitizeShareUrl(
   return url.toString();
 }
 
+export function resolveDriveFolderLink(folderId: string | null | undefined): string | null {
+  const normalized = normalizeString(folderId);
+  if (!normalized) {
+    return null;
+  }
+
+  if (!DRIVE_FOLDER_ID_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  return `https://drive.google.com/drive/folders/${encodeURIComponent(normalized)}`;
+}
+
 function buildShareUrl(options: SharePageOptions): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -173,4 +193,60 @@ export async function copyCurrentPageLink(options: SharePageOptions = {}): Promi
   }
 
   toast.error("Could not copy page link.");
+}
+
+export async function shareDriveFolderLink(options: ShareDriveFolderOptions): Promise<void> {
+  const url = resolveDriveFolderLink(options.folderId);
+  if (!url) {
+    toast.error("Could not resolve a Drive link for this folder.");
+    return;
+  }
+
+  const title = options.title ?? "Studytrix";
+  const text = options.text ?? "Open this folder in Google Drive";
+  const preference = getPageSharePreference();
+
+  if (preference === "copy_link") {
+    if (await writeClipboardWithFallback(url)) {
+      toast.success("Drive folder link copied.");
+      return;
+    }
+  }
+
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    try {
+      await navigator.share({
+        title,
+        text,
+        url,
+      });
+      return;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+    }
+  }
+
+  if (await writeClipboardWithFallback(url)) {
+    toast.success("Drive folder link copied.");
+    return;
+  }
+
+  toast.error("Could not share this Drive folder link on your device.");
+}
+
+export async function copyDriveFolderLink(folderId: string): Promise<void> {
+  const url = resolveDriveFolderLink(folderId);
+  if (!url) {
+    toast.error("Could not resolve a Drive link for this folder.");
+    return;
+  }
+
+  if (await writeClipboardWithFallback(url)) {
+    toast.success("Drive folder link copied.");
+    return;
+  }
+
+  toast.error("Could not copy Drive folder link.");
 }

@@ -26,10 +26,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSetting } from "@/ui/hooks/useSettings";
-import { copyCurrentPageLink, shareCurrentPage } from "@/features/share/share.page";
+import {
+  copyDriveFolderLink,
+  copyCurrentPageLink,
+  resolveDriveFolderLink,
+  shareCurrentPage,
+  shareDriveFolderLink,
+} from "@/features/share/share.page";
+import type { RepositoryKind } from "@/features/navigation/repository-route";
 
 type StickyHeaderProps = {
   folderName: string;
+  folderId?: string;
+  repositoryKind?: RepositoryKind;
   breadcrumbSegments: Array<{
     label: string;
     href: string;
@@ -38,6 +47,8 @@ type StickyHeaderProps = {
 
 export function StickyHeader({
   folderName,
+  folderId,
+  repositoryKind = "global",
   breadcrumbSegments,
 }: StickyHeaderProps) {
   const router = useRouter();
@@ -54,6 +65,11 @@ export function StickyHeader({
     () => breadcrumbSegments.map((segment) => `${segment.href}|${segment.label}`).join("::"),
     [breadcrumbSegments],
   );
+  const personalDriveLink = useMemo(
+    () => (repositoryKind === "personal" ? resolveDriveFolderLink(folderId) : null),
+    [folderId, repositoryKind],
+  );
+  const isPersonalShareDisabled = repositoryKind === "personal" && !personalDriveLink;
   const searchSignature = searchParams.toString();
 
   const clearPendingFrames = useCallback(() => {
@@ -179,9 +195,20 @@ export function StickyHeader({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label="Share this page"
+            aria-label={isPersonalShareDisabled ? "Share unavailable for this personal folder" : "Share this page"}
+            title={isPersonalShareDisabled ? "Drive link unavailable for this personal folder" : undefined}
+            disabled={isPersonalShareDisabled}
             className={isCompact ? "size-9 shrink-0 rounded-lg transition-all duration-200 hover:bg-muted/60 active:scale-[0.97]" : "size-11 shrink-0 rounded-lg transition-all duration-200 hover:bg-muted/60 active:scale-[0.97]"}
             onClick={() => {
+              if (repositoryKind === "personal") {
+                void shareDriveFolderLink({
+                  folderId: folderId ?? "",
+                  title: folderName,
+                  text: "Open this folder in Google Drive.",
+                });
+                return;
+              }
+
               void shareCurrentPage({
                 title: folderName,
                 text: "Open this Studytrix folder view.",
@@ -253,11 +280,21 @@ export function StickyHeader({
 
               <DropdownMenuItem
                 onClick={() => {
+                  if (repositoryKind === "personal") {
+                    void shareDriveFolderLink({
+                      folderId: folderId ?? "",
+                      title: folderName,
+                      text: "Open this folder in Google Drive.",
+                    });
+                    return;
+                  }
+
                   void shareCurrentPage({
                     title: folderName,
                     text: "Open this Studytrix folder view.",
                   });
                 }}
+                disabled={isPersonalShareDisabled}
                 className="flex items-center gap-3 rounded-lg py-2.5"
               >
                 <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">
@@ -265,14 +302,23 @@ export function StickyHeader({
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-medium leading-none text-foreground">Share Current View</span>
-                  <span className="text-[10px] leading-none text-muted-foreground mt-1">Includes current folder and query</span>
+                  <span className="text-[10px] leading-none text-muted-foreground mt-1">
+                    {isPersonalShareDisabled
+                      ? "Drive link unavailable for this personal folder"
+                      : "Includes current folder and query"}
+                  </span>
                 </div>
               </DropdownMenuItem>
 
               <DropdownMenuItem
                 onClick={() => {
+                  if (repositoryKind === "personal") {
+                    void copyDriveFolderLink(folderId ?? "");
+                    return;
+                  }
                   void copyCurrentPageLink();
                 }}
+                disabled={isPersonalShareDisabled}
                 className="flex items-center gap-3 rounded-lg py-2.5"
               >
                 <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/60">

@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { IconCheck, IconSun, IconMoon, IconTree, IconSunset, IconCircleDashed, IconMoonStars, IconHexagon, IconSparkles } from "@tabler/icons-react";
 
 import {
@@ -55,7 +55,6 @@ function getThemeIcon(id: ThemeId) {
 }
 
 export function ThemeGrid({ currentTheme, onSelect }: ThemeGridProps) {
-  const shouldReduceMotion = useReducedMotion();
   const lightThemes = getThemesByIds(LIGHT_THEME_IDS);
   const darkThemes = getThemesByIds(DARK_THEME_IDS);
 
@@ -69,16 +68,8 @@ export function ThemeGrid({ currentTheme, onSelect }: ThemeGridProps) {
         role="radio"
         aria-checked={isSelected}
         onClick={() => onSelect(theme.id)}
-        whileHover={
-          shouldReduceMotion
-            ? undefined
-            : { y: -1.5, scale: 1.012 }
-        }
-        whileTap={
-          shouldReduceMotion
-            ? undefined
-            : { y: 0.5, scale: 0.982 }
-        }
+        whileHover={{ y: -1.5, scale: 1.012 }}
+        whileTap={{ y: 0.5, scale: 0.982 }}
         transition={{
           type: "spring",
           stiffness: 460,

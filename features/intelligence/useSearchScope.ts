@@ -3,25 +3,14 @@
 import { useMemo } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-import { useCustomFoldersTabsStore } from "@/features/custom-folders/custom-folders.tabs.store";
 import {
   FOLDER_TRAIL_IDS_QUERY_PARAM,
   FOLDER_TRAIL_QUERY_PARAM,
   parseFolderTrailParam,
 } from "@/features/navigation/folder-trail";
+import { parseRepositoryRoute } from "@/features/navigation/repository-route";
 
 import type { SearchScope } from "./intelligence.types";
-
-function parseFolderPathFromRoute(pathname: string): { folderId: string | null } {
-  const segments = pathname.split("/").filter(Boolean);
-  if (segments.length < 3) {
-    return { folderId: null };
-  }
-
-  return {
-    folderId: decodeURIComponent(segments[2] ?? "").trim() || null,
-  };
-}
 
 function normalizePairList(ids: string[], names: string[]): Array<{ folderId: string; folderName: string }> {
   const pairs: Array<{ folderId: string; folderName: string }> = [];
@@ -47,13 +36,13 @@ function normalizePairList(ids: string[], names: string[]): Array<{ folderId: st
 export function useSearchScope(): SearchScope {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const activePage = useCustomFoldersTabsStore((state) => state.activePage);
 
   return useMemo(() => {
-    const { folderId } = parseFolderPathFromRoute(pathname);
+    const routeContext = parseRepositoryRoute({ pathname, searchParams });
+    const { folderId } = routeContext;
 
     if (!folderId) {
-      if (activePage === "personal") {
+      if (routeContext.repoKind === "personal") {
         return { kind: "personal-root" };
       }
       return { kind: "global-root" };
@@ -78,8 +67,8 @@ export function useSearchScope(): SearchScope {
       kind: "folder",
       folderId,
       folderName,
-      repoKind: activePage === "personal" ? "personal" : "global",
+      repoKind: routeContext.repoKind === "personal" ? "personal" : "global",
       breadcrumb,
     };
-  }, [activePage, pathname, searchParams]);
+  }, [pathname, searchParams]);
 }

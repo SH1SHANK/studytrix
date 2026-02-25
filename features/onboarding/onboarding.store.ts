@@ -11,7 +11,7 @@ interface OnboardingStoreState {
   reset: () => void;
 }
 
-const ONBOARDING_STORAGE_KEY = "studytrix_onboarding";
+const ONBOARDING_STORAGE_KEY = "studytrix_onboarding_v2";
 
 export const useOnboardingStore = create<OnboardingStoreState>()(
   persist(

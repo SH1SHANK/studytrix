@@ -33,11 +33,15 @@ import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
 import { useDownloadRiskGate } from "@/ui/hooks/useDownloadRiskGate";
 import { useSelectionStore } from "@/features/selection/selection.store";
 import {
-  buildFolderRouteHref,
   parseFolderTrailParam,
   FOLDER_TRAIL_IDS_QUERY_PARAM,
   FOLDER_TRAIL_QUERY_PARAM,
 } from "@/features/navigation/folder-trail";
+import {
+  buildGlobalFolderRouteHref,
+  buildPersonalFolderRouteHref,
+  parseRepositoryRoute,
+} from "@/features/navigation/repository-route";
 import { cn } from "@/lib/utils";
 
 type FileListProps = {
@@ -324,9 +328,10 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const rowContainerClass = isGridView
     ? cn("grid grid-cols-2", compactModeEnabled ? "gap-2" : "gap-3")
     : cn("flex flex-col", compactModeEnabled ? "gap-1" : "gap-2");
-  const pathSegments = useMemo(() => pathname.split("/").filter(Boolean), [pathname]);
-  const departmentSegment = pathSegments[0];
-  const semesterSegment = pathSegments[1];
+  const routeContext = useMemo(
+    () => parseRepositoryRoute({ pathname, searchParams }),
+    [pathname, searchParams],
+  );
   const currentTrailLabels = useMemo(() => {
     const labels = parseFolderTrailParam(searchParams.get(FOLDER_TRAIL_QUERY_PARAM));
     if (labels.length > 0) {
@@ -511,14 +516,26 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const handleOpenRow = useCallback(
     (item: FileListRow) => {
       if (item.type === "folder") {
-        if (!departmentSegment || !semesterSegment) {
+        if (routeContext.repoKind === "personal") {
+          router.push(
+            buildPersonalFolderRouteHref({
+              folderId: item.id,
+              folderName: item.title,
+              trailLabels: [...currentTrailLabels, item.title],
+              trailIds: [...currentTrailIds, item.id],
+            }),
+          );
+          return;
+        }
+
+        if (!routeContext.departmentId || !routeContext.semesterId) {
           return;
         }
 
         router.push(
-          buildFolderRouteHref({
-            departmentId: departmentSegment,
-            semesterId: semesterSegment,
+          buildGlobalFolderRouteHref({
+            departmentId: routeContext.departmentId,
+            semesterId: routeContext.semesterId,
             folderId: item.id,
             folderName: item.title,
             trailLabels: [...currentTrailLabels, item.title],
@@ -552,11 +569,10 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
       autoPrefetchEnabled,
       currentTrailIds,
       currentTrailLabels,
-      departmentSegment,
       fileRows,
       getRowOfflineState,
+      routeContext,
       router,
-      semesterSegment,
     ],
   );
 
