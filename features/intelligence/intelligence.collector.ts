@@ -469,6 +469,8 @@ export async function collectPersonalRepository(
             }
           }
         }
+      } else if (sourceKind === "local-virtual") {
+        entities = [];
       } else {
         entities = await collectFolderRecursive(
           folder.id,

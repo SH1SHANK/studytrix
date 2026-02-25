@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { IconCopy, IconDownload, IconLink, IconShare, IconStar, IconStarFilled, IconTag } from "@tabler/icons-react";
-import { PencilLine, RefreshCw, Settings2, Trash2 } from "lucide-react";
+import { FolderPlus, PencilLine, Plus, RefreshCw, Settings2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
 
@@ -32,6 +32,8 @@ type PersonalFolderMenuProps = {
   refreshing: boolean;
   onRename: () => void;
   onRefresh: () => Promise<void> | void;
+  onNewSubfolder?: () => void;
+  onAddFiles?: () => void;
   onEdit: () => void;
   onRemove: () => void;
 };
@@ -160,6 +162,8 @@ export function PersonalFolderMenu({
   refreshing,
   onRename,
   onRefresh,
+  onNewSubfolder,
+  onAddFiles,
   onEdit,
   onRemove,
 }: PersonalFolderMenuProps) {
@@ -447,12 +451,48 @@ export function PersonalFolderMenu({
             disabled={refreshing}
             onSelect={() => runAction(onRefresh)}
           />
+          <MenuAction
+            icon={<FolderPlus className="size-4 text-violet-500" />}
+            label="New Subfolder"
+            description="Create a folder inside this one"
+            onSelect={() => {
+              runAction(() => {
+                onNewSubfolder?.();
+              });
+            }}
+          />
+          <MenuAction
+            icon={<Plus className="size-4 text-indigo-500" />}
+            label="Add Files"
+            description="Upload files into this folder"
+            onSelect={() => {
+              runAction(() => {
+                onAddFiles?.();
+              });
+            }}
+          />
+          {sourceKind === "drive" ? (
+            <MenuAction
+              icon={<IconDownload className="size-4 text-sky-500" />}
+              label="Download All"
+              description="Download the full folder contents"
+              onSelect={() => runAction(handleDownload)}
+            />
+          ) : null}
           {sourceKind === "drive" ? (
             <MenuAction
               icon={<IconLink className="size-4 text-violet-500" />}
               label="Share Folder Link"
               description="Create a Studytrix import link"
               onSelect={handleOpenShareSheet}
+            />
+          ) : null}
+          {sourceKind === "drive" ? (
+            <MenuAction
+              icon={<IconCopy className="size-4 text-slate-500" />}
+              label="Copy Folder Link"
+              description="Copy Google Drive folder URL"
+              onSelect={handleCopyLink}
             />
           ) : null}
           {sourceKind === "drive" && shareCount > 0 ? (

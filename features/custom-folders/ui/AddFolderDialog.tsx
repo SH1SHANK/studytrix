@@ -10,7 +10,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   ClipboardPaste,
-  Cloud,
   HardDrive,
   Link2,
 } from "lucide-react";
@@ -28,7 +27,6 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
   getPersonalRepositoryErrorMessage,
-  normalizeDriveFolderInput,
   normalizeImportFolderInput,
 } from "@/features/custom-folders/custom-folders.constants";
 import { useCustomFoldersStore } from "@/features/custom-folders/custom-folders.store";
@@ -52,7 +50,7 @@ type AddFolderDialogProps = {
 
 type VerifyPhase = "input" | "verifying" | "customize";
 type StageKey = "format" | "access" | "permission" | "contents" | "safety";
-type FolderSource = "drive" | "local" | "import";
+type FolderSource = "drive" | "local";
 
 type StageDefinition = {
   key: StageKey;
@@ -145,13 +143,8 @@ export function AddFolderDialog({
   const hasSafetyWarning = source !== "local" && Boolean(verifiedFolder?.safetyFlags.length);
   const labelCount = customLabel.trim().length;
   const canAdd = labelCount > 0 && labelCount <= 40 && (!hasSafetyWarning || safetyAcknowledged);
-  const normalizedFolderInput = useMemo(() => {
-    if (source === "import") {
-      return normalizeImportFolderInput(inputValue);
-    }
-    return normalizeDriveFolderInput(inputValue);
-  }, [inputValue, source]);
-  const canVerify = (source === "drive" || source === "import")
+  const normalizedFolderInput = useMemo(() => normalizeImportFolderInput(inputValue), [inputValue]);
+  const canVerify = source === "drive"
     && phase === "input"
     && normalizedFolderInput !== null;
 
@@ -201,7 +194,7 @@ export function AddFolderDialog({
       return;
     }
 
-    setSource("import");
+    setSource("drive");
     setPhase("input");
     setInputError(null);
     setLocalPickerError(null);
@@ -232,11 +225,7 @@ export function AddFolderDialog({
   const runVerification = useCallback(async () => {
     const folderId = normalizedFolderInput;
     if (!folderId) {
-      setInputError(
-        source === "import"
-          ? "Paste a valid Studytrix share link or Drive folder link."
-          : "This doesn't look like a valid Drive folder link.",
-      );
+      setInputError("Paste a valid Studytrix share link or Drive folder link.");
       return;
     }
 
@@ -346,7 +335,7 @@ export function AddFolderDialog({
     setCustomLabel(payload.name.slice(0, 40));
     setSafetyAcknowledged(payload.safetyFlags.length === 0);
     setPhase("customize");
-  }, [normalizedFolderInput, setStage, source]);
+  }, [normalizedFolderInput, setStage]);
 
   const handleChooseLocalFolder = useCallback(async () => {
     if (!deviceSourceAvailable) {
@@ -398,7 +387,7 @@ export function AddFolderDialog({
       return;
     }
 
-    if (source !== "import" || phase !== "input") {
+    if (source !== "drive" || phase !== "input") {
       return;
     }
 
@@ -498,17 +487,13 @@ export function AddFolderDialog({
   ]);
 
   const sourceSelector = (
-    <div
-      className={`grid gap-2 rounded-xl border border-border/70 bg-muted/35 p-1.5 ${
-        deviceSourceAvailable ? "grid-cols-3" : "grid-cols-2"
-      }`}
-    >
+    <div className={`grid gap-2 ${deviceSourceAvailable ? "sm:grid-cols-2" : "grid-cols-1"}`}>
       <button
         type="button"
-        className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors ${
+        className={`rounded-xl border px-3 py-3 text-left transition-colors ${
           source === "drive"
-            ? "bg-card text-foreground shadow-sm"
-            : "text-muted-foreground hover:bg-card/70"
+            ? "border-primary/45 bg-primary/10"
+            : "border-border/70 bg-card/45 hover:bg-card"
         }`}
         onClick={() => {
           setSource("drive");
@@ -517,16 +502,22 @@ export function AddFolderDialog({
           setLocalSelection(null);
         }}
       >
-        <Cloud className="size-4" />
-        Google Drive
+        <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Link2 className="size-4" />
+          Drive or Import Link
+        </span>
+        <span className="mt-1 block text-xs text-muted-foreground">
+          Paste a Studytrix shared link or a Google Drive folder link.
+        </span>
       </button>
+
       {deviceSourceAvailable ? (
         <button
           type="button"
-          className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors ${
+          className={`rounded-xl border px-3 py-3 text-left transition-colors ${
             source === "local"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-card/70"
+              ? "border-primary/45 bg-primary/10"
+              : "border-border/70 bg-card/45 hover:bg-card"
           }`}
           onClick={() => {
             setSource("local");
@@ -534,28 +525,15 @@ export function AddFolderDialog({
             setInputError(null);
           }}
         >
-          <HardDrive className="size-4" />
-          This Device
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+            <HardDrive className="size-4" />
+            This Device
+          </span>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            Files stay on your device. Nothing is uploaded.
+          </span>
         </button>
       ) : null}
-      <button
-        type="button"
-        className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors ${
-          source === "import"
-            ? "bg-card text-foreground shadow-sm"
-            : "text-muted-foreground hover:bg-card/70"
-        }`}
-        onClick={() => {
-          setSource("import");
-          setPhase("input");
-          setInputError(null);
-          setLocalPickerError(null);
-          setLocalSelection(null);
-        }}
-      >
-        <Link2 className="size-4" />
-        Import Link
-      </button>
     </div>
   );
 
@@ -568,7 +546,7 @@ export function AddFolderDialog({
       dismissOnOverlayClick={phase !== "verifying"}
       dismissOnEscape={phase !== "verifying"}
     >
-      <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto flex max-h-[88dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-t-3xl border-t border-border/70 bg-background/95 p-0 shadow-2xl backdrop-blur-xl sm:inset-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[85dvh] sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border">
+      <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto flex max-h-[88dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-t-3xl border-t border-border/70 bg-background/95 p-0 shadow-2xl backdrop-blur-xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[85dvh] sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border">
         <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-muted" />
         <div className="flex-1 overflow-y-auto px-5 pb-4 pt-4 sm:px-6 sm:pb-5 sm:pt-4">
           <DialogHeader className="space-y-1">
@@ -576,9 +554,7 @@ export function AddFolderDialog({
             <DialogDescription>
               {phase === "input"
                 ? source === "drive"
-                  ? "Paste a Google Drive folder link to verify and add it."
-                  : source === "import"
-                    ? "Import a shared folder from a Studytrix link or a Drive folder link."
+                  ? "Paste a Studytrix shared link or Google Drive folder link to verify and add it."
                   : "Add a folder from your device. Your files stay on your device. Nothing is uploaded."
                 : phase === "verifying"
                   ? "Verifying folder access and safety checks."
@@ -603,16 +579,11 @@ export function AddFolderDialog({
                   </p>
                 ) : null}
 
-                {source === "drive" || source === "import" ? (
+                {source === "drive" ? (
                   <>
-                    {source === "import" ? (
-                      <div className="rounded-xl border border-border/70 bg-card/45 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                        Import a shared folder. Paste a Studytrix share link or a Google Drive folder link.
-                      </div>
-                    ) : null}
                     <div className="space-y-1.5">
                       <label htmlFor="add-personal-folder-input" className="text-xs font-medium text-muted-foreground">
-                        {source === "drive" ? "Google Drive folder link" : "Shared or Drive folder link"}
+                        Drive or Studytrix shared link
                       </label>
                       <div className="relative">
                         <Input
@@ -631,7 +602,7 @@ export function AddFolderDialog({
                               void runVerification();
                             }
                           }}
-                          placeholder={source === "drive" ? "Paste a Google Drive folder link" : "Paste link here"}
+                          placeholder="Paste a Studytrix or Drive folder link"
                           className="h-11 pr-22"
                         />
                         <Button
@@ -654,9 +625,7 @@ export function AddFolderDialog({
                       </p>
                     ) : null}
                     <div className="rounded-xl border border-border/70 bg-card/45 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                      {source === "drive"
-                        ? "We only add folders after verifying access and basic safety checks."
-                        : "Import a shared folder. A copy will be added to your Personal Repository after verification."}
+                      We only add folders after verifying access and basic safety checks.
                     </div>
                   </>
                 ) : (
@@ -799,9 +768,9 @@ export function AddFolderDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              {source === "drive" || source === "import" ? (
+              {source === "drive" ? (
                 <Button type="button" disabled={!canVerify} onClick={() => void runVerification()}>
-                  {source === "import" ? "Verify" : "Verify Folder"}
+                  Verify Link
                 </Button>
               ) : null}
             </div>

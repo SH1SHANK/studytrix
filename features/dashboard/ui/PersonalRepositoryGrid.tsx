@@ -1,19 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconPlus } from "@tabler/icons-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { MoreHorizontal } from "lucide-react";
+import { Camera, FolderPlus, HeartPulse, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
 
-import { AddFolderCard } from "@/features/custom-folders/ui/AddFolderCard";
 import { AddFolderDialog } from "@/features/custom-folders/ui/AddFolderDialog";
+import { CreateFolderSheet } from "@/features/custom-folders/ui/CreateFolderSheet";
+import { FolderHealthBadge } from "@/features/custom-folders/ui/FolderHealthBadge";
 import { EditFolderSheet } from "@/features/custom-folders/ui/EditFolderSheet";
+import { FolderHealthSheet } from "@/features/custom-folders/ui/FolderHealthSheet";
 import { LocalFolderReconnectBanner } from "@/features/custom-folders/ui/LocalFolderReconnectBanner";
 import { PersonalFolderCard } from "@/features/custom-folders/ui/PersonalFolderCard";
 import { PersonalFolderListRow } from "@/features/custom-folders/ui/PersonalFolderListRow";
+import { QuickCaptureFAB } from "@/features/custom-folders/ui/QuickCaptureFAB";
+import { QuickCaptureSheet } from "@/features/custom-folders/ui/QuickCaptureSheet";
 import { SmartCollectionsShelf } from "@/features/custom-folders/ui/SmartCollectionsShelf";
 import { PinnedFilesShelf } from "@/features/custom-folders/ui/PinnedFilesShelf";
 import { StudySetsShelf } from "@/features/custom-folders/ui/StudySetsShelf";
@@ -22,6 +26,7 @@ import { CollectionDetailView } from "@/features/custom-folders/ui/CollectionDet
 import { useSmartCollectionsStore } from "@/features/custom-folders/smart-collections.store";
 import { useStudySetsStore } from "@/features/custom-folders/study-sets.store";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +56,15 @@ import { useTagStore } from "@/features/tags/tag.store";
 import type { FilterMode, TagAssignment } from "@/features/tags/tag.types";
 import { useSetting } from "@/ui/hooks/useSettings";
 import { cn } from "@/lib/utils";
+import { usePersonalFilesStore } from "@/features/custom-folders/personal-files.store";
+import { savePersonalFileLocal } from "@/features/custom-folders/personal-files.ingest";
+import {
+  drainPendingCaptures,
+  getFailedCaptureCount,
+  getFailedMoveCount,
+  isCaptureSyncEnabled,
+} from "@/features/custom-folders/capture.queue";
+import { getFolderHealth } from "@/features/custom-folders/custom-folders.utils";
 
 type PersonalRepositoryGridProps = {
   showSharedChrome?: boolean;
@@ -73,6 +87,14 @@ type PersonalFileView = {
   sourceLabel: string;
   mimeType?: string;
 };
+
+function createLocalVirtualFolderId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `local_virtual_${crypto.randomUUID()}`;
+  }
+
+  return `local_virtual_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+}
 
 function resolvePersonalAssignment(
   assignments: Record<string, TagAssignment>,
@@ -106,6 +128,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   const router = useRouter();
   const hydrationRef = useRef(false);
   const folders = useCustomFoldersStore((state) => state.folders);
+  const addFolder = useCustomFoldersStore((state) => state.addFolder);
   const removeFolder = useCustomFoldersStore((state) => state.removeFolder);
   const renameFolder = useCustomFoldersStore((state) => state.renameFolder);
   const refreshFolder = useCustomFoldersStore((state) => state.refreshFolder);
@@ -124,6 +147,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   const personalFilterMode = useDashboardToolbarStore((state) => state.personalFilterMode);
   const setPersonalFilterMode = useDashboardToolbarStore((state) => state.setPersonalFilterMode);
   const indexedEntries = useIntelligenceStore((state) => state.indexedEntries);
+  const personalFileRecords = usePersonalFilesStore((state) => state.records);
   const collections = useSmartCollectionsStore((state) => state.collections);
   const lastGeneratedAt = useSmartCollectionsStore((state) => state.lastGeneratedAt);
   const generateCollections = useSmartCollectionsStore((state) => state.generateCollections);
@@ -157,11 +181,20 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   );
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
+  const [createFolderParentId, setCreateFolderParentId] = useState<string | null>(null);
+  const [isFolderHealthOpen, setIsFolderHealthOpen] = useState(false);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+  const [quickCaptureMode, setQuickCaptureMode] = useState<"photo" | "note" | "voice">("photo");
+  const [failedSyncCount, setFailedSyncCount] = useState(0);
+  const [isCreateStudySetOpen, setIsCreateStudySetOpen] = useState(false);
+  const [studySetNameDraft, setStudySetNameDraft] = useState("");
   const [editingFolder, setEditingFolder] = useState<CustomFolder | null>(null);
   const [removeTarget, setRemoveTarget] = useState<CustomFolder | null>(null);
   const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [activeStudySetId, setActiveStudySetId] = useState<string | null>(null);
+  const [activeAcceptedTags, setActiveAcceptedTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (defaultDashboardView === "grid" || defaultDashboardView === "list") {
@@ -200,8 +233,62 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
     [assignments, folders],
   );
 
+  const rootFolders = useMemo(
+    () => orderedFolders.filter((folder) => !folder.parentFolderId),
+    [orderedFolders],
+  );
+
+  const folderTagsByRootId = useMemo(() => {
+    const byId = new Map(orderedFolders.map((folder) => [folder.id, folder]));
+    const tagsByRoot = new Map<string, Set<string>>();
+
+    const resolveRootId = (folderId: string): string | null => {
+      let cursor = byId.get(folderId);
+      let safety = 0;
+      while (cursor?.parentFolderId && safety < 50) {
+        cursor = byId.get(cursor.parentFolderId);
+        safety += 1;
+      }
+      return cursor?.id ?? (byId.has(folderId) ? folderId : null);
+    };
+
+    for (const record of personalFileRecords) {
+      if (!Array.isArray(record.tags) || record.tags.length === 0) {
+        continue;
+      }
+      const rootId = resolveRootId(record.folderId);
+      if (!rootId) {
+        continue;
+      }
+
+      const current = tagsByRoot.get(rootId) ?? new Set<string>();
+      record.tags.forEach((tag) => {
+        const normalized = tag.trim();
+        if (normalized) {
+          current.add(normalized);
+        }
+      });
+      tagsByRoot.set(rootId, current);
+    }
+
+    return tagsByRoot;
+  }, [orderedFolders, personalFileRecords]);
+
+  const uniqueAcceptedTags = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          personalFileRecords
+            .flatMap((record) => record.tags)
+            .map((tag) => tag.trim())
+            .filter((tag) => tag.length > 0),
+        ),
+      ).sort((left, right) => left.localeCompare(right)),
+    [personalFileRecords],
+  );
+
   const filteredFolders = useMemo(() => {
-    const filtered = orderedFolders.filter((folder) => {
+    const filtered = rootFolders.filter((folder) => {
       const matchesState =
         personalFilterMode === "pinned"
           ? folder.pinnedToTop
@@ -217,7 +304,17 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         return false;
       }
 
-      return matchesTagFilters(folder.tagIds, activeFilters, filterMode);
+      const matchesTagAssignments = matchesTagFilters(folder.tagIds, activeFilters, filterMode);
+      if (!matchesTagAssignments) {
+        return false;
+      }
+
+      if (activeAcceptedTags.length === 0) {
+        return true;
+      }
+
+      const tagSet = folderTagsByRootId.get(folder.id) ?? new Set<string>();
+      return activeAcceptedTags.every((tag) => tagSet.has(tag));
     });
 
     return [...filtered].sort((left, right) => {
@@ -239,7 +336,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
           return right.addedAt - left.addedAt;
       }
     });
-  }, [activeFilters, filterMode, orderedFolders, personalFilterMode, sortKey]);
+  }, [activeAcceptedTags, activeFilters, filterMode, folderTagsByRootId, personalFilterMode, rootFolders, sortKey]);
 
   const localFolders = useMemo(
     () => orderedFolders.filter((folder) => (folder.sourceKind ?? "drive") === "local"),
@@ -265,8 +362,19 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
     }
     return map;
   }, [orderedFolders, tagMap]);
+  const folderHealthById = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getFolderHealth>>();
+    for (const folder of orderedFolders) {
+      map.set(folder.id, getFolderHealth({ folder }));
+    }
+    return map;
+  }, [orderedFolders]);
 
-  const hasFolders = orderedFolders.length > 0;
+  const hasFolders = rootFolders.length > 0;
+  const totalItemsCount = useMemo(
+    () => orderedFolders.reduce((sum, folder) => sum + folder.fileCount + folder.folderCount, 0),
+    [orderedFolders],
+  );
   const hasActivePersonalFilters = personalFilterMode !== "all" || activeFilters.length > 0;
   const reconnectFolderIds = useMemo(() => Array.from(needsReconnect), [needsReconnect]);
 
@@ -322,6 +430,24 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
     () => sets.find((setItem) => setItem.id === activeStudySetId) ?? null,
     [activeStudySetId, sets],
   );
+  const quickCaptureDestinations = useMemo(
+    () => rootFolders.map((folder) => ({ id: folder.id, label: folder.label })),
+    [rootFolders],
+  );
+  const queueSyncEnabled = isCaptureSyncEnabled();
+
+  const refreshFailedSyncCount = useCallback(async () => {
+    if (!queueSyncEnabled) {
+      setFailedSyncCount(0);
+      return;
+    }
+
+    const [failedCaptures, failedMoves] = await Promise.all([
+      getFailedCaptureCount(),
+      getFailedMoveCount(),
+    ]);
+    setFailedSyncCount(failedCaptures + failedMoves);
+  }, [queueSyncEnabled]);
 
   useEffect(() => {
     const handler = () => {
@@ -339,12 +465,32 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
       if (lastGeneratedAt === null || Date.now() - lastGeneratedAt > 86_400_000) {
         void generateCollections();
       }
+
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        void drainPendingCaptures().finally(() => {
+          void refreshFailedSyncCount();
+        });
+      }
     };
 
     handler();
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
-  }, [generateCollections, lastGeneratedAt, localFolders, refreshLocalFolder]);
+  }, [generateCollections, lastGeneratedAt, localFolders, refreshFailedSyncCount, refreshLocalFolder]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      void drainPendingCaptures().finally(() => {
+        void refreshFailedSyncCount();
+      });
+    };
+
+    void refreshFailedSyncCount();
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+    };
+  }, [refreshFailedSyncCount]);
 
   return (
     <section
@@ -360,26 +506,79 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         <h2>Personal Repository</h2>
       </header>
 
-      <div className="mb-2 flex items-center justify-end">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button type="button" size="icon" variant="ghost" aria-label="Personal Repository actions" />}
-          >
-            <MoreHorizontal className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem
-              onClick={() => {
-                const nextName = `Study Set ${sets.length + 1}`;
-                const setId = createSet(nextName);
-                setActiveStudySetId(setId);
-                toast.success(`${nextName} created`);
-              }}
+      <div className="mb-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card/95 to-primary/5 p-3 shadow-sm backdrop-blur-sm sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
+              Personal Repository
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {orderedFolders.length} folders · {totalItemsCount} items
+            </p>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button type="button" size="icon" variant="ghost" aria-label="Personal Repository actions" />}
             >
-              Create Study Set
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <MoreHorizontal className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => setIsFolderHealthOpen(true)}>
+                Open Folder Health
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Button type="button" size="sm" className="justify-start" onClick={() => setIsAddDialogOpen(true)}>
+            <FolderPlus className="size-4" />
+            Add Folder
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="justify-start"
+            onClick={() => {
+              setCreateFolderParentId(null);
+              setIsCreateFolderOpen(true);
+            }}
+          >
+            <FolderPlus className="size-4" />
+            Create Folder
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="justify-start"
+            onClick={() => {
+              setQuickCaptureMode("photo");
+              setQuickCaptureOpen(true);
+            }}
+          >
+            <Camera className="size-4" />
+            Quick Capture
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="justify-start"
+            onClick={() => setIsCreateStudySetOpen(true)}
+          >
+            <IconPlus className="size-4" />
+            New Study Set
+          </Button>
+        </div>
+
+        <div className="mt-2 flex justify-end">
+          <Button type="button" size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={() => setIsFolderHealthOpen(true)}>
+            <HeartPulse className="size-4" />
+            Folder Health
+          </Button>
+        </div>
       </div>
 
       {reconnectFolderIds.length > 0 ? (
@@ -388,6 +587,20 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
             <LocalFolderReconnectBanner key={folderId} folderId={folderId} />
           ))}
         </div>
+      ) : null}
+
+      {queueSyncEnabled && failedSyncCount > 0 ? (
+        <button
+          type="button"
+          className="mb-2 w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-xs text-amber-800 dark:text-amber-300"
+          onClick={() => {
+            void drainPendingCaptures().finally(() => {
+              void refreshFailedSyncCount();
+            });
+          }}
+        >
+          {failedSyncCount} sync operation{failedSyncCount === 1 ? "" : "s"} failed. Tap to retry.
+        </button>
       ) : null}
 
       <SmartCollectionsShelf
@@ -409,17 +622,46 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         onOpenSet={setActiveStudySetId}
       />
 
+      {uniqueAcceptedTags.length >= 3 ? (
+        <section className="mt-3 space-y-2">
+          <header className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Tags
+          </header>
+          <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1">
+            {uniqueAcceptedTags.map((tag) => {
+              const active = activeAcceptedTags.includes(tag);
+              return (
+                <button
+                  key={`accepted-tag-${tag}`}
+                  type="button"
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    active
+                      ? "border-primary/45 bg-primary/12 text-primary"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted/40",
+                  )}
+                  onClick={() => {
+                    setActiveAcceptedTags((current) =>
+                      current.includes(tag)
+                        ? current.filter((entry) => entry !== tag)
+                        : [...current, tag],
+                    );
+                  }}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
       {!hasFolders ? (
         <div className="mt-4 rounded-2xl border border-dashed border-border/70 bg-card/50 px-5 py-8 text-center">
           <h3 className="text-base font-semibold text-foreground">Your personal space is empty</h3>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Add Drive folders you own or have access to —
-            your notes, shared resources, anything you study from.
+            Use the actions above to add folders, create study sets, and start quick capture.
           </p>
-          <Button type="button" className="mt-5" onClick={() => setIsAddDialogOpen(true)}>
-            <IconPlus className="size-4" />
-            Add Folder
-          </Button>
         </div>
       ) : filteredFolders.length === 0 ? (
         <div className="mt-4 rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -441,7 +683,6 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         </div>
       ) : viewMode === "grid" ? (
         <motion.div layout className="mt-4 grid grid-cols-2 gap-4">
-          <AddFolderCard onClick={() => setIsAddDialogOpen(true)} />
           <AnimatePresence initial={false}>
             {filteredFolders.map((folder, index) => (
               <motion.div
@@ -456,8 +697,17 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                   folder={folder}
                   starred={folder.starred}
                   tags={folderTagPreviewById.get(folder.id) ?? []}
+                  errorState={folderHealthById.get(folder.id)?.status === "error"}
+                  healthBadge={folderHealthById.get(folder.id) ? (
+                    <FolderHealthBadge health={folderHealthById.get(folder.id)!} />
+                  ) : null}
                   iconLayoutId={newlyAddedId === folder.id ? `personal-folder-icon-${folder.id}` : undefined}
                   onOpen={() => {
+                    const health = folderHealthById.get(folder.id);
+                    if (health?.status === "error" && (folder.sourceKind ?? "drive") === "local") {
+                      void refreshLocalFolder(folder.id);
+                      return;
+                    }
                     router.push(
                       buildPersonalFolderRouteHref({
                         folderId: folder.id,
@@ -479,6 +729,20 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                       toast.error(error instanceof Error ? error.message : "Couldn't refresh this folder.");
                     }
                   }}
+                  onNewSubfolder={() => {
+                    setCreateFolderParentId(folder.id);
+                    setIsCreateFolderOpen(true);
+                  }}
+                  onAddFiles={() => {
+                    router.push(
+                      buildPersonalFolderRouteHref({
+                        folderId: folder.id,
+                        folderName: folder.label,
+                        trailLabels: [folder.label],
+                        trailIds: [folder.id],
+                      }),
+                    );
+                  }}
                   onRemove={() => {
                     setRemoveTarget(folder);
                   }}
@@ -490,20 +754,6 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         </motion.div>
       ) : (
         <motion.div layout className="mt-4 flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={() => setIsAddDialogOpen(true)}
-            className="flex min-h-16 items-center gap-3 rounded-xl border-2 border-dotted border-border/70 bg-card/45 px-4 text-left transition-colors hover:border-primary/55 hover:bg-card"
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/70 bg-card">
-              <IconPlus className="size-5 text-muted-foreground" />
-            </span>
-            <span>
-              <span className="block text-sm font-semibold text-foreground">Add Folder</span>
-              <span className="block text-xs text-muted-foreground">Connect another Drive folder or local folder</span>
-            </span>
-          </button>
-
           <AnimatePresence initial={false}>
             {filteredFolders.map((folder, index) => (
               <motion.div
@@ -522,7 +772,16 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                   sourceKind={folder.sourceKind}
                   starred={folder.starred}
                   tags={folderTagPreviewById.get(folder.id) ?? []}
+                  errorState={folderHealthById.get(folder.id)?.status === "error"}
+                  healthBadge={folderHealthById.get(folder.id) ? (
+                    <FolderHealthBadge health={folderHealthById.get(folder.id)!} />
+                  ) : null}
                   onOpen={() => {
+                    const health = folderHealthById.get(folder.id);
+                    if (health?.status === "error" && (folder.sourceKind ?? "drive") === "local") {
+                      void refreshLocalFolder(folder.id);
+                      return;
+                    }
                     router.push(
                       buildPersonalFolderRouteHref({
                         folderId: folder.id,
@@ -543,6 +802,20 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                       toast.error(error instanceof Error ? error.message : "Couldn't refresh this folder.");
                     }
                   }}
+                  onNewSubfolder={() => {
+                    setCreateFolderParentId(folder.id);
+                    setIsCreateFolderOpen(true);
+                  }}
+                  onAddFiles={() => {
+                    router.push(
+                      buildPersonalFolderRouteHref({
+                        folderId: folder.id,
+                        folderName: folder.label,
+                        trailLabels: [folder.label],
+                        trailIds: [folder.id],
+                      }),
+                    );
+                  }}
                   onEdit={() => setEditingFolder(folder)}
                   onRemove={() => setRemoveTarget(folder)}
                 />
@@ -558,6 +831,152 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         onFolderAdded={(folderId) => {
           setNewlyAddedId(folderId);
           window.setTimeout(() => setNewlyAddedId((current) => (current === folderId ? null : current)), 700);
+        }}
+      />
+
+      <CreateFolderSheet
+        open={isCreateFolderOpen}
+        onOpenChange={(open) => {
+          setIsCreateFolderOpen(open);
+          if (!open) {
+            setCreateFolderParentId(null);
+          }
+        }}
+        parentOptions={rootFolders.map((folder) => ({ id: folder.id, label: folder.label }))}
+        defaultParentId={createFolderParentId}
+        onCreate={({ name, colour, parentFolderId }) => {
+          const now = Date.now();
+          const folderId = createLocalVirtualFolderId();
+          const nextFolder: CustomFolder = {
+            id: folderId,
+            label: name,
+            colour,
+            pinnedToTop: false,
+            addedAt: now,
+            lastRefreshedAt: now,
+            fileCount: 0,
+            folderCount: 0,
+            accessVerifiedAt: now,
+            sourceKind: "local-virtual",
+            parentFolderId: parentFolderId ?? undefined,
+            syncStatus: {
+              lastScannedAt: now,
+              fileCount: 0,
+              lastSyncError: null,
+            },
+          };
+          addFolder(nextFolder);
+
+          const existingFolders = useCustomFoldersStore.getState().folders;
+          const byId = new Map(existingFolders.map((folder) => [folder.id, folder]));
+          byId.set(nextFolder.id, nextFolder);
+          const lineage: CustomFolder[] = [];
+          let cursor: CustomFolder | undefined = nextFolder;
+          let safety = 0;
+          while (cursor && safety < 50) {
+            lineage.push(cursor);
+            cursor = cursor.parentFolderId ? byId.get(cursor.parentFolderId) : undefined;
+            safety += 1;
+          }
+          lineage.reverse();
+          const ancestorIds = lineage.slice(0, -1).map((folder) => folder.id);
+          const customFolderId = lineage[0]?.id ?? nextFolder.id;
+          const fullPath = lineage.map((folder) => folder.label).join(" > ");
+          void useIntelligenceStore.getState().indexIncrementalFiles([
+            {
+              fileId: nextFolder.id,
+              name: nextFolder.label,
+              fullPath,
+              ancestorIds,
+              depth: ancestorIds.length,
+              isFolder: true,
+              repoKind: "personal",
+              customFolderId,
+              mimeType: "application/vnd.google-apps.folder",
+            },
+          ]);
+          if (!parentFolderId) {
+            setNewlyAddedId(folderId);
+            window.setTimeout(() => setNewlyAddedId((current) => (current === folderId ? null : current)), 700);
+          }
+          toast.success("Folder created");
+        }}
+      />
+
+      <FolderHealthSheet
+        open={isFolderHealthOpen}
+        onOpenChange={setIsFolderHealthOpen}
+      />
+
+      <Dialog
+        open={isCreateStudySetOpen}
+        onOpenChange={(open) => {
+          setIsCreateStudySetOpen(open);
+          if (!open) {
+            setStudySetNameDraft("");
+          }
+        }}
+      >
+        <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto w-full max-w-none translate-x-0 translate-y-0 rounded-t-3xl border-t border-border/70 p-4 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:w-full sm:max-w-sm sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border">
+          <DialogHeader>
+            <DialogTitle>Create Study Set</DialogTitle>
+            <DialogDescription>Name your set and start adding files.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={studySetNameDraft}
+            maxLength={40}
+            onChange={(event) => setStudySetNameDraft(event.target.value)}
+            placeholder={`Study Set ${sets.length + 1}`}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsCreateStudySetOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const nextName = studySetNameDraft.trim() || `Study Set ${sets.length + 1}`;
+                const setId = createSet(nextName);
+                setActiveStudySetId(setId);
+                setIsCreateStudySetOpen(false);
+                setStudySetNameDraft("");
+                toast.success(`${nextName} created`);
+              }}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <QuickCaptureSheet
+        open={quickCaptureOpen}
+        onOpenChange={setQuickCaptureOpen}
+        initialMode={quickCaptureMode}
+        destinations={quickCaptureDestinations}
+        onSaveCapture={async (capture) => {
+          try {
+            await savePersonalFileLocal({
+              folderId: capture.folderId,
+              fileName: capture.fileName,
+              mimeType: capture.mimeType,
+              blob: capture.blob,
+              source: "capture",
+            });
+            toast.success("Capture saved");
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Could not save this capture.";
+            toast.error(message);
+            throw error;
+          }
+        }}
+      />
+
+      <QuickCaptureFAB
+        onOpen={(mode) => {
+          setQuickCaptureMode(mode ?? "photo");
+          setQuickCaptureOpen(true);
         }}
       />
 

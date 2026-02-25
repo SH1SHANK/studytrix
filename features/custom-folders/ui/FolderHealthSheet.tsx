@@ -70,11 +70,10 @@ export function FolderHealthSheet({ open, onOpenChange }: FolderHealthSheetProps
     }
     setRefreshAllInFlight(true);
     try {
-      for (const folder of folders) {
-        // Sequential refresh prevents API burst and keeps UI predictable.
-        // eslint-disable-next-line no-await-in-loop
+      await folders.reduce<Promise<void>>(async (chain, folder) => {
+        await chain;
         await refreshOne(folder.id);
-      }
+      }, Promise.resolve());
     } finally {
       setRefreshAllInFlight(false);
     }
@@ -82,7 +81,7 @@ export function FolderHealthSheet({ open, onOpenChange }: FolderHealthSheetProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto max-h-[80dvh] w-full max-w-none rounded-t-3xl border-t p-0 sm:inset-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[75dvh] sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl">
+      <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto max-h-[80dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-t-3xl border-t border-border/70 p-0 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[75dvh] sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border">
         <div className="max-h-[72dvh] overflow-y-auto p-4">
           <DialogHeader>
             <DialogTitle>Folder Health</DialogTitle>
@@ -124,4 +123,3 @@ export function FolderHealthSheet({ open, onOpenChange }: FolderHealthSheetProps
     </Dialog>
   );
 }
-

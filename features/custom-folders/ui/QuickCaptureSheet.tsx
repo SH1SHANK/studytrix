@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Mic, PenSquare, StopCircle, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -410,7 +411,7 @@ export function QuickCaptureSheet({
         onOpenChange(nextOpen);
       }}
     >
-      <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto max-h-[88dvh] w-full max-w-none rounded-t-3xl border-t p-0 sm:inset-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[85dvh] sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl">
+      <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto max-h-[88dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-t-3xl border-t border-border/70 p-0 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[85dvh] sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border">
         <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-muted" />
         <div className="max-h-[82dvh] overflow-y-auto px-5 pb-4 pt-3 sm:px-6">
           <DialogHeader className="space-y-1">
@@ -493,7 +494,14 @@ export function QuickCaptureSheet({
                   Take Photo
                 </Button>
                 {photoPreviewUrl ? (
-                  <img src={photoPreviewUrl} alt="Photo preview" className="max-h-56 w-full rounded-xl border border-border object-cover" />
+                  <Image
+                    src={photoPreviewUrl}
+                    alt="Photo preview"
+                    width={1200}
+                    height={800}
+                    unoptimized
+                    className="max-h-56 w-full rounded-xl border border-border object-cover"
+                  />
                 ) : null}
                 <Input
                   value={photoFileName}
@@ -605,4 +613,3 @@ export function QuickCaptureSheet({
     </Dialog>
   );
 }
-

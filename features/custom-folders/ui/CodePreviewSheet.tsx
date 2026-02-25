@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Copy, Download, Share2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,6 +24,19 @@ type CodePreviewSheetProps = {
 };
 
 const MAX_PREVIEW_BYTES = 500 * 1024;
+const HIGHLIGHT_THEME_CSS = `
+.studytrix-hljs-light .hljs { color: #24292f; background: #f6f8fa; }
+.studytrix-hljs-light .hljs-comment,.studytrix-hljs-light .hljs-quote { color: #6e7781; }
+.studytrix-hljs-light .hljs-keyword,.studytrix-hljs-light .hljs-selector-tag,.studytrix-hljs-light .hljs-literal,.studytrix-hljs-light .hljs-name { color: #cf222e; }
+.studytrix-hljs-light .hljs-string,.studytrix-hljs-light .hljs-title,.studytrix-hljs-light .hljs-section,.studytrix-hljs-light .hljs-attribute { color: #0a3069; }
+.studytrix-hljs-light .hljs-number,.studytrix-hljs-light .hljs-meta { color: #8250df; }
+
+.studytrix-hljs-dark .hljs { color: #c9d1d9; background: #0d1117; }
+.studytrix-hljs-dark .hljs-comment,.studytrix-hljs-dark .hljs-quote { color: #8b949e; }
+.studytrix-hljs-dark .hljs-keyword,.studytrix-hljs-dark .hljs-selector-tag,.studytrix-hljs-dark .hljs-literal,.studytrix-hljs-dark .hljs-name { color: #ff7b72; }
+.studytrix-hljs-dark .hljs-string,.studytrix-hljs-dark .hljs-title,.studytrix-hljs-dark .hljs-section,.studytrix-hljs-dark .hljs-attribute { color: #a5d6ff; }
+.studytrix-hljs-dark .hljs-number,.studytrix-hljs-dark .hljs-meta { color: #d2a8ff; }
+`;
 
 function normalizeTextSource(source: unknown): string {
   if (Array.isArray(source)) {
@@ -37,6 +50,29 @@ function normalizeTextSource(source: unknown): string {
 
 function readAsText(blob: Blob): Promise<string> {
   return blob.text();
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+async function highlightWithHighlightJs(text: string, language: string): Promise<string> {
+  try {
+    const hljsModule = await import("highlight.js");
+    const hljs = hljsModule.default;
+    if (language && hljs.getLanguage(language)) {
+      return hljs.highlight(text, {
+        language,
+        ignoreIllegals: true,
+      }).value;
+    }
+    return hljs.highlightAuto(text).value;
+  } catch {
+    return escapeHtml(text);
+  }
 }
 
 function isDarkThemeActive(): boolean {
@@ -58,10 +94,11 @@ export function CodePreviewSheet({
   const [highlightedHtml, setHighlightedHtml] = useState("");
   const [isNotebook, setIsNotebook] = useState(false);
   const [notebookCells, setNotebookCells] = useState<NotebookCell[]>([]);
+  const [notebookCodeHtmlByIndex, setNotebookCodeHtmlByIndex] = useState<Record<number, string>>({});
 
   const languageLabel = getCodeLanguage(extension) ?? extension.toUpperCase();
   const syntaxLanguage = getSyntaxHighlightLanguage(extension);
-  const darkTheme = useMemo(() => (typeof document !== "undefined" ? isDarkThemeActive() : false), [open]);
+  const darkTheme = typeof document !== "undefined" ? isDarkThemeActive() : false;
 
   useEffect(() => {
     if (!open || !fileId) {
@@ -69,6 +106,7 @@ export function CodePreviewSheet({
       setRawContent("");
       setHighlightedHtml("");
       setNotebookCells([]);
+      setNotebookCodeHtmlByIndex({});
       setIsNotebook(false);
       return;
     }
@@ -100,18 +138,36 @@ export function CodePreviewSheet({
         if (isIpynb) {
           try {
             const parsed = JSON.parse(text) as { cells?: NotebookCell[] };
-            setNotebookCells(Array.isArray(parsed.cells) ? parsed.cells : []);
+            const cells = Array.isArray(parsed.cells) ? parsed.cells : [];
+            const highlightedCodeEntries = await Promise.all(
+              cells.map(async (cell, index) => {
+                if (cell?.cell_type !== "code") {
+                  return [index, ""] as const;
+                }
+                const source = normalizeTextSource(cell.source);
+                const html = await highlightWithHighlightJs(source, "python");
+                return [index, html] as const;
+              }),
+            );
+            const nextHighlights = highlightedCodeEntries.reduce<Record<number, string>>((acc, [index, html]) => {
+              if (html) {
+                acc[index] = html;
+              }
+              return acc;
+            }, {});
+            setNotebookCells(cells);
+            setNotebookCodeHtmlByIndex(nextHighlights);
             setStatus("ready");
             return;
           } catch {
             setNotebookCells([]);
+            setNotebookCodeHtmlByIndex({});
           }
         }
 
-        const hljs = await import("highlight.js");
-        const highlighted = hljs.default.highlight(text, { language: syntaxLanguage, ignoreIllegals: true });
+        const highlighted = await highlightWithHighlightJs(text, syntaxLanguage);
         if (!cancelled) {
-          setHighlightedHtml(highlighted.value);
+          setHighlightedHtml(highlighted);
           setStatus("ready");
         }
       } catch {
@@ -161,6 +217,7 @@ export function CodePreviewSheet({
         <div className="fixed inset-0 z-[70] bg-black/50" onClick={() => onOpenChange(false)} />
       ) : null}
       <div className={`fixed inset-0 z-[80] ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
+        <style>{HIGHLIGHT_THEME_CSS}</style>
         <div className={`absolute inset-0 transform bg-background transition-transform duration-200 ${open ? "translate-y-0" : "translate-y-full"}`}>
           <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
             <div className="min-w-0">
@@ -183,7 +240,7 @@ export function CodePreviewSheet({
           {status === "missing" ? (
             <div className="p-4">
               <p className="text-sm text-muted-foreground">Download this file first to preview it.</p>
-              {fileId ? (
+              {fileId && onRequestDownload ? (
                 <Button type="button" className="mt-3" onClick={() => onRequestDownload?.(fileId)}>
                   <Download className="size-4" />
                   Download
@@ -205,14 +262,14 @@ export function CodePreviewSheet({
           ) : null}
 
           {status === "ready" && !isNotebook ? (
-            <div className="h-[calc(100%-56px)] overflow-auto">
+            <div className={`h-[calc(100%-56px)] overflow-auto ${darkTheme ? "studytrix-hljs-dark" : "studytrix-hljs-light"}`}>
               <div className="flex min-w-max">
                 <div className="select-none border-r border-border bg-muted/40 px-2 py-3 text-right text-xs text-muted-foreground">
                   {codeLines.map((_, index) => (
                     <div key={`line-${index + 1}`} className="h-5 leading-5">{index + 1}</div>
                   ))}
                 </div>
-                <pre className={`hljs m-0 p-3 text-xs leading-5 ${darkTheme ? "bg-[#0d1117] text-[#c9d1d9]" : "bg-[#f6f8fa] text-[#24292f]"}`}>
+                <pre className="hljs m-0 p-3 text-xs leading-5">
                   <code dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
                 </pre>
               </div>
@@ -220,7 +277,7 @@ export function CodePreviewSheet({
           ) : null}
 
           {status === "ready" && isNotebook ? (
-            <div className="h-[calc(100%-56px)] overflow-auto p-3">
+            <div className={`h-[calc(100%-56px)] overflow-auto p-3 ${darkTheme ? "studytrix-hljs-dark" : "studytrix-hljs-light"}`}>
               <p className="mb-2 text-xs text-muted-foreground">Jupyter Notebook · {notebookCells.length} cells</p>
               <div className="space-y-3">
                 {notebookCells.map((cell, index) => {
@@ -242,7 +299,9 @@ export function CodePreviewSheet({
 
                   return (
                     <article key={`code-${index}`} className="rounded-lg border border-border bg-card p-3">
-                      <pre className="overflow-auto whitespace-pre text-xs leading-5">{source}</pre>
+                      <pre className="hljs overflow-auto whitespace-pre text-xs leading-5">
+                        <code dangerouslySetInnerHTML={{ __html: notebookCodeHtmlByIndex[index] ?? escapeHtml(source) }} />
+                      </pre>
                       {outputText ? (
                         <div className="mt-2 rounded border border-border/70 bg-muted/30 p-2 text-xs text-muted-foreground">
                           <p className="mb-1 font-medium">Output</p>
@@ -260,4 +319,3 @@ export function CodePreviewSheet({
     </>
   );
 }
-

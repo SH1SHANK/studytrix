@@ -12,11 +12,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { IconChevronDown, IconFolderOff } from "@tabler/icons-react";
+import { Camera, Plus } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 
 import { useFileManagerViewMode } from "@/features/file/ui/file-manager/ControlsBar";
 import { FileRow } from "@/features/file/ui/file-manager/FileRow";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDriveFolder } from "@/features/drive/drive.hooks";
 import type { DownloadTask as DownloadManagerTask } from "@/features/download/download.types";
@@ -24,6 +34,7 @@ import { openLocalFirst } from "@/features/offline/offline.access";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
 import { loadOfflineLibrarySnapshot } from "@/features/offline/offline.library";
 import { autoPrefetch } from "@/features/offline/offline.prefetch";
+import { getFile } from "@/features/offline/offline.db";
 import { useSettingsStore } from "@/features/settings/settings.store";
 import {
   formatFileSize,
@@ -45,6 +56,13 @@ import {
   parseRepositoryRoute,
 } from "@/features/navigation/repository-route";
 import { cn } from "@/lib/utils";
+import { isCodeFile } from "@/features/custom-folders/file-type.utils";
+import { AddFilesSheet } from "@/features/custom-folders/ui/AddFilesSheet";
+import { QuickCaptureSheet } from "@/features/custom-folders/ui/QuickCaptureSheet";
+import { emitCodePreviewRequest } from "@/features/custom-folders/code-preview.events";
+import { savePersonalFileLocal, reindexPersonalFileRecord } from "@/features/custom-folders/personal-files.ingest";
+import { usePersonalFilesStore } from "@/features/custom-folders/personal-files.store";
+import { enqueuePendingMove } from "@/features/custom-folders/capture.queue";
 
 type FileListProps = {
   driveFolderId: string | null;
@@ -56,6 +74,7 @@ type FileListRow = {
   type: "folder" | "file";
   title: string;
   subtitle: string;
+  fullPath: string | null;
   sourceKind: "drive" | "local";
   customFolderId?: string;
   mimeType: string | null;
@@ -63,6 +82,14 @@ type FileListRow = {
   modifiedTime: string | null;
   webViewLink: string | null;
 };
+
+function createPendingMoveId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `pending_move_${crypto.randomUUID()}`;
+  }
+
+  return `pending_move_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+}
 
 function areSetsEqual(left: Set<string>, right: Set<string>): boolean {
   if (left.size !== right.size) {
@@ -182,6 +209,11 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const [swipeEnabled, setSwipeEnabled] = useState(false);
   const [foldersOpen, setFoldersOpen] = useState(true);
   const [filesOpen, setFilesOpen] = useState(true);
+  const [addFilesSheetOpen, setAddFilesSheetOpen] = useState(false);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+  const [quickCaptureInitialMode, setQuickCaptureInitialMode] = useState<"photo" | "note" | "voice">("photo");
+  const [moveFileId, setMoveFileId] = useState<string | null>(null);
+  const [moveTargetFolderId, setMoveTargetFolderId] = useState("");
   const offlineFiles = useOfflineIndexStore((state) => state.snapshot.offlineFiles);
   const offlineSnapshotUpdatedAt = useOfflineIndexStore((state) => state.snapshot.updatedAt);
   const removeOffline = useOfflineIndexStore((state) => state.removeOffline);
@@ -208,6 +240,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const gateDownloadRisk = useDownloadRiskGate();
   const setContextItems = useSelectionStore((state) => state.setContextItems);
   const customFolders = useCustomFoldersStore((state) => state.folders);
+  const personalFileRecords = usePersonalFilesStore((state) => state.records);
   const indexedEntries = useIntelligenceStore((state) => state.indexedEntries);
   const routeContext = useMemo(
     () => parseRepositoryRoute({ pathname, searchParams }),
@@ -237,19 +270,26 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   const localRootFolder = useMemo(
     () => customFolders.find((folder) =>
       folder.id === localRootFolderId
-      && (folder.sourceKind ?? "drive") === "local") ?? null,
+      && (folder.sourceKind ?? "drive") !== "drive") ?? null,
     [customFolders, localRootFolderId],
   );
   const isLocalFolderContext = routeContext.repoKind === "personal" && localRootFolder !== null;
   const localCurrentFolderId = routeContext.repoKind === "personal"
     ? (routeContext.folderId?.trim() || driveFolderId?.trim() || "")
     : "";
+  const currentPersonalFolderId = routeContext.repoKind === "personal"
+    ? (routeContext.folderId?.trim() || driveFolderId?.trim() || "")
+    : "";
+  const personalFolderOptions = useMemo(
+    () => customFolders.map((folder) => ({ id: folder.id, label: folder.label })),
+    [customFolders],
+  );
   const localContextSourceEntries = useMemo(() => {
     if (!isLocalFolderContext || !localRootFolder || !localCurrentFolderId) {
       return [] as FileListRow[];
     }
 
-    const rows = indexedEntries
+    const rowsFromIndex = indexedEntries
       .filter((entry) =>
         entry.repoKind === "personal"
         && entry.customFolderId === localRootFolder.id
@@ -268,6 +308,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           type: entry.isFolder ? "folder" : "file",
           title: entry.name,
           subtitle,
+          fullPath: entry.fullPath,
           sourceKind: "local",
           customFolderId: entry.customFolderId,
           mimeType: entry.mimeType ?? null,
@@ -283,10 +324,46 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         return left.title.localeCompare(right.title);
       });
 
+    const rowsById = new Map(rowsFromIndex.map((row) => [row.id, row]));
+    for (const record of personalFileRecords) {
+      if (record.folderId !== localCurrentFolderId || rowsById.has(record.id)) {
+        continue;
+      }
+
+      const sizeLabel = formatFileSize(record.size ?? null);
+      const mimeLabel = getMimeLabel(record.mimeType ?? "", record.name);
+      rowsById.set(record.id, {
+        id: record.id,
+        type: "file",
+        title: record.name,
+        subtitle: showFileMetadata
+          ? [sizeLabel, mimeLabel].filter(Boolean).join(" · ")
+          : "File",
+        fullPath: record.fullPath,
+        sourceKind: "local",
+        customFolderId: localRootFolder.id,
+        mimeType: record.mimeType ?? null,
+        sizeBytes: record.size ?? 0,
+        modifiedTime: record.modifiedTime ?? null,
+        webViewLink: null,
+      });
+    }
+
+    const rows = Array.from(rowsById.values()).sort((left, right) => {
+      if (left.type !== right.type) {
+        return left.type === "folder" ? -1 : 1;
+      }
+      return left.title.localeCompare(right.title);
+    });
+
     return rows;
-  }, [indexedEntries, isLocalFolderContext, localCurrentFolderId, localRootFolder, showFileMetadata]);
+  }, [indexedEntries, isLocalFolderContext, localCurrentFolderId, localRootFolder, personalFileRecords, showFileMetadata]);
   const driveFolderIdForQuery = isLocalFolderContext ? null : driveFolderId;
   const { folders, files, isLoading, error, isStale, lastUpdatedAt } = useDriveFolder(driveFolderIdForQuery);
+  const indexedEntryById = useMemo(
+    () => new Map(indexedEntries.map((entry) => [entry.fileId, entry])),
+    [indexedEntries],
+  );
 
   useEffect(() => {
     if (isLocalFolderContext) {
@@ -306,6 +383,17 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
     return () =>
       mediaQuery.removeEventListener("change", updateSwipeCapability);
   }, []);
+
+  useEffect(() => {
+    if (!moveFileId) {
+      return;
+    }
+
+    const fallback = personalFolderOptions.find((folder) => folder.id !== currentPersonalFolderId)?.id ?? "";
+    if (!moveTargetFolderId) {
+      setMoveTargetFolderId(fallback);
+    }
+  }, [currentPersonalFolderId, moveFileId, moveTargetFolderId, personalFolderOptions]);
 
   useEffect(() => {
     let canceled = false;
@@ -355,19 +443,23 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         return localContextSourceEntries.filter((entry) => entry.type === "folder");
       }
 
-      return folders.map((item): FileListRow => ({
-        id: item.id,
-        type: "folder",
-        title: item.name,
-        subtitle: "Folder",
-        sourceKind: "drive",
-        mimeType: item.mimeType,
-        sizeBytes: 0,
-        modifiedTime: item.modifiedTime,
-        webViewLink: item.webViewLink,
-      }));
+      return folders.map((item): FileListRow => {
+        const indexed = indexedEntryById.get(item.id);
+        return {
+          id: item.id,
+          type: "folder",
+          title: item.name,
+          subtitle: "Folder",
+          fullPath: indexed?.fullPath ?? null,
+          sourceKind: "drive",
+          mimeType: item.mimeType,
+          sizeBytes: 0,
+          modifiedTime: item.modifiedTime,
+          webViewLink: item.webViewLink,
+        };
+      });
     },
-    [folders, isLocalFolderContext, localContextSourceEntries],
+    [folders, indexedEntryById, isLocalFolderContext, localContextSourceEntries],
   );
 
   const fileRows = useMemo<FileListRow[]>(
@@ -383,11 +475,13 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
           ? [sizeLabel, mimeLabel].filter(Boolean).join(" · ")
           : "File";
 
+        const indexed = indexedEntryById.get(item.id);
         return {
           id: item.id,
           type: "file",
           title: item.name,
           subtitle,
+          fullPath: indexed?.fullPath ?? null,
           sourceKind: "drive",
           mimeType: item.mimeType,
           sizeBytes: item.size ?? 0,
@@ -396,10 +490,14 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         };
       });
     },
-    [files, isLocalFolderContext, localContextSourceEntries, showFileMetadata],
+    [files, indexedEntryById, isLocalFolderContext, localContextSourceEntries, showFileMetadata],
   );
 
   const allRows = useMemo<FileListRow[]>(() => [...folderRows, ...fileRows], [folderRows, fileRows]);
+  const rowById = useMemo(
+    () => new Map(allRows.map((row) => [row.id, row])),
+    [allRows],
+  );
   const visibleRows = useMemo(() => {
     if (!virtualizedListsEnabled) {
       return {
@@ -607,6 +705,147 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
     [activeDownloadsByFileId, getRowOfflineState, isLocalFolderContext, offlineFiles],
   );
 
+  const persistPersonalFile = useCallback(async (
+    input: {
+      folderId: string;
+      fileName: string;
+      mimeType: string;
+      blob: Blob;
+      source: "capture" | "upload" | "duplicate" | "move";
+    },
+  ) => {
+    if (!input.folderId.trim()) {
+      toast.error("Select a destination folder first.");
+      return false;
+    }
+
+    try {
+      await savePersonalFileLocal(input);
+      toast.success(`${input.fileName} saved`);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not save this file.";
+      toast.error(message);
+      return false;
+    }
+  }, []);
+
+  const handleUploadFiles = useCallback(async (selectedFiles: File[]) => {
+    if (!currentPersonalFolderId) {
+      toast.error("Open a personal folder first.");
+      return;
+    }
+
+    for (const file of selectedFiles) {
+      await persistPersonalFile({
+        folderId: currentPersonalFolderId,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        blob: file,
+        source: "upload",
+      });
+    }
+  }, [currentPersonalFolderId, persistPersonalFile]);
+
+  const handleDuplicateFile = useCallback(async (fileId: string) => {
+    const row = rowById.get(fileId);
+    if (!row || row.type !== "file") {
+      return;
+    }
+
+    const cached = await getFile(fileId);
+    if (!cached) {
+      toast.error("Download this file first to duplicate it.");
+      return;
+    }
+
+    const targetFolderId = personalFileRecords.find((record) => record.id === fileId)?.folderId
+      ?? currentPersonalFolderId;
+    const duplicateName = `Copy of ${row.title}`;
+    await persistPersonalFile({
+      folderId: targetFolderId,
+      fileName: duplicateName,
+      mimeType: cached.mimeType || row.mimeType || "application/octet-stream",
+      blob: cached.blob,
+      source: "duplicate",
+    });
+  }, [currentPersonalFolderId, personalFileRecords, persistPersonalFile, rowById]);
+
+  const handleMoveFileRequest = useCallback((fileId: string) => {
+    setMoveFileId(fileId);
+    const nextDefault = personalFolderOptions.find((folder) => folder.id !== currentPersonalFolderId)?.id ?? "";
+    setMoveTargetFolderId(nextDefault);
+  }, [currentPersonalFolderId, personalFolderOptions]);
+
+  const handleConfirmMove = useCallback(async () => {
+    if (!moveFileId || !moveTargetFolderId) {
+      return;
+    }
+
+    const row = rowById.get(moveFileId);
+    if (!row || row.type !== "file") {
+      return;
+    }
+
+    const existingRecord = personalFileRecords.find((record) => record.id === moveFileId) ?? null;
+    const sourceFolderId = existingRecord?.folderId ?? currentPersonalFolderId;
+    const sourceFolder = customFolders.find((folder) => folder.id === sourceFolderId) ?? null;
+    const targetFolder = customFolders.find((folder) => folder.id === moveTargetFolderId) ?? null;
+    const targetLabel = targetFolder?.label ?? "Personal Repository";
+    const nextFullPath = `${targetLabel} > ${row.title}`;
+
+    if (sourceFolderId && sourceFolderId === moveTargetFolderId) {
+      setMoveFileId(null);
+      setMoveTargetFolderId("");
+      return;
+    }
+
+    if (!existingRecord) {
+      usePersonalFilesStore.getState().upsertRecord({
+        id: moveFileId,
+        name: row.title,
+        folderId: sourceFolderId || currentPersonalFolderId || moveTargetFolderId,
+        fullPath: row.fullPath ?? `${targetLabel} > ${row.title}`,
+        mimeType: row.mimeType || "application/octet-stream",
+        size: row.sizeBytes,
+        modifiedTime: row.modifiedTime,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        tags: [],
+        source: "move",
+      });
+    }
+
+    const shouldQueueMove =
+      Boolean(sourceFolder)
+      && Boolean(targetFolder)
+      && (sourceFolder?.sourceKind ?? "drive") === "drive"
+      && (targetFolder?.sourceKind ?? "drive") === "drive";
+
+    try {
+      usePersonalFilesStore.getState().moveRecord(moveFileId, moveTargetFolderId, nextFullPath);
+
+      if (shouldQueueMove) {
+        await enqueuePendingMove({
+          id: createPendingMoveId(),
+          fileId: moveFileId,
+          sourceFolderId: sourceFolderId || currentPersonalFolderId || "personal",
+          targetFolderId: moveTargetFolderId,
+          createdAt: Date.now(),
+          attempts: 0,
+        });
+      }
+
+      await reindexPersonalFileRecord(moveFileId);
+      toast.success("File moved");
+    } catch {
+      toast.error("File moved locally, but background updates did not fully complete.");
+    } finally {
+      setMoveFileId(null);
+      setMoveTargetFolderId("");
+    }
+  }, [currentPersonalFolderId, customFolders, moveFileId, moveTargetFolderId, personalFileRecords, rowById]);
+
   const handleOpenRow = useCallback(
     (item: FileListRow) => {
       if (item.type === "folder") {
@@ -639,7 +878,17 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         return;
       }
 
+      if (routeContext.repoKind === "personal" && isCodeFile(item.title.split(".").pop() ?? "")) {
+        emitCodePreviewRequest({
+          fileId: item.id,
+          fileName: item.title,
+          extension: item.title.split(".").pop() ?? "",
+        });
+        return;
+      }
+
       if (item.webViewLink) {
+
         if (autoPrefetchEnabled) {
           autoPrefetch(
             item.id,
@@ -742,8 +991,9 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   }
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
+    <>
+      <AnimatePresence mode="wait">
+        <motion.div
         key={viewMode}
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -754,6 +1004,31 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         {isStale && typeof lastUpdatedAt === "number" ? (
           <div className="mb-2 inline-flex items-center rounded-full border border-amber-300/70 bg-amber-100/70 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/30 dark:text-amber-300">
             Last updated {formatLastUpdatedLabel(lastUpdatedAt)}
+          </div>
+        ) : null}
+        {routeContext.repoKind === "personal" && currentPersonalFolderId ? (
+          <div className="mb-3 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setAddFilesSheetOpen(true)}
+            >
+              <Plus className="size-3.5" />
+              Add Files
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setQuickCaptureInitialMode("photo");
+                setQuickCaptureOpen(true);
+              }}
+            >
+              <Camera className="size-3.5" />
+              Quick Capture
+            </Button>
           </div>
         ) : null}
         {layoutMode === "separated" ? (
@@ -786,6 +1061,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                           type={item.type}
                           title={item.title}
                           subtitle={getRowSubtitle(item)}
+                          fullPath={item.fullPath}
                           mimeType={item.mimeType}
                           sizeBytes={item.sizeBytes}
                           modifiedTime={item.modifiedTime}
@@ -797,6 +1073,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                           viewMode={viewMode}
                           isOpen={openRowId === item.id}
                           swipeEnabled={swipeEnabled && !isGridView}
+                          parentFolderId={currentPersonalFolderId || null}
                           onToggleOpen={onToggleOpen}
                           onOpen={() => handleOpenRow(item)}
                           onRemoveOffline={() => {
@@ -844,6 +1121,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                           type={item.type}
                           title={item.title}
                           subtitle={getRowSubtitle(item)}
+                          fullPath={item.fullPath}
                           mimeType={item.mimeType}
                           sizeBytes={item.sizeBytes}
                           modifiedTime={item.modifiedTime}
@@ -855,10 +1133,15 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                           viewMode={viewMode}
                           isOpen={openRowId === item.id}
                           swipeEnabled={swipeEnabled && !isGridView}
+                          parentFolderId={currentPersonalFolderId || null}
                           onToggleOpen={onToggleOpen}
                           onOpen={() => handleOpenRow(item)}
                           onMakeOffline={(sourceElement) => {
                             void handleMakeOffline(item, sourceElement);
+                          }}
+                          onMoveFile={handleMoveFileRequest}
+                          onDuplicateFile={(fileId) => {
+                            void handleDuplicateFile(fileId);
                           }}
                           onRemoveOffline={() => {
                             void handleRemoveOffline(item);
@@ -884,6 +1167,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                   type={item.type}
                   title={item.title}
                   subtitle={getRowSubtitle(item)}
+                  fullPath={item.fullPath}
                   mimeType={item.mimeType}
                   sizeBytes={item.sizeBytes}
                   modifiedTime={item.modifiedTime}
@@ -895,10 +1179,15 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
                   viewMode={viewMode}
                   isOpen={openRowId === item.id}
                   swipeEnabled={swipeEnabled && !isGridView}
+                  parentFolderId={currentPersonalFolderId || null}
                   onToggleOpen={onToggleOpen}
                   onOpen={() => handleOpenRow(item)}
                   onMakeOffline={(sourceElement) => {
                     void handleMakeOffline(item, sourceElement);
+                  }}
+                  onMoveFile={handleMoveFileRequest}
+                  onDuplicateFile={(fileId) => {
+                    void handleDuplicateFile(fileId);
                   }}
                   onRemoveOffline={() => {
                     void handleRemoveOffline(item);
@@ -926,7 +1215,74 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
             </Button>
           </div>
         ) : null}
-      </motion.div>
-    </AnimatePresence>
+        </motion.div>
+      </AnimatePresence>
+
+      <AddFilesSheet
+        open={addFilesSheetOpen}
+        onOpenChange={setAddFilesSheetOpen}
+        onUploadFiles={handleUploadFiles}
+        onOpenQuickCapture={() => {
+          setQuickCaptureInitialMode("photo");
+          setQuickCaptureOpen(true);
+        }}
+      />
+
+      <QuickCaptureSheet
+        open={quickCaptureOpen}
+        onOpenChange={setQuickCaptureOpen}
+        initialMode={quickCaptureInitialMode}
+        destinations={personalFolderOptions}
+        defaultDestinationId={currentPersonalFolderId || undefined}
+        onSaveCapture={async (capture) => {
+          await persistPersonalFile({
+            folderId: capture.folderId,
+            fileName: capture.fileName,
+            mimeType: capture.mimeType,
+            blob: capture.blob,
+            source: "capture",
+          });
+        }}
+      />
+
+      <Dialog
+        open={moveFileId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMoveFileId(null);
+            setMoveTargetFolderId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Move to...</DialogTitle>
+            <DialogDescription>Select a destination folder in Personal Repository.</DialogDescription>
+          </DialogHeader>
+          <select
+            value={moveTargetFolderId}
+            onChange={(event) => setMoveTargetFolderId(event.target.value)}
+            className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+          >
+            <option value="" disabled>Select folder</option>
+            {personalFolderOptions
+              .filter((folder) => folder.id !== currentPersonalFolderId)
+              .map((folder) => (
+                <option key={`move-folder-${folder.id}`} value={folder.id}>
+                  {folder.label}
+                </option>
+              ))}
+          </select>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setMoveFileId(null)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={!moveTargetFolderId} onClick={() => void handleConfirmMove()}>
+              Move
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

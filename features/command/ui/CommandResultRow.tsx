@@ -30,9 +30,16 @@ export function CommandResultRow({
   const codeLanguage = isCode ? (getCodeLanguage(extension) ?? extension.toUpperCase()) : null;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(hit)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(hit);
+        }
+      }}
       className={cn(
         "flex w-full items-center gap-2 min-h-[52px] rounded-lg border border-border/60 px-2.5 py-2 text-left",
         leftAccent ? "border-l-[3px] border-l-[hsl(var(--primary)/0.08)]" : "border-l-transparent",
@@ -70,6 +77,6 @@ export function CommandResultRow({
           {score.toFixed(2)}
         </span>
       ) : null}
-    </button>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { IconFolder, IconStarFilled } from "@tabler/icons-react";
 
 import { PersonalFolderMenu } from "@/features/custom-folders/ui/PersonalFolderMenu";
@@ -25,8 +25,12 @@ type PersonalFolderListRowProps = {
   onOpen: () => void;
   onRename: () => void;
   onRefresh: () => Promise<void> | void;
+  onNewSubfolder?: () => void;
+  onAddFiles?: () => void;
   onEdit: () => void;
   onRemove: () => void;
+  errorState?: boolean;
+  healthBadge?: ReactNode;
 };
 
 export function PersonalFolderListRow({
@@ -40,8 +44,12 @@ export function PersonalFolderListRow({
   onOpen,
   onRename,
   onRefresh,
+  onNewSubfolder,
+  onAddFiles,
   onEdit,
   onRemove,
+  errorState = false,
+  healthBadge = null,
 }: PersonalFolderListRowProps) {
   const [refreshing, setRefreshing] = useState(false);
   const visibleTags = tags.slice(0, 2);
@@ -63,6 +71,10 @@ export function PersonalFolderListRow({
         }
       }}
       className="group relative flex min-h-16 cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-4 py-2 shadow-sm transition-all duration-200 hover:shadow-md active:scale-[0.99]"
+      style={{
+        borderLeftColor: errorState ? "color-mix(in oklab, hsl(0 78% 53%) 55%, var(--border))" : undefined,
+        borderLeftWidth: errorState ? "3px" : undefined,
+      }}
     >
       <div
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-card shadow-inner"
@@ -102,6 +114,9 @@ export function PersonalFolderListRow({
             ) : null}
           </div>
         ) : null}
+        {healthBadge ? (
+          <div className="mt-1">{healthBadge}</div>
+        ) : null}
       </div>
 
       <div
@@ -128,6 +143,8 @@ export function PersonalFolderListRow({
               setRefreshing(false);
             }
           }}
+          onNewSubfolder={onNewSubfolder}
+          onAddFiles={onAddFiles}
           onEdit={onEdit}
           onRemove={onRemove}
         />

@@ -51,7 +51,7 @@ export function EditFolderSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="fixed inset-x-0 bottom-0 top-auto mx-auto flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-border/70 bg-background/95 p-0 shadow-2xl backdrop-blur-xl sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[80dvh] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border sm:p-0">
+      <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto flex max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-t-3xl border-t border-border/70 bg-background/95 p-0 shadow-2xl backdrop-blur-xl sm:inset-auto sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[80dvh] sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border">
         <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-muted" />
         <div className="overflow-y-auto px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
           <DialogHeader className="space-y-1">

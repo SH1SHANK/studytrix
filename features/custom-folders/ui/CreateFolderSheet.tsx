@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -58,6 +58,14 @@ export function CreateFolderSheet({
 
   const error = useMemo(() => validateFolderName(name), [name]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setParentFolderId(defaultParentId ?? "root");
+  }, [defaultParentId, open]);
+
   return (
     <Dialog
       open={open}
@@ -69,7 +77,7 @@ export function CreateFolderSheet({
         onOpenChange(nextOpen);
       }}
     >
-      <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto w-full max-w-none rounded-t-3xl border-t p-0 sm:inset-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl">
+      <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto w-full max-w-none translate-x-0 translate-y-0 rounded-t-3xl border-t border-border/70 p-0 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border">
         <div className="p-4">
           <DialogHeader>
             <DialogTitle>Create Folder</DialogTitle>
@@ -137,4 +145,3 @@ export function CreateFolderSheet({
     </Dialog>
   );
 }
-

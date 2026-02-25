@@ -94,6 +94,8 @@ import { expandSemanticQuery } from "@/features/intelligence/intelligence.synony
 import { useIntelligenceStore } from "@/features/intelligence/intelligence.store";
 import { useOnboardingStore } from "@/features/onboarding/onboarding.store";
 import { useCommandCenterStore } from "@/features/command/command-center.store";
+import { isCodeFile } from "@/features/custom-folders/file-type.utils";
+import { emitCodePreviewRequest } from "@/features/custom-folders/code-preview.events";
 import type {
   IntelligenceSearchHit,
   SearchScope as NavigationSearchScope,
@@ -2114,6 +2116,23 @@ export function CommandBar({
       pushRecentCommandId(item.id);
 
       const externalUrl = item.payload?.url;
+      const repoKind = typeof item.payload?.repoKind === "string" ? item.payload.repoKind : null;
+      const fileExtension = item.title.split(".").pop()?.trim().toLowerCase() ?? "";
+      if (
+        item.group === "files"
+        && typeof item.entityId === "string"
+        && repoKind === "personal"
+        && isCodeFile(fileExtension)
+      ) {
+        emitCodePreviewRequest({
+          fileId: item.entityId,
+          fileName: item.title,
+          extension: fileExtension,
+        });
+        setOpen(false);
+        return;
+      }
+
       const isOfflinePreferred = item.payload?.offlineOnly === true;
       const isOfflineFile =
         item.group === "files"

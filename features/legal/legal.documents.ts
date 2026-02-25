@@ -48,7 +48,7 @@ export const LEGAL_DOCUMENTS: Record<LegalDocument["slug"], LegalDocument> = {
       {
         heading: "3. Nature of the Service",
         paragraphs: [
-          "Studytrix is provided as a free, open-source tool for academic productivity. It is a Progressive Web Application (PWA) that operates primarily on your device using local browser storage. No account creation, registration, or authentication is required to use the Service.",
+          "Studytrix is provided as a free, open-source tool for academic productivity. It is a Progressive Web Application (PWA) that operates primarily on your device using local browser storage. No account creation or registration is required to use the Service.",
           "The Service is developed and maintained by a single developer as a personal and academic project. It is offered without any guarantee of uptime, continuity, or long-term maintenance. The developer reserves the right to modify, suspend, or discontinue the Service at any time without notice.",
           "Studytrix is currently in active development and beta. Interfaces, features, and behaviour may change frequently without prior notice.",
         ],

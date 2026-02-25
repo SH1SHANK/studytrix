@@ -40,6 +40,11 @@ const StudySetPickerSheet = dynamic(
   { ssr: false },
 );
 
+const CodePreviewRuntime = dynamic(
+  () => import("@/features/custom-folders/ui/CodePreviewRuntime").then((mod) => mod.CodePreviewRuntime),
+  { ssr: false },
+);
+
 export function RootRuntimeMounts() {
   const isSelectionMode = useSelectionStore((state) => state.isSelectionMode);
   const selectedCount = useSelectionStore((state) => state.selectedIds.size);
@@ -57,6 +62,7 @@ export function RootRuntimeMounts() {
       {activeDownloadCount > 0 ? <DownloadFloatingIndicator /> : null}
       {riskDialogOpen ? <DownloadRiskDialog /> : null}
       {studySetPickerFileId ? <StudySetPickerSheet /> : null}
+      <CodePreviewRuntime />
     </>
   );
 }

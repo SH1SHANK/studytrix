@@ -33,7 +33,7 @@ import {
   IconStarFilled,
   IconTag,
 } from "@tabler/icons-react";
-import { BookPlus, Pin } from "lucide-react";
+import { BookPlus, Code2, Copy, CopyPlus, MoveRight, Pin } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@/lib/utils";
@@ -45,6 +45,13 @@ import { Button } from "@/components/ui/button";
 import { EntityActionsMenu } from "@/features/file/ui/file-manager/EntityActionsMenu";
 import { useCustomFoldersStore } from "@/features/custom-folders/custom-folders.store";
 import { useStudySetsStore } from "@/features/custom-folders/study-sets.store";
+import { getIntelligenceClient } from "@/features/intelligence/intelligence.client";
+import { TagSuggestionRow } from "@/features/custom-folders/ui/TagSuggestionRow";
+import { reindexPersonalFileRecord } from "@/features/custom-folders/personal-files.ingest";
+import { usePersonalFilesStore } from "@/features/custom-folders/personal-files.store";
+import { isCodeFile } from "@/features/custom-folders/file-type.utils";
+import { emitCodePreviewRequest } from "@/features/custom-folders/code-preview.events";
+import { toast } from "sonner";
 
 type FileRowProps = {
   id: string;
@@ -62,6 +69,10 @@ type FileRowProps = {
   viewMode: "grid" | "list";
   isOpen: boolean;
   swipeEnabled: boolean;
+  parentFolderId?: string | null;
+  fullPath?: string | null;
+  onMoveFile?: (fileId: string) => void;
+  onDuplicateFile?: (fileId: string) => void;
   onToggleOpen: (id: string | null) => void;
   onOpen?: () => void;
   onMakeOffline?: (sourceElement?: HTMLElement) => void;
@@ -164,6 +175,10 @@ function FileRowComponent({
   viewMode,
   isOpen,
   swipeEnabled,
+  parentFolderId = null,
+  fullPath = null,
+  onMoveFile,
+  onDuplicateFile,
   onToggleOpen,
   onOpen,
   onMakeOffline,
@@ -216,6 +231,16 @@ function FileRowComponent({
           : "Online only";
   const isPinned = pinnedFileIds.includes(id);
   const showPersonalFileActions = !isFolder && repositoryKind === "personal";
+  const personalFileRecord = usePersonalFilesStore((state) => state.records.find((entry) => entry.id === id) ?? null);
+  const setPersonalFileTags = usePersonalFilesStore((state) => state.setFileTags);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
+  const resolvedFullPath = fullPath?.trim() || personalFileRecord?.fullPath || title;
+  const isCode = !isFolder && isCodeFile(ext);
+  const acceptedTags = useMemo(
+    () => personalFileRecord?.tags ?? [],
+    [personalFileRecord?.tags],
+  );
   const fileTags = useMemo<FileTagBadge[]>(() => {
     if (isFolder || assignedTagIds.length === 0) {
       return [];
@@ -241,6 +266,66 @@ function FileRowComponent({
   }, [assignedTagIds, isFolder, tags]);
   const visibleFileTags = fileTags.slice(0, FILE_TAG_PREVIEW_LIMIT);
   const hiddenTagCount = fileTags.length - visibleFileTags.length;
+
+  useEffect(() => {
+    if (!showPersonalFileActions || isFolder || suggestionsDismissed) {
+      return;
+    }
+
+    let cancelled = false;
+    void getIntelligenceClient()
+      .suggestTags({ fileId: id, topK: 3 })
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+
+        const next = response.tags.filter((tag) => !acceptedTags.includes(tag));
+        setSuggestedTags(next);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSuggestedTags([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [acceptedTags, id, isFolder, showPersonalFileActions, suggestionsDismissed]);
+
+  const handleAcceptSuggestedTag = useCallback((tag: string) => {
+    const normalized = tag.trim();
+    if (!normalized) {
+      return;
+    }
+
+    if (!personalFileRecord) {
+      usePersonalFilesStore.getState().upsertRecord({
+        id,
+        name: title,
+        folderId: parentFolderId?.trim() || "personal",
+        fullPath: resolvedFullPath,
+        mimeType: mimeType || "application/octet-stream",
+        size: sizeBytes,
+        modifiedTime,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        tags: [],
+        source: "move",
+      });
+    }
+
+    const merged = Array.from(new Set([...acceptedTags, normalized]));
+    setPersonalFileTags(id, merged);
+    setSuggestedTags((current) => current.filter((entry) => entry !== normalized));
+    void reindexPersonalFileRecord(id);
+  }, [acceptedTags, id, mimeType, modifiedTime, parentFolderId, personalFileRecord, resolvedFullPath, setPersonalFileTags, sizeBytes, title]);
+
+  const handleDismissSuggestedTags = useCallback(() => {
+    setSuggestionsDismissed(true);
+    setSuggestedTags([]);
+  }, []);
 
   const handleMakeOfflineAction = (sourceElement?: HTMLElement) => {
     if (isFolder || isOffline || isDownloading) {
@@ -331,6 +416,56 @@ function FileRowComponent({
             description: "Choose an existing set or create a new one",
             onSelect: () => {
               openStudySetPicker(id);
+            },
+          },
+          ...(isCode
+            ? [{
+              id: "view_code",
+              icon: <Code2 className="size-4 text-sky-500" />,
+              label: "View Code",
+              description: "Open an in-app code preview",
+              onSelect: () => {
+                emitCodePreviewRequest({
+                  fileId: id,
+                  fileName: title,
+                  extension: ext,
+                });
+              },
+            }]
+            : []),
+          {
+            id: "copy_path",
+            icon: <Copy className="size-4 text-emerald-500" />,
+            label: "Copy Path",
+            description: "Copy the full Personal Repository path",
+            onSelect: () => {
+              if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+                toast.error("Clipboard is unavailable.");
+                return;
+              }
+              void navigator.clipboard.writeText(resolvedFullPath).then(() => {
+                toast.success("Path copied");
+              }).catch(() => {
+                toast.error("Clipboard is unavailable.");
+              });
+            },
+          },
+          {
+            id: "move_to_folder",
+            icon: <MoveRight className="size-4 text-violet-500" />,
+            label: "Move to...",
+            description: "Move this file to another personal folder",
+            onSelect: () => {
+              onMoveFile?.(id);
+            },
+          },
+          {
+            id: "duplicate_file",
+            icon: <CopyPlus className="size-4 text-amber-500" />,
+            label: "Duplicate",
+            description: "Create a copy in this folder",
+            onSelect: () => {
+              onDuplicateFile?.(id);
             },
           },
         ]
@@ -515,6 +650,13 @@ function FileRowComponent({
               {subtitle}
             </p>
             {renderTagBadges()}
+            {showPersonalFileActions && !isFolder ? (
+              <TagSuggestionRow
+                tags={suggestedTags}
+                onAccept={handleAcceptSuggestedTag}
+                onDismissAll={handleDismissSuggestedTags}
+              />
+            ) : null}
           </div>
         </div>
       </div>
@@ -768,6 +910,13 @@ function FileRowComponent({
               {subtitle}
             </p>
             {renderTagBadges()}
+            {showPersonalFileActions && !isFolder ? (
+              <TagSuggestionRow
+                tags={suggestedTags}
+                onAccept={handleAcceptSuggestedTag}
+                onDismissAll={handleDismissSuggestedTags}
+              />
+            ) : null}
           </div>
 
           {renderActionMenu()}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { IconStarFilled } from "@tabler/icons-react";
 
@@ -23,8 +23,12 @@ type PersonalFolderCardProps = {
   onOpen: () => void;
   onRename: (label: string) => void;
   onRefresh: () => Promise<void> | void;
+  onNewSubfolder?: () => void;
+  onAddFiles?: () => void;
   onRemove: () => void;
   onEdit: () => void;
+  errorState?: boolean;
+  healthBadge?: ReactNode;
   iconLayoutId?: string;
 };
 
@@ -35,8 +39,12 @@ export function PersonalFolderCard({
   onOpen,
   onRename,
   onRefresh,
+  onNewSubfolder,
+  onAddFiles,
   onRemove,
   onEdit,
+  errorState = false,
+  healthBadge = null,
   iconLayoutId,
 }: PersonalFolderCardProps) {
   const [isRenaming, setIsRenaming] = useState(false);
@@ -71,6 +79,8 @@ export function PersonalFolderCard({
       style={{
         borderColor: `color-mix(in oklab, ${folderTone} 28%, var(--border))`,
         backgroundColor: `color-mix(in oklab, ${folderTone} 14%, var(--card))`,
+        borderLeftColor: errorState ? "color-mix(in oklab, hsl(0 78% 53%) 55%, var(--border))" : undefined,
+        borderLeftWidth: errorState ? "3px" : undefined,
       }}
     >
       <div className="absolute right-3 top-3 z-20 opacity-100">
@@ -95,6 +105,8 @@ export function PersonalFolderCard({
               setRefreshing(false);
             }
           }}
+          onNewSubfolder={onNewSubfolder}
+          onAddFiles={onAddFiles}
           onEdit={onEdit}
           onRemove={onRemove}
         />
@@ -181,6 +193,9 @@ export function PersonalFolderCard({
             </div>
           ) : null}
           <p className="text-sm text-muted-foreground">{itemCountLabel}</p>
+          {healthBadge ? (
+            <div className="pt-1">{healthBadge}</div>
+          ) : null}
         </div>
       </CardContent>
     </Card>
