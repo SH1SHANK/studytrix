@@ -7,6 +7,10 @@ import { enqueuePendingCapture } from "@/features/custom-folders/capture.queue";
 import { useCustomFoldersStore } from "@/features/custom-folders/custom-folders.store";
 import type { CustomFolder } from "@/features/custom-folders/custom-folders.types";
 import { usePersonalFilesStore, type PersonalFileRecord } from "@/features/custom-folders/personal-files.store";
+import {
+  normalizePersonalFolderId,
+  PERSONAL_ROOT_FOLDER_ID,
+} from "@/features/custom-folders/personal-root.constants";
 
 type CaptureSource = PersonalFileRecord["source"];
 
@@ -58,16 +62,24 @@ function buildFolderLineage(
 }
 
 export function buildFolderPathContext(folderId: string): FolderPathContext {
-  const normalizedFolderId = folderId.trim();
+  const normalizedFolderId = normalizePersonalFolderId(folderId);
+  if (normalizedFolderId === PERSONAL_ROOT_FOLDER_ID) {
+    return {
+      customFolderId: PERSONAL_ROOT_FOLDER_ID,
+      ancestorIds: [],
+      fullPathPrefix: "Personal Repository",
+    };
+  }
+
   const folders = useCustomFoldersStore.getState().folders;
   const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
   const lineage = buildFolderLineage(normalizedFolderId, foldersById);
 
   if (lineage.length === 0) {
     return {
-      customFolderId: normalizedFolderId || "unsorted_captures",
+      customFolderId: normalizedFolderId || PERSONAL_ROOT_FOLDER_ID,
       ancestorIds: normalizedFolderId ? [normalizedFolderId] : [],
-      fullPathPrefix: normalizedFolderId ? "Personal Repository" : "Unsorted Captures",
+      fullPathPrefix: "Personal Repository",
     };
   }
 
@@ -101,8 +113,8 @@ function toIndexableEntityFromRecord(record: PersonalFileRecord): IndexableEntit
 }
 
 function shouldQueueCaptureSync(folderId: string): boolean {
-  const normalizedFolderId = folderId.trim();
-  if (!normalizedFolderId || normalizedFolderId === "unsorted_captures") {
+  const normalizedFolderId = normalizePersonalFolderId(folderId);
+  if (!normalizedFolderId || normalizedFolderId === PERSONAL_ROOT_FOLDER_ID) {
     return false;
   }
 
@@ -132,7 +144,7 @@ export async function savePersonalFileLocal(input: SavePersonalFileInput): Promi
   fileId: string;
   record: PersonalFileRecord;
 }> {
-  const folderId = input.folderId.trim();
+  const folderId = normalizePersonalFolderId(input.folderId);
   const fileName = normalizeFileName(input.fileName);
   const mimeType = input.mimeType.trim() || "application/octet-stream";
   const now = Date.now();
@@ -154,7 +166,7 @@ export async function savePersonalFileLocal(input: SavePersonalFileInput): Promi
   const record: PersonalFileRecord = {
     id: fileId,
     name: fileName,
-    folderId: folderId || "unsorted_captures",
+    folderId: folderId || PERSONAL_ROOT_FOLDER_ID,
     fullPath,
     mimeType,
     size: input.blob.size,

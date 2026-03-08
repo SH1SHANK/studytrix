@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { normalizePersonalFolderId } from "@/features/custom-folders/personal-root.constants";
 
 export type PersonalFileRecord = {
   id: string;
@@ -40,7 +41,7 @@ function normalizeText(value: string): string {
 
 function sanitizeRecord(record: PersonalFileRecord): PersonalFileRecord | null {
   const id = normalizeText(record.id);
-  const folderId = normalizeText(record.folderId);
+  const folderId = normalizePersonalFolderId(record.folderId);
   const name = normalizeText(record.name) || id;
   const fullPath = normalizeText(record.fullPath) || name;
   if (!id || !folderId) {
@@ -100,7 +101,7 @@ export const usePersonalFilesStore = create<PersonalFilesStore>()(persist(
 
     moveRecord: (fileId, targetFolderId, targetFullPath) => {
       const normalizedId = normalizeText(fileId);
-      const normalizedFolderId = normalizeText(targetFolderId);
+      const normalizedFolderId = normalizePersonalFolderId(targetFolderId);
       if (!normalizedId || !normalizedFolderId) {
         return;
       }
@@ -182,4 +183,3 @@ export const usePersonalFilesStore = create<PersonalFilesStore>()(persist(
     partialize: (state) => ({ records: state.records }),
   },
 ));
-

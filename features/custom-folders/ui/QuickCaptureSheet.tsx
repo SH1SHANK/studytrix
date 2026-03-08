@@ -14,6 +14,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  normalizePersonalFolderId,
+  PERSONAL_ROOT_FOLDER_ID,
+  PERSONAL_ROOT_LABEL,
+} from "@/features/custom-folders/personal-root.constants";
 
 type CaptureMode = "photo" | "note" | "voice";
 
@@ -28,6 +33,7 @@ type QuickCaptureSheetProps = {
   initialMode?: CaptureMode;
   destinations: DestinationOption[];
   defaultDestinationId?: string;
+  onCreateFolder?: () => void;
   onSaveCapture: (input: {
     folderId: string;
     fileName: string;
@@ -82,15 +88,31 @@ export function QuickCaptureSheet({
   initialMode = "photo",
   destinations,
   defaultDestinationId,
+  onCreateFolder,
   onSaveCapture,
 }: QuickCaptureSheetProps) {
-  const availableDestinations = useMemo(() => (
-    destinations.length > 0
-      ? destinations
-      : [{ id: "unsorted_captures", label: "Unsorted Captures" }]
-  ), [destinations]);
+  const availableDestinations = useMemo(() => {
+    const options = new Map<string, DestinationOption>();
+    options.set(PERSONAL_ROOT_FOLDER_ID, { id: PERSONAL_ROOT_FOLDER_ID, label: PERSONAL_ROOT_LABEL });
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+    destinations.forEach((entry) => {
+      const normalizedId = normalizePersonalFolderId(entry.id);
+      if (!normalizedId || normalizedId === PERSONAL_ROOT_FOLDER_ID) {
+        return;
+      }
+
+      options.set(normalizedId, {
+        id: normalizedId,
+        label: entry.label,
+      });
+    });
+
+    return Array.from(options.values());
+  }, [destinations]);
+
+  const captureInputRef = useRef<HTMLInputElement | null>(null);
+  const deviceImageInputRef = useRef<HTMLInputElement | null>(null);
+  const noteBodyRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -99,7 +121,9 @@ export function QuickCaptureSheet({
   const recordingStartedAtRef = useRef<number | null>(null);
   const recordingTimeoutRef = useRef<number | null>(null);
   const [mode, setMode] = useState<CaptureMode>(initialMode);
-  const [destinationId, setDestinationId] = useState<string>(defaultDestinationId ?? availableDestinations[0]?.id ?? "unsorted_captures");
+  const [destinationId, setDestinationId] = useState<string>(
+    normalizePersonalFolderId(defaultDestinationId) || availableDestinations[0]?.id || PERSONAL_ROOT_FOLDER_ID,
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -117,6 +141,24 @@ export function QuickCaptureSheet({
   const [voicePreviewUrl, setVoicePreviewUrl] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [waveBars, setWaveBars] = useState<number[]>(new Array(20).fill(0.08));
+  const hasNoFolders = destinations
+    .map((entry) => normalizePersonalFolderId(entry.id))
+    .filter((id) => id && id !== PERSONAL_ROOT_FOLDER_ID)
+    .length === 0;
+
+  const handlePhotoSelected = useCallback((file: File | null | undefined) => {
+    if (!file) {
+      return;
+    }
+
+    if (photoPreviewUrl) {
+      URL.revokeObjectURL(photoPreviewUrl);
+    }
+    setPhotoFile(file);
+    setPhotoPreviewUrl(URL.createObjectURL(file));
+    setPhotoFileName(`Photo_${formatDateToken(new Date())}.jpg`);
+    setMode("photo");
+  }, [photoPreviewUrl]);
 
   useEffect(() => {
     if (!open) {
@@ -131,12 +173,13 @@ export function QuickCaptureSheet({
       return;
     }
 
-    const fromStorage = window.localStorage.getItem(LAST_DESTINATION_KEY);
+    const fromStorage = normalizePersonalFolderId(window.localStorage.getItem(LAST_DESTINATION_KEY));
+    const normalizedDefaultDestinationId = normalizePersonalFolderId(defaultDestinationId);
     const candidate = fromStorage && availableDestinations.some((entry) => entry.id === fromStorage)
       ? fromStorage
-      : defaultDestinationId && availableDestinations.some((entry) => entry.id === defaultDestinationId)
-        ? defaultDestinationId
-        : availableDestinations[0]?.id ?? "unsorted_captures";
+      : normalizedDefaultDestinationId && availableDestinations.some((entry) => entry.id === normalizedDefaultDestinationId)
+        ? normalizedDefaultDestinationId
+        : availableDestinations[0]?.id ?? PERSONAL_ROOT_FOLDER_ID;
     setDestinationId(candidate);
   }, [availableDestinations, defaultDestinationId, open]);
 
@@ -199,7 +242,7 @@ export function QuickCaptureSheet({
   }, [photoPreviewUrl, voicePreviewUrl]);
 
   const persistDestination = useCallback((id: string) => {
-    window.localStorage.setItem(LAST_DESTINATION_KEY, id);
+    window.localStorage.setItem(LAST_DESTINATION_KEY, normalizePersonalFolderId(id));
   }, []);
 
   const restoreDraft = useCallback(() => {
@@ -323,6 +366,34 @@ export function QuickCaptureSheet({
     }
   }, [startWaveform, stopVoiceRecording, voicePreviewUrl]);
 
+  const quickCapturePhoto = useCallback(() => {
+    setMode("photo");
+    window.requestAnimationFrame(() => {
+      captureInputRef.current?.click();
+    });
+  }, []);
+
+  const addPhotoFromDevice = useCallback(() => {
+    setMode("photo");
+    window.requestAnimationFrame(() => {
+      deviceImageInputRef.current?.click();
+    });
+  }, []);
+
+  const quickCaptureNote = useCallback(() => {
+    setMode("note");
+    window.requestAnimationFrame(() => {
+      noteBodyRef.current?.focus();
+    });
+  }, []);
+
+  const quickCaptureVoice = useCallback(() => {
+    setMode("voice");
+    if (voiceState === "ready") {
+      void handleStartRecording();
+    }
+  }, [handleStartRecording, voiceState]);
+
   const savePhoto = useCallback(async () => {
     if (!photoFile || !photoFileName.trim()) {
       return;
@@ -416,27 +487,74 @@ export function QuickCaptureSheet({
         <div className="max-h-[82dvh] overflow-y-auto px-5 pb-4 pt-3 sm:px-6">
           <DialogHeader className="space-y-1">
             <DialogTitle>Quick Capture</DialogTitle>
-            <DialogDescription>Capture and store instantly in your Personal Repository.</DialogDescription>
+            <DialogDescription>One tap to photo, note, or voice.</DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-border/70 bg-muted/35 p-1.5">
-            {([
-              { key: "photo", label: "Photo", icon: Camera },
-              { key: "note", label: "Note", icon: PenSquare },
-              { key: "voice", label: "Voice", icon: Mic },
-            ] as const).map((entry) => (
+          <input
+            ref={captureInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(event) => {
+              handlePhotoSelected(event.target.files?.[0]);
+              event.currentTarget.value = "";
+            }}
+          />
+
+          <input
+            ref={deviceImageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              handlePhotoSelected(event.target.files?.[0]);
+              event.currentTarget.value = "";
+            }}
+          />
+
+          <div className="mt-4 rounded-xl border border-border/70 bg-muted/25 p-2">
+            <p className="px-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Capture Now
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
               <button
-                key={entry.key}
                 type="button"
-                onClick={() => setMode(entry.key)}
-                className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  mode === entry.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:bg-card/70"
+                onClick={quickCapturePhoto}
+                className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors ${
+                  mode === "photo"
+                    ? "border-primary/45 bg-primary/15 text-foreground"
+                    : "border-border/70 bg-card/45 text-muted-foreground hover:bg-card/70"
                 }`}
               >
-                <entry.icon className="size-4" />
-                {entry.label}
+                <Camera className="size-4" />
+                Photo
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={quickCaptureNote}
+                className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors ${
+                  mode === "note"
+                    ? "border-primary/45 bg-primary/15 text-foreground"
+                    : "border-border/70 bg-card/45 text-muted-foreground hover:bg-card/70"
+                }`}
+              >
+                <PenSquare className="size-4" />
+                Note
+              </button>
+              <button
+                type="button"
+                onClick={quickCaptureVoice}
+                className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors ${
+                  mode === "voice"
+                    ? "border-primary/45 bg-primary/15 text-foreground"
+                    : "border-border/70 bg-card/45 text-muted-foreground hover:bg-card/70"
+                }`}
+              >
+                <Mic className="size-4" />
+                Voice
+              </button>
+            </div>
           </div>
 
           {hasDraft ? (
@@ -470,28 +588,17 @@ export function QuickCaptureSheet({
           <div className="mt-4 space-y-3">
             {mode === "photo" ? (
               <div className="space-y-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) {
-                      return;
-                    }
-                    if (photoPreviewUrl) {
-                      URL.revokeObjectURL(photoPreviewUrl);
-                    }
-                    setPhotoFile(file);
-                    setPhotoPreviewUrl(URL.createObjectURL(file));
-                    setPhotoFileName(`Photo_${formatDateToken(new Date())}.jpg`);
-                  }}
-                />
-                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <Button
+                  type="button"
+                  className="h-11 w-full justify-center shadow-sm"
+                  onClick={quickCapturePhoto}
+                >
                   <Camera className="size-4" />
-                  Take Photo
+                  {photoFile ? "Retake Photo" : "Take Photo"}
+                </Button>
+                <Button type="button" variant="outline" className="w-full" onClick={addPhotoFromDevice}>
+                  <Upload className="size-4" />
+                  Add From Device
                 </Button>
                 {photoPreviewUrl ? (
                   <Image
@@ -503,26 +610,33 @@ export function QuickCaptureSheet({
                     className="max-h-56 w-full rounded-xl border border-border object-cover"
                   />
                 ) : null}
-                <Input
-                  value={photoFileName}
-                  onChange={(event) => setPhotoFileName(event.target.value)}
-                  placeholder="Photo filename"
-                />
+                {photoFile ? (
+                  <Input
+                    value={photoFileName}
+                    onChange={(event) => setPhotoFileName(event.target.value)}
+                    placeholder="Photo filename"
+                  />
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Tap <span className="font-medium text-foreground">Take Photo</span> to capture instantly.
+                  </p>
+                )}
               </div>
             ) : null}
 
             {mode === "note" ? (
               <div className="space-y-2.5">
-                <Input
-                  value={noteTitle}
-                  onChange={(event) => setNoteTitle(event.target.value)}
-                  placeholder={`Note_${formatDateToken(new Date())}.md`}
-                />
                 <textarea
+                  ref={noteBodyRef}
                   value={noteBody}
                   onChange={(event) => setNoteBody(event.target.value)}
                   placeholder="Start writing..."
                   className="min-h-44 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                />
+                <Input
+                  value={noteTitle}
+                  onChange={(event) => setNoteTitle(event.target.value)}
+                  placeholder={`Filename (optional): Note_${formatDateToken(new Date())}.md`}
                 />
                 {noteBody.length >= 500 ? (
                   <p className="text-xs text-muted-foreground">{noteBody.length} characters</p>
@@ -539,14 +653,14 @@ export function QuickCaptureSheet({
                 ) : null}
                 <div className="flex items-center gap-2">
                   {voiceState !== "recording" ? (
-                    <Button type="button" variant="outline" onClick={() => void handleStartRecording()}>
+                    <Button type="button" className="w-full" onClick={() => void handleStartRecording()}>
                       <Mic className="size-4" />
-                      Start Recording
+                      Start Voice Note
                     </Button>
                   ) : (
-                    <Button type="button" variant="destructive" onClick={stopVoiceRecording}>
+                    <Button type="button" variant="destructive" className="w-full" onClick={stopVoiceRecording}>
                       <StopCircle className="size-4" />
-                      Stop
+                      Stop Recording
                     </Button>
                   )}
                 </div>
@@ -565,17 +679,40 @@ export function QuickCaptureSheet({
                   <audio controls className="w-full" src={voicePreviewUrl} />
                 ) : null}
 
-                <Input
-                  value={voiceFileName}
-                  onChange={(event) => setVoiceFileName(event.target.value)}
-                  placeholder={`Voice_${formatDateToken(new Date())}.${extensionFromMime(voiceMimeType)}`}
-                />
+                {voiceBlob ? (
+                  <Input
+                    value={voiceFileName}
+                    onChange={(event) => setVoiceFileName(event.target.value)}
+                    placeholder={`Voice_${formatDateToken(new Date())}.${extensionFromMime(voiceMimeType)}`}
+                  />
+                ) : null}
               </div>
             ) : null}
           </div>
         </div>
 
         <div className="border-t border-border/70 px-5 py-3 sm:px-6">
+          {hasNoFolders ? (
+            <div className="mb-3 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2.5">
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                No personal folders yet. Captures will save to <span className="font-medium">{PERSONAL_ROOT_LABEL}</span>.
+              </p>
+              {onCreateFolder ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-8 border-amber-500/45 bg-transparent text-amber-800 hover:bg-amber-500/15 dark:text-amber-200"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onCreateFolder();
+                  }}
+                >
+                  Create New Folder
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           <label className="mb-2 block text-xs font-medium text-muted-foreground">Save to</label>
           <select
             value={destinationId}

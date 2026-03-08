@@ -1,7 +1,9 @@
 import type { ComponentType } from "react";
 
 export type OnboardingStep =
+  | "welcome-consent"
   | "capabilities"
+  | "features-guide"
   | "identity"
   | "personalized-bridge"
   | "academic-setup"

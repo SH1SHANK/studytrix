@@ -418,7 +418,7 @@ function FileRowComponent({
               openStudySetPicker(id);
             },
           },
-          ...(isCode
+          ...(isCode && (sourceKind !== "local" || personalFileRecord !== null)
             ? [{
               id: "view_code",
               icon: <Code2 className="size-4 text-sky-500" />,

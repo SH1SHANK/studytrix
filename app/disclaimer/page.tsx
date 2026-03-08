@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function DisclaimerPage() {
   return (
-    <AppShell headerTitle="Legal" hideHeaderFilters={true}>
+    <AppShell headerTitle="Legal" hideHeaderFilters={true} contentWidth="compact">
       <LegalDocumentView document={document} />
     </AppShell>
   );

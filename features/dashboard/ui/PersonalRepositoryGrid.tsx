@@ -58,6 +58,7 @@ import { useSetting } from "@/ui/hooks/useSettings";
 import { cn } from "@/lib/utils";
 import { usePersonalFilesStore } from "@/features/custom-folders/personal-files.store";
 import { savePersonalFileLocal } from "@/features/custom-folders/personal-files.ingest";
+import { openLocalFirst } from "@/features/offline/offline.access";
 import {
   drainPendingCaptures,
   getFailedCaptureCount,
@@ -65,6 +66,11 @@ import {
   isCaptureSyncEnabled,
 } from "@/features/custom-folders/capture.queue";
 import { getFolderHealth } from "@/features/custom-folders/custom-folders.utils";
+import {
+  normalizePersonalFolderId,
+  PERSONAL_ROOT_FOLDER_ID,
+  PERSONAL_ROOT_LABEL,
+} from "@/features/custom-folders/personal-root.constants";
 
 type PersonalRepositoryGridProps = {
   showSharedChrome?: boolean;
@@ -379,7 +385,10 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   const reconnectFolderIds = useMemo(() => Array.from(needsReconnect), [needsReconnect]);
 
   const folderNameById = useMemo(
-    () => new Map(orderedFolders.map((folder) => [folder.id, folder.label])),
+    () => new Map<string, string>([
+      [PERSONAL_ROOT_FOLDER_ID, PERSONAL_ROOT_LABEL],
+      ...orderedFolders.map((folder) => [folder.id, folder.label] as const),
+    ]),
     [orderedFolders],
   );
 
@@ -430,8 +439,19 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
     () => sets.find((setItem) => setItem.id === activeStudySetId) ?? null,
     [activeStudySetId, sets],
   );
+  const rootFileRecords = useMemo(
+    () => personalFileRecords
+      .filter((record) => normalizePersonalFolderId(record.folderId) === PERSONAL_ROOT_FOLDER_ID)
+      .sort((left, right) => right.updatedAt - left.updatedAt),
+    [personalFileRecords],
+  );
   const quickCaptureDestinations = useMemo(
-    () => rootFolders.map((folder) => ({ id: folder.id, label: folder.label })),
+    () => [
+      { id: PERSONAL_ROOT_FOLDER_ID, label: PERSONAL_ROOT_LABEL },
+      ...rootFolders
+        .filter((folder) => folder.id !== PERSONAL_ROOT_FOLDER_ID)
+        .map((folder) => ({ id: folder.id, label: folder.label })),
+    ],
     [rootFolders],
   );
   const queueSyncEnabled = isCaptureSyncEnabled();
@@ -498,7 +518,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
       role="tabpanel"
       aria-labelledby="tab-personal-repository"
       className={cn(
-        "min-w-0 px-4 pb-32",
+        "min-w-0 px-4 pb-32 lg:px-6 xl:px-8",
         showSharedChrome ? "pt-5 sm:pt-6" : "pt-3",
       )}
     >
@@ -530,7 +550,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
           </DropdownMenu>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
           <Button type="button" size="sm" className="justify-start" onClick={() => setIsAddDialogOpen(true)}>
             <FolderPlus className="size-4" />
             Add Folder
@@ -601,6 +621,47 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         >
           {failedSyncCount} sync operation{failedSyncCount === 1 ? "" : "s"} failed. Tap to retry.
         </button>
+      ) : null}
+
+      {rootFileRecords.length > 0 ? (
+        <section className="mb-3 rounded-2xl border border-border/70 bg-card/80 p-3 shadow-sm sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">{PERSONAL_ROOT_LABEL}</h3>
+              <p className="text-xs text-muted-foreground">
+                {rootFileRecords.length} file{rootFileRecords.length === 1 ? "" : "s"} saved at root
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {rootFileRecords.slice(0, 5).map((record) => (
+              <div
+                key={`root-file-${record.id}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">{record.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{record.mimeType || "application/octet-stream"}</p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    void openLocalFirst(record.id, `/api/file/${encodeURIComponent(record.id)}/stream`)
+                      .then((opened) => {
+                        if (!opened) {
+                          toast.error("This file is unavailable right now.");
+                        }
+                      });
+                  }}
+                >
+                  Open
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <SmartCollectionsShelf
@@ -682,7 +743,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
           ) : null}
         </div>
       ) : viewMode === "grid" ? (
-        <motion.div layout className="mt-4 grid grid-cols-2 gap-4">
+        <motion.div layout className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           <AnimatePresence initial={false}>
             {filteredFolders.map((folder, index) => (
               <motion.div
@@ -955,6 +1016,10 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         onOpenChange={setQuickCaptureOpen}
         initialMode={quickCaptureMode}
         destinations={quickCaptureDestinations}
+        onCreateFolder={() => {
+          setCreateFolderParentId(null);
+          setIsCreateFolderOpen(true);
+        }}
         onSaveCapture={async (capture) => {
           try {
             await savePersonalFileLocal({

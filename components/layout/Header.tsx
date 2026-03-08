@@ -59,7 +59,7 @@ export function Header({ title, hideFilters }: { title?: string; hideFilters?: b
   return (
     <header className={isCompact ? "px-4 pt-4 sm:pt-5" : "px-4 pt-5 sm:pt-6"}>
       <div className={isCompact ? "space-y-1" : "space-y-1.5"}>
-        <div className="flex flex-wrap items-center justify-between gap-x-2.5 gap-y-1.5">
+        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-2 sm:items-center">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {!isRootPage ? (
               <Button
@@ -92,7 +92,7 @@ export function Header({ title, hideFilters }: { title?: string; hideFilters?: b
                       render={
                         <Button
                           variant="ghost"
-                          className={`${contextTriggerClass} max-w-[clamp(9rem,45vw,18rem)]`}
+                          className={`${contextTriggerClass} max-w-[clamp(9rem,35vw,28rem)]`}
                         />
                       }
                     >
@@ -120,7 +120,7 @@ export function Header({ title, hideFilters }: { title?: string; hideFilters?: b
                       render={
                         <Button
                           variant="ghost"
-                          className={`${contextTriggerClass} relative max-w-[clamp(6.5rem,28vw,11rem)]`}
+                          className={`${contextTriggerClass} relative max-w-[clamp(6.5rem,24vw,14rem)]`}
                         />
                       }
                     >
@@ -144,7 +144,7 @@ export function Header({ title, hideFilters }: { title?: string; hideFilters?: b
             </div>
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-1.5 sm:w-auto sm:justify-start sm:gap-2">
             <Button
               type="button"
               aria-label="Share current page"

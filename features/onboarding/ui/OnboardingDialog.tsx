@@ -7,11 +7,13 @@ import { OnboardingShell } from "@/components/onboarding/OnboardingShell";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { CapabilitiesSlide } from "@/components/onboarding/slides/CapabilitiesSlide";
 import { CompletionSlide } from "@/components/onboarding/slides/CompletionSlide";
+import { FeaturesGuideSlide } from "@/components/onboarding/slides/FeaturesGuideSlide";
 import { GreetingSlide } from "@/components/onboarding/slides/GreetingSlide";
 import { IdentitySlide } from "@/components/onboarding/slides/IdentitySlide";
 import { PersonalSlide } from "@/components/onboarding/slides/PersonalSlide";
 import { AcademicSlide } from "@/components/onboarding/slides/AcademicSlide";
 import { ThemeSlide } from "@/components/onboarding/slides/ThemeSlide";
+import { WelcomeConsentSlide } from "@/components/onboarding/slides/WelcomeConsentSlide";
 import { useAcademicContext } from "@/components/layout/AcademicContext";
 import { ONBOARDING_CAPABILITY_CARDS } from "@/features/onboarding/onboarding.content";
 import { useSettingsStore } from "@/features/settings/settings.store";
@@ -35,7 +37,9 @@ type CatalogIndexEntry = {
 
 type SlideDefinition = {
   id:
+    | "welcome-consent"
     | `capability-${string}`
+    | "features-guide"
     | "identity"
     | "greeting"
     | "personal"
@@ -107,6 +111,7 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
   const [semesterDraft, setSemesterDraft] = useState(semester);
   const [personalRepositoryEnabled, setPersonalRepositoryEnabled] = useState(personalRepositoryVisible);
   const [themeDraft, setThemeDraft] = useState<ThemeId>(normalizeThemeId(theme));
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
 
   const [nameSuccessTick, setNameSuccessTick] = useState(0);
   const [emailSuccessTick, setEmailSuccessTick] = useState(0);
@@ -120,7 +125,9 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
   const completionTriggeredRef = useRef(false);
 
   const slides = useMemo<SlideDefinition[]>(() => [
+    { id: "welcome-consent", counted: true },
     ...ONBOARDING_CAPABILITY_CARDS.map((card) => ({ id: `capability-${card.id}` as `capability-${string}`, counted: true })),
+    { id: "features-guide", counted: true },
     { id: "identity", counted: true },
     { id: "greeting", counted: false },
     { id: "personal", counted: true },
@@ -212,6 +219,7 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
     setSemesterDraft(semester);
     setPersonalRepositoryEnabled(personalRepositoryVisible);
     setThemeDraft(currentTheme);
+    setAcceptedLegal(false);
     void loadAcademicMappings();
   }, [currentTheme, department, loadAcademicMappings, open, personalRepositoryVisible, semester, userProfile.email, userProfile.name]);
 
@@ -289,12 +297,16 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
       return validateIdentity();
     }
 
+    if (slideId === "welcome-consent") {
+      return acceptedLegal;
+    }
+
     if (slideId === "academic") {
       return validateAcademic();
     }
 
     return true;
-  }, [slides, validateAcademic, validateIdentity]);
+  }, [acceptedLegal, slides, validateAcademic, validateIdentity]);
 
   const navigateToIndex = useCallback((targetIndex: number) => {
     if (targetIndex < 0 || targetIndex >= slides.length || targetIndex === currentIndex) {
@@ -390,6 +402,10 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
       return true;
     }
 
+    if (currentSlide.id === "welcome-consent") {
+      return !acceptedLegal;
+    }
+
     if (currentSlide.id === "identity") {
       return name.trim().length === 0 || email.trim().length === 0;
     }
@@ -399,9 +415,17 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
     }
 
     return false;
-  }, [currentSlide, departments.length, email, name]);
+  }, [acceptedLegal, currentSlide, departments.length, email, name]);
 
-  const nextLabel = currentSlide?.id === "completion" ? "Get Started" : "Continue";
+  const nextLabel = useMemo(() => {
+    if (currentSlide?.id === "completion") {
+      return "Get Started";
+    }
+    if (currentSlide?.id === "welcome-consent") {
+      return acceptedLegal ? "Continue" : "Accept to Continue";
+    }
+    return "Continue";
+  }, [acceptedLegal, currentSlide?.id]);
 
   const renderSlide = useCallback((ready: boolean) => {
     const slideId = currentSlide?.id;
@@ -428,6 +452,20 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
         );
       }
 
+    }
+
+    if (slideId === "welcome-consent") {
+      return (
+        <WelcomeConsentSlide
+          ready={ready}
+          accepted={acceptedLegal}
+          onAcceptedChange={setAcceptedLegal}
+        />
+      );
+    }
+
+    if (slideId === "features-guide") {
+      return <FeaturesGuideSlide ready={ready} />;
     }
 
     if (slideId === "identity") {
@@ -513,7 +551,7 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
     }
 
     return null;
-  }, [catalogError, catalogLoading, currentIndex, currentSlide?.id, departmentDraft, departmentSuccessTick, departments, email, emailError, emailSuccessTick, loadAcademicMappings, name, nameError, nameSuccessTick, navigateToIndex, personalRepositoryEnabled, semesterDraft, semesterSuccessTick, themeDraft]);
+  }, [acceptedLegal, catalogError, catalogLoading, currentIndex, currentSlide?.id, departmentDraft, departmentSuccessTick, departments, email, emailError, emailSuccessTick, loadAcademicMappings, name, nameError, nameSuccessTick, navigateToIndex, personalRepositoryEnabled, semesterDraft, semesterSuccessTick, themeDraft]);
 
   return (
     <Dialog

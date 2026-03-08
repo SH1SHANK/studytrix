@@ -459,7 +459,7 @@ export function DashboardGrid({ showSharedChrome = true }: DashboardGridProps) {
   return (
     <section
       className={cn(
-        "flex flex-col gap-0 px-4 pb-32",
+        "flex flex-col gap-0 px-4 pb-32 lg:px-6 xl:px-8",
         showSharedChrome ? "pt-5 sm:pt-6" : "pt-3",
       )}
     >
@@ -568,8 +568,8 @@ export function DashboardGrid({ showSharedChrome = true }: DashboardGridProps) {
           ) : null}
 
           {/* ── Toolbar Row ─────────────────────────────────────── */}
-          <div className="mt-5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               {/* Sort Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -773,7 +773,7 @@ export function DashboardGrid({ showSharedChrome = true }: DashboardGridProps) {
       <div className="mt-4 flex flex-col gap-8">
         {isLoading ? (
           viewMode === "grid" ? (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {Array.from({ length: 6 }, (_, index) => (
                 <Skeleton key={`sk-${index}`} className="h-[120px] rounded-xl" />
               ))}
@@ -822,7 +822,7 @@ export function DashboardGrid({ showSharedChrome = true }: DashboardGridProps) {
                   </span>
                 </div>
                 {viewMode === "grid" ? (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                     {coreFolders.map((folder, index) => (
                       <div key={folder.id} className="card-entrance" style={{ animationDelay: `${index * 50}ms` }}>
                       <FolderCard
@@ -869,7 +869,7 @@ export function DashboardGrid({ showSharedChrome = true }: DashboardGridProps) {
                   </span>
                 </div>
                 {viewMode === "grid" ? (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                     {electiveFolders.map((folder, index) => (
                       <div key={folder.id} className="card-entrance" style={{ animationDelay: `${(coreFolders.length + index) * 50}ms` }}>
                       <FolderCard

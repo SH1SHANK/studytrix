@@ -43,7 +43,7 @@ export function PersonalSlide({
           variants={slideItemVariants}
           className="font-heading text-[clamp(1.9rem,4.6vw,3rem)] font-semibold leading-tight tracking-tight text-foreground"
         >
-          <WordReveal text="Personal workspace settings" start={ready} />
+          <WordReveal text="Personal Repository defaults" start={ready} />
         </motion.h2>
 
         <motion.article variants={slideItemVariants} className="space-y-4 rounded-2xl border border-border/70 bg-card/75 p-4">
@@ -54,7 +54,7 @@ export function PersonalSlide({
                 Personal Repository
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Keep your private notes and custom folders in a separate space.
+                Keep captures, notes, study sets, and custom folders in your own space.
               </p>
             </div>
             <Switch
@@ -70,8 +70,8 @@ export function PersonalSlide({
               Helpful to know
             </p>
             <ul className="mt-2 space-y-1 text-xs leading-relaxed text-muted-foreground">
-              <li>Your repository is stored locally on this device.</li>
-              <li>Keep your own backups for important files.</li>
+              <li>Personal Repository is local-first and optimized for quick capture workflows.</li>
+              <li>Device folders may need reconnect permission after browser or app restarts.</li>
               <li>Storage behavior can vary in private/incognito sessions.</li>
             </ul>
             <p className="mt-2 text-xs text-muted-foreground">

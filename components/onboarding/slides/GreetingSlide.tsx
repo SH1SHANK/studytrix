@@ -131,7 +131,7 @@ export function GreetingSlide({ name, ready, onContinue }: GreetingSlideProps) {
                 transition={{ delay: 1.4, duration: 0.25, ease: "easeOut" }}
                 className="mt-1 text-sm text-muted-foreground"
               >
-                Your academic workspace is ready.
+                Your local-first workspace is ready.
               </motion.p>
             </>
           ) : null}

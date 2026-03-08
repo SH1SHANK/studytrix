@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, Mic, PenSquare, Plus } from "lucide-react";
 
@@ -20,15 +21,24 @@ function triggerHaptic(duration = 12): void {
 
 export function QuickCaptureFAB({ onOpen }: QuickCaptureFABProps) {
   const isCommandCenterOpen = useCommandCenterStore((state) => state.isOpen);
+  const [mounted, setMounted] = useState(false);
   const [showQuickModes, setShowQuickModes] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   if (isCommandCenterOpen) {
     return null;
   }
 
-  return (
-    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+80px)] right-5 z-40">
+  if (!mounted) {
+    return null;
+  }
+
+  return createPortal(
+    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+80px)] right-4 z-50 sm:right-5 lg:right-8">
       <AnimatePresence>
         {showQuickModes ? (
           <motion.div
@@ -92,13 +102,17 @@ export function QuickCaptureFAB({ onOpen }: QuickCaptureFABProps) {
         }}
         whileTap={{ scale: 0.92 }}
         transition={{ type: "spring", stiffness: 540, damping: 30, duration: 0.08 }}
-        className="inline-flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_4px_16px_hsl(var(--primary)/0.35)]"
-        style={{ background: "hsl(var(--primary))" }}
+        className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary/35 text-foreground shadow-[0_6px_16px_hsl(var(--background)/0.42)] backdrop-blur-sm transition-shadow hover:shadow-[0_8px_18px_hsl(var(--background)/0.48)]"
+        style={{
+          background:
+            "radial-gradient(70% 70% at 28% 26%, hsl(var(--primary) / 0.22) 0%, hsl(var(--primary) / 0.10) 42%, transparent 100%), linear-gradient(160deg, hsl(var(--card) / 0.95) 0%, hsl(var(--card) / 0.88) 100%)",
+        }}
         aria-label="Quick capture"
       >
-        <Plus className="size-6" />
+        <span className="pointer-events-none absolute inset-[2px] rounded-full border border-primary/22" />
+        <Plus className="relative z-10 size-5 stroke-[2.2]" />
       </motion.button>
-    </div>
+    </div>,
+    document.body,
   );
 }
-

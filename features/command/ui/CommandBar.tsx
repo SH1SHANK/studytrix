@@ -2413,9 +2413,16 @@ export function CommandBar({
       return;
     }
 
-    setIsCoarsePointer(window.matchMedia("(pointer: coarse)").matches);
+    const pointerQuery = window.matchMedia("(pointer: coarse)");
+    const syncPointer = () => setIsCoarsePointer(pointerQuery.matches);
+    syncPointer();
     setRecentQueries(loadRecentQueries());
     setRecentCommandIds(loadRecentCommandIds());
+
+    pointerQuery.addEventListener("change", syncPointer);
+    return () => {
+      pointerQuery.removeEventListener("change", syncPointer);
+    };
   }, []);
 
   useEffect(() => {
@@ -2636,18 +2643,18 @@ export function CommandBar({
           ? "Unavailable"
         : ""
     : "";
-  const isMobilePalette = isCoarsePointer || (viewportMetrics.width > 0 && viewportMetrics.width <= 820);
+  const isMobilePalette = isCoarsePointer || (viewportMetrics.width > 0 && viewportMetrics.width <= 760);
   const panelHeight = Math.min(
-    isMobilePalette ? 920 : 880,
-    Math.max(isMobilePalette ? 420 : 360, (viewportMetrics.height || 760) - (isMobilePalette ? 8 : 24)),
+    isMobilePalette ? 920 : 980,
+    Math.max(isMobilePalette ? 420 : 520, (viewportMetrics.height || 760) - (isMobilePalette ? 8 : 28)),
   );
   const isCompactScopeChip = (viewportMetrics.width || 390) < 375;
   const overlayTopInset = isMobilePalette
     ? Math.max(0, viewportMetrics.offsetTop)
-    : Math.max(12, viewportMetrics.offsetTop + 12);
+    : Math.max(16, viewportMetrics.offsetTop + 16);
   const overlayBottomInset = isMobilePalette
     ? Math.max(0, viewportMetrics.keyboardInset)
-    : Math.max(12, viewportMetrics.keyboardInset + 12);
+    : Math.max(16, viewportMetrics.keyboardInset + 16);
   const listBottomInset = Math.max(isMobilePalette ? 14 : 18, viewportMetrics.keyboardInset + (isMobilePalette ? 16 : 12));
   const inputCenterOffset = useMemo(() => {
     if (
@@ -2913,7 +2920,7 @@ export function CommandBar({
                 "mx-auto flex w-full min-h-0 flex-col border border-border/80 bg-card/95 p-2 shadow-2xl",
                 isMobilePalette
                   ? "max-w-none rounded-t-2xl rounded-b-none border-b-0 px-2 pb-2"
-                  : "max-w-3xl rounded-2xl",
+                  : "max-w-[min(96vw,1480px)] rounded-2xl",
               )}
               style={{ height: panelHeight }}
             >

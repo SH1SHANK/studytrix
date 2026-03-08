@@ -66,11 +66,11 @@ export function ThemeSlide({ ready, selectedTheme, onThemeSelected }: ThemeSlide
           variants={slideItemVariants}
           className="font-heading text-[clamp(1.9rem,4.6vw,3rem)] font-semibold leading-tight tracking-tight text-foreground"
         >
-          <WordReveal text="Choose your visual style" start={ready} />
+          <WordReveal text="Choose your workspace tone" start={ready} />
         </motion.h2>
 
         <motion.p variants={slideItemVariants} className="max-w-2xl text-sm text-muted-foreground">
-          Preview updates here only. Your app theme changes after onboarding finishes.
+          Preview updates here only. Your selected theme is applied across dashboard, dialogs, and repository views after onboarding.
         </motion.p>
 
         <motion.section variants={slideItemVariants} className="rounded-3xl border border-border/70 bg-card/70 p-3.5 sm:p-4">

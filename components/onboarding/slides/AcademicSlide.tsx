@@ -86,11 +86,11 @@ export function AcademicSlide({
           variants={slideItemVariants}
           className="font-heading text-[clamp(1.9rem,4.6vw,3rem)] font-semibold leading-tight tracking-tight text-foreground"
         >
-          <WordReveal text="Set your department and semester" start={ready} />
+          <WordReveal text="Set your default academic context" start={ready} />
         </motion.h2>
 
         <motion.p variants={slideItemVariants} className="max-w-2xl text-sm text-muted-foreground">
-          You can change this later and switch semesters anytime from dashboard controls.
+          This sets your Global Repository defaults. You can switch department or semester anytime.
         </motion.p>
 
         <motion.div variants={slideItemVariants} className="space-y-4 rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-5">

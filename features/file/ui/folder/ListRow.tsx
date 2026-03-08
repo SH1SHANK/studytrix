@@ -246,7 +246,7 @@ export function ListRow({
           }
         }}
         className={cn(
-          "relative z-10 flex h-16 cursor-pointer items-center gap-3 rounded-xl border px-4 shadow-sm transition-shadow duration-200",
+          "relative z-10 flex h-16 cursor-pointer items-center gap-3 rounded-xl border px-4 shadow-sm transition-shadow duration-200 sm:h-[70px] sm:px-5",
           "hover:shadow-md active:scale-[0.99]",
           variant === "accent"
             ? "border-primary/35 bg-primary/10"

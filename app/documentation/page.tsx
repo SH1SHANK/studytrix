@@ -333,7 +333,7 @@ const TROUBLESHOOTING: DocSection = {
 
 export default function DocumentationPage() {
   return (
-    <AppShell headerTitle="Documentation" hideHeaderFilters={true}>
+    <AppShell headerTitle="Documentation" hideHeaderFilters={true} contentWidth="compact">
       <CompactPageContainer
         regularClassName="px-4 py-5 sm:px-5"
         compactClassName="px-4 py-4 sm:px-5"

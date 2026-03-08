@@ -64,8 +64,9 @@ export function DashboardSwipeContainer() {
   const syncedQueryRef = useRef(false);
   const x = useMotionValue(0);
   const [viewportWidth, setViewportWidth] = useState(0);
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const activeIndex = activePage === "global" ? 0 : 1;
-  const canSwipeBetweenRepositories = showPersonalRepository && viewportWidth > 0;
+  const canSwipeBetweenRepositories = showPersonalRepository && viewportWidth > 0 && isCoarsePointer;
 
   const handlePageChange = (nextPage: "global" | "personal") => {
     if (!showPersonalRepository && nextPage === "personal") {
@@ -139,6 +140,21 @@ export function DashboardSwipeContainer() {
     observer.observe(element);
     return () => {
       observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(pointer: coarse)");
+    const syncPointer = () => setIsCoarsePointer(mediaQuery.matches);
+    syncPointer();
+    mediaQuery.addEventListener("change", syncPointer);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncPointer);
     };
   }, []);
 

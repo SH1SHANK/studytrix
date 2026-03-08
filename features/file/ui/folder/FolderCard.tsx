@@ -83,7 +83,7 @@ export function FolderCard({
         }
       }}
       className={cn(
-        "group relative min-h-[120px] cursor-pointer rounded-xl py-0 shadow-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2",
+        "group relative min-h-[118px] cursor-pointer rounded-xl py-0 shadow-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 sm:min-h-[128px]",
         "hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
       )}
       style={cardStyle}
@@ -97,7 +97,7 @@ export function FolderCard({
         />
       </div>
 
-      <CardContent className="flex min-h-[120px] flex-col justify-between space-y-2 p-5 pr-14">
+      <CardContent className="flex min-h-[118px] flex-col justify-between space-y-2 p-4 pr-14 sm:min-h-[128px] sm:p-5 sm:pr-14">
         {/* Upgraded icon container: inner shadow, border, glow on accent */}
         <div
           className={cn(
@@ -109,7 +109,7 @@ export function FolderCard({
         </div>
 
         <div className="space-y-1">
-          <h3 className="line-clamp-2 text-base font-medium text-foreground">
+          <h3 className="line-clamp-2 text-sm font-medium text-foreground sm:text-base">
             {title}
           </h3>
           {starred || visibleTags.length > 0 ? (

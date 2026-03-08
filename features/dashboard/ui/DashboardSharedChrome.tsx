@@ -299,8 +299,8 @@ export function DashboardSharedChrome({
   const metricLabel = SORT_LABELS_BY_PAGE[activePage][sortKey];
 
   return (
-    <section className="px-4 pb-3 pt-3">
-      <div className="flex items-center justify-between gap-2">
+    <section className="px-4 pb-3 pt-3 lg:px-6 xl:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -355,7 +355,7 @@ export function DashboardSharedChrome({
           </DropdownMenu>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <Button
             id={DOWNLOAD_BUTTON_ELEMENT_ID}
             variant="ghost"
@@ -407,8 +407,8 @@ export function DashboardSharedChrome({
         </div>
       ) : null}
 
-      <div className="mt-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
               render={

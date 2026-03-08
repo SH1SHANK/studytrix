@@ -100,9 +100,9 @@ export function ControlsBar() {
       {/* Subtle separator */}
       <div className="h-px bg-linear-to-r from-transparent via-border to-transparent" />
 
-      <div className={cn("flex items-center justify-between gap-2 px-4", compactModeEnabled ? "py-2" : "py-3")}>
+      <div className={cn("flex flex-wrap items-center justify-between gap-2 px-4 lg:px-6 xl:px-8", compactModeEnabled ? "py-2" : "py-3")}>
         {/* Left group — Downloads + Sort */}
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <DownloadButton
             className={cn(
               "gap-1.5 rounded-lg border-border bg-card px-3 text-xs font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-muted active:scale-[0.97]",
@@ -151,7 +151,7 @@ export function ControlsBar() {
         </div>
 
         {/* Right group — View toggle */}
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2">
           <Button
             variant={isSelectionMode ? "secondary" : "outline"}
             size="sm"

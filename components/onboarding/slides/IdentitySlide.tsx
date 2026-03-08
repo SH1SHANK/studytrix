@@ -58,7 +58,7 @@ export function IdentitySlide({
         </motion.h2>
 
         <motion.p variants={slideItemVariants} className="max-w-2xl text-sm text-muted-foreground">
-          Add your details for a more personal dashboard and context-aware setup.
+          Add your details for personalized greetings and a smoother setup experience.
         </motion.p>
 
         <motion.div variants={slideItemVariants} className="space-y-4 rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-5">

@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicyPage() {
   return (
-    <AppShell headerTitle="Legal" hideHeaderFilters={true}>
+    <AppShell headerTitle="Legal" hideHeaderFilters={true} contentWidth="compact">
       <LegalDocumentView document={document} />
     </AppShell>
   );

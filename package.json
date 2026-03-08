@@ -2,13 +2,14 @@
   "name": "studytrix",
   "version": "0.9.4-experimental",
   "private": true,
+  "packageManager": "pnpm@10.30.2",
   "scripts": {
     "dev": "next dev",
     "build": "NODE_OPTIONS=--max-old-space-size=6144 next build --webpack",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "test:intelligence": "jest tests/command/intelligence.*.test.ts --runInBand",
-    "verify": "npm run lint && npm run test:intelligence && npm run build"
+    "verify": "pnpm lint && pnpm test:intelligence && pnpm build"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

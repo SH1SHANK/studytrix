@@ -262,7 +262,7 @@ export function FloatingDock({
   }, [isCoarsePointer, resolvedPlaceholder, scopeSummary]);
   const searchButtonWidthClass = useMemo(() => {
     if (!isCoarsePointer) {
-      return "w-12 justify-center sm:w-48 sm:justify-between xl:w-56";
+      return "w-12 justify-center sm:w-56 sm:justify-between lg:w-64 xl:w-72";
     }
 
     return "w-full min-w-0 justify-between";

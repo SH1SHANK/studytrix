@@ -63,6 +63,7 @@ import { emitCodePreviewRequest } from "@/features/custom-folders/code-preview.e
 import { savePersonalFileLocal, reindexPersonalFileRecord } from "@/features/custom-folders/personal-files.ingest";
 import { usePersonalFilesStore } from "@/features/custom-folders/personal-files.store";
 import { enqueuePendingMove } from "@/features/custom-folders/capture.queue";
+import { openIndexedLocalFile } from "@/features/custom-folders/local-file.open";
 
 type FileListProps = {
   driveFolderId: string | null;
@@ -523,7 +524,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
 
   const isGridView = viewMode === "grid";
   const rowContainerClass = isGridView
-    ? cn("grid grid-cols-2", compactModeEnabled ? "gap-2" : "gap-3")
+    ? cn("grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4", compactModeEnabled ? "gap-2" : "gap-3")
     : cn("flex flex-col", compactModeEnabled ? "gap-1" : "gap-2");
 
   const onToggleOpen = useCallback((id: string | null) => {
@@ -878,16 +879,56 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         return;
       }
 
-      if (routeContext.repoKind === "personal" && isCodeFile(item.title.split(".").pop() ?? "")) {
-        emitCodePreviewRequest({
-          fileId: item.id,
-          fileName: item.title,
-          extension: item.title.split(".").pop() ?? "",
-        });
-        return;
-      }
+      void (async () => {
+        const extension = item.title.split(".").pop() ?? "";
+        const isPersonalCodeFile = routeContext.repoKind === "personal" && isCodeFile(extension);
+        const isLocalFile = item.sourceKind === "local" || isLocalFolderContext;
 
-      if (item.webViewLink) {
+        if (isLocalFile) {
+          const cached = await getFile(item.id);
+
+          if (isPersonalCodeFile && cached) {
+            emitCodePreviewRequest({
+              fileId: item.id,
+              fileName: item.title,
+              extension,
+            });
+            return;
+          }
+
+          if (cached) {
+            void openLocalFirst(item.id, `/api/file/${encodeURIComponent(item.id)}/stream`);
+            return;
+          }
+
+          if (item.customFolderId && item.fullPath) {
+            const result = await openIndexedLocalFile({
+              customFolderId: item.customFolderId,
+              fullPath: item.fullPath,
+              fileName: item.title,
+            });
+            if (!result.ok) {
+              toast.error(result.message);
+            }
+            return;
+          }
+
+          toast.error("This local file could not be opened right now.");
+          return;
+        }
+
+        if (isPersonalCodeFile) {
+          emitCodePreviewRequest({
+            fileId: item.id,
+            fileName: item.title,
+            extension,
+          });
+          return;
+        }
+
+        if (!item.webViewLink) {
+          return;
+        }
 
         if (autoPrefetchEnabled) {
           autoPrefetch(
@@ -906,7 +947,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         }
 
         window.open(item.webViewLink, "_blank", "noopener,noreferrer");
-      }
+      })();
     },
     [
       autoPrefetchEnabled,
@@ -914,6 +955,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
       currentTrailLabels,
       fileRows,
       getRowOfflineState,
+      isLocalFolderContext,
       routeContext,
       router,
     ],
@@ -922,7 +964,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   // Loading state — skeleton cards matching real card dimensions
   if (isLoading) {
     return (
-      <div className="mt-4 px-4 pb-32">
+      <div className="mt-4 px-4 pb-32 lg:px-6 xl:px-8">
         <div className="space-y-4">
           {/* Skeleton section header */}
           <div className="flex items-center gap-2.5 px-1 py-3">
@@ -930,7 +972,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
             <Skeleton className="h-3 w-16 rounded" />
             <Skeleton className="h-5 w-6 rounded-full" />
           </div>
-          <div className={isGridView ? cn("grid grid-cols-2", compactModeEnabled ? "gap-2" : "gap-3") : cn(compactModeEnabled ? "space-y-1" : "space-y-2")}>
+          <div className={isGridView ? cn("grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4", compactModeEnabled ? "gap-2" : "gap-3") : cn(compactModeEnabled ? "space-y-1" : "space-y-2")}>
             {Array.from({ length: isGridView ? 4 : 3 }, (_, index) => (
               <SkeletonCard key={`sk-folder-${index}`} viewMode={viewMode} />
             ))}
@@ -945,7 +987,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
             <Skeleton className="h-3 w-12 rounded" />
             <Skeleton className="h-5 w-6 rounded-full" />
           </div>
-          <div className={isGridView ? cn("grid grid-cols-2", compactModeEnabled ? "gap-2" : "gap-3") : cn(compactModeEnabled ? "space-y-1" : "space-y-2")}>
+          <div className={isGridView ? cn("grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4", compactModeEnabled ? "gap-2" : "gap-3") : cn(compactModeEnabled ? "space-y-1" : "space-y-2")}>
             {Array.from({ length: isGridView ? 4 : 3 }, (_, index) => (
               <SkeletonCard key={`sk-file-${index}`} viewMode={viewMode} />
             ))}
@@ -958,7 +1000,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   // Error state
   if (error) {
     return (
-      <div className="mt-6 flex min-h-[50vh] flex-col items-center justify-center px-4 pb-32 text-center">
+      <div className="mt-6 flex min-h-[50vh] flex-col items-center justify-center px-4 pb-32 text-center lg:px-6 xl:px-8">
         <p className="text-sm font-medium text-rose-600 dark:text-rose-400">
           {error}
         </p>
@@ -974,7 +1016,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
   // Empty state
   if (allRows.length === 0) {
     return (
-      <div className="mt-6 flex min-h-[50vh] flex-col items-center justify-center px-4 pb-32 text-center">
+      <div className="mt-6 flex min-h-[50vh] flex-col items-center justify-center px-4 pb-32 text-center lg:px-6 xl:px-8">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-muted">
           <IconFolderOff className="size-6 text-muted-foreground" />
         </div>
@@ -999,7 +1041,7 @@ export function FileList({ driveFolderId, courseName }: FileListProps) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.97 }}
         transition={{ duration: 0.15, ease: "easeOut" }}
-        className="mt-4 px-4 pb-32"
+        className="mt-4 px-4 pb-32 lg:px-6 xl:px-8"
       >
         {isStale && typeof lastUpdatedAt === "number" ? (
           <div className="mb-2 inline-flex items-center rounded-full border border-amber-300/70 bg-amber-100/70 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/30 dark:text-amber-300">

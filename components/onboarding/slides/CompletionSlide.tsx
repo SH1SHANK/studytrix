@@ -43,7 +43,7 @@ export function CompletionSlide({ ready, name }: CompletionSlideProps) {
         </motion.h2>
 
         <motion.p variants={slideItemVariants} className="max-w-lg text-sm text-muted-foreground">
-          Tap Get Started to open your dashboard with your selected onboarding preferences.
+          Tap Get Started to open your dashboard. Quick Capture, folder actions, and Study Set workflows are ready.
         </motion.p>
       </div>
     </SlideContainer>
