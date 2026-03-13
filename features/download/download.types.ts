@@ -10,7 +10,11 @@ export type DownloadState =
 
 export type DownloadErrorCode =
   | "NETWORK_ERROR"
+  | "OFFLINE"
+  | "RATE_LIMITED"
+  | "QUOTA"
   | "QUOTA_EXCEEDED"
+  | "NOT_FOUND"
   | "SERVER_ERROR"
   | "TIMEOUT"
   | "UNKNOWN";

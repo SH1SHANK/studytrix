@@ -4,6 +4,33 @@ import { openDB, type IDBPDatabase } from "idb";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+/**
+ * Augmented FileSystemDirectoryHandle with File System Access API extensions
+ * that are not yet included in TypeScript's built-in lib types.
+ */
+interface FileSystemDirectoryHandleExt extends FileSystemDirectoryHandle {
+  queryPermission(descriptor: { mode: "read" | "readwrite" }): Promise<PermissionState>;
+  requestPermission(descriptor: { mode: "read" | "readwrite" }): Promise<PermissionState>;
+  entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
+}
+
+/**
+ * Augmented FileSystemFileHandle with the `move()` method available in
+ * Chromium-based browsers.
+ */
+interface FileSystemFileHandleExt extends FileSystemFileHandle {
+  move(name: string): Promise<void>;
+}
+
+/**
+ * Subset of the `showDirectoryPicker` API available on `window` in browsers
+ * that support the File System Access API.
+ */
+type ShowDirectoryPickerFn = (options?: {
+  mode?: "read" | "readwrite";
+  startIn?: "documents" | "downloads" | "desktop" | FileSystemDirectoryHandle;
+}) => Promise<FileSystemDirectoryHandle>;
+
 export interface StorageProvider {
   kind: "filesystem" | "indexeddb";
   /**
@@ -62,7 +89,7 @@ export function supportsFileSystemAccess(): boolean {
     return false;
   }
 
-  return typeof (window as any).showDirectoryPicker === "function";
+  return typeof (window as Window & { showDirectoryPicker?: ShowDirectoryPickerFn }).showDirectoryPicker === "function";
 }
 
 // ─── Directory Handle Persistence ───────────────────────────────────────────
@@ -142,8 +169,8 @@ export async function loadDirectoryHandle(options?: {
       return { handle: null, permissionGranted: false, handleStatus: "lost" };
     }
 
-    const queryPermission = (handle as any).queryPermission;
-    const requestPermission = (handle as any).requestPermission;
+    const queryPermission = (handle as FileSystemDirectoryHandleExt).queryPermission;
+    const requestPermission = (handle as FileSystemDirectoryHandleExt).requestPermission;
 
     // Attempt silent permission re-acquisition when supported.
     if (typeof queryPermission === "function") {
@@ -304,7 +331,7 @@ export class FileSystemAccessProvider implements StorageProvider {
 
     try {
       const tempHandle = await this.dirHandle.getFileHandle(tempName);
-      const move = (tempHandle as any).move;
+      const move = (tempHandle as FileSystemFileHandleExt).move;
       if (typeof move === "function") {
         await move.call(tempHandle, name);
       } else {
@@ -338,7 +365,7 @@ export class FileSystemAccessProvider implements StorageProvider {
   async listFiles(): Promise<string[]> {
     const names: string[] = [];
 
-    for await (const [name, handle] of (this.dirHandle as any).entries()) {
+    for await (const [name, handle] of (this.dirHandle as FileSystemDirectoryHandleExt).entries()) {
       if (handle.kind === "file" && !name.startsWith(".") && !name.startsWith("_")) {
         names.push(name);
       }
@@ -480,7 +507,7 @@ export async function pickDirectory(options?: {
     return null;
   }
 
-  const picker = (window as any).showDirectoryPicker;
+  const picker = (window as Window & { showDirectoryPicker?: ShowDirectoryPickerFn }).showDirectoryPicker;
   if (typeof picker !== "function") {
     return null;
   }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconPlus } from "@tabler/icons-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Camera, FolderPlus, HeartPulse, MoreHorizontal } from "lucide-react";
+import { Camera, FolderPlus, HeartPulse } from "lucide-react";
 import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
 
@@ -35,12 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import {
   getSortedPersonalFolders,
   useCustomFoldersStore,
@@ -95,7 +90,10 @@ type PersonalFileView = {
 };
 
 function createLocalVirtualFolderId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return `local_virtual_${crypto.randomUUID()}`;
   }
 
@@ -130,7 +128,9 @@ function matchesTagFilters(
   return activeFilters.some((tagId) => tagSet.has(tagId));
 }
 
-export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepositoryGridProps) {
+export function PersonalRepositoryGrid({
+  showSharedChrome = true,
+}: PersonalRepositoryGridProps) {
   const router = useRouter();
   const hydrationRef = useRef(false);
   const folders = useCustomFoldersStore((state) => state.folders);
@@ -138,31 +138,49 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   const removeFolder = useCustomFoldersStore((state) => state.removeFolder);
   const renameFolder = useCustomFoldersStore((state) => state.renameFolder);
   const refreshFolder = useCustomFoldersStore((state) => state.refreshFolder);
-  const refreshLocalFolder = useCustomFoldersStore((state) => state.refreshLocalFolder);
+  const refreshLocalFolder = useCustomFoldersStore(
+    (state) => state.refreshLocalFolder,
+  );
   const updateFolder = useCustomFoldersStore((state) => state.updateFolder);
   const needsReconnect = useCustomFoldersStore((state) => state.needsReconnect);
   const pinnedFileIds = useCustomFoldersStore((state) => state.pinnedFileIds);
   const unpinFile = useCustomFoldersStore((state) => state.unpinFile);
-  const reorderPinnedFiles = useCustomFoldersStore((state) => state.reorderPinnedFiles);
+  const reorderPinnedFiles = useCustomFoldersStore(
+    (state) => state.reorderPinnedFiles,
+  );
   const [defaultSortValue] = useSetting("default_sort_order");
   const [defaultDashboardView] = useSetting("dashboard_default_view");
   const sortKey = useDashboardToolbarStore((state) => state.sortKey);
   const setSortKey = useDashboardToolbarStore((state) => state.setSortKey);
   const viewMode = useDashboardToolbarStore((state) => state.viewMode);
   const setViewMode = useDashboardToolbarStore((state) => state.setViewMode);
-  const personalFilterMode = useDashboardToolbarStore((state) => state.personalFilterMode);
-  const setPersonalFilterMode = useDashboardToolbarStore((state) => state.setPersonalFilterMode);
+  const personalFilterMode = useDashboardToolbarStore(
+    (state) => state.personalFilterMode,
+  );
+  const setPersonalFilterMode = useDashboardToolbarStore(
+    (state) => state.setPersonalFilterMode,
+  );
   const indexedEntries = useIntelligenceStore((state) => state.indexedEntries);
   const personalFileRecords = usePersonalFilesStore((state) => state.records);
   const collections = useSmartCollectionsStore((state) => state.collections);
-  const lastGeneratedAt = useSmartCollectionsStore((state) => state.lastGeneratedAt);
-  const generateCollections = useSmartCollectionsStore((state) => state.generateCollections);
-  const dismissCollection = useSmartCollectionsStore((state) => state.dismissCollection);
-  const pinCollection = useSmartCollectionsStore((state) => state.pinCollection);
+  const lastGeneratedAt = useSmartCollectionsStore(
+    (state) => state.lastGeneratedAt,
+  );
+  const generateCollections = useSmartCollectionsStore(
+    (state) => state.generateCollections,
+  );
+  const dismissCollection = useSmartCollectionsStore(
+    (state) => state.dismissCollection,
+  );
+  const pinCollection = useSmartCollectionsStore(
+    (state) => state.pinCollection,
+  );
   const sets = useStudySetsStore((state) => state.sets);
   const createSet = useStudySetsStore((state) => state.createSet);
   const addFileToSet = useStudySetsStore((state) => state.addFileToSet);
-  const removeFileFromSet = useStudySetsStore((state) => state.removeFileFromSet);
+  const removeFileFromSet = useStudySetsStore(
+    (state) => state.removeFileFromSet,
+  );
   const reorderSetFiles = useStudySetsStore((state) => state.reorderSetFiles);
   const renameSet = useStudySetsStore((state) => state.renameSet);
   const deleteSet = useStudySetsStore((state) => state.deleteSet);
@@ -188,17 +206,23 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
-  const [createFolderParentId, setCreateFolderParentId] = useState<string | null>(null);
+  const [createFolderParentId, setCreateFolderParentId] = useState<
+    string | null
+  >(null);
   const [isFolderHealthOpen, setIsFolderHealthOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
-  const [quickCaptureMode, setQuickCaptureMode] = useState<"photo" | "note" | "voice">("photo");
+  const [quickCaptureMode, setQuickCaptureMode] = useState<
+    "photo" | "note" | "voice"
+  >("photo");
   const [failedSyncCount, setFailedSyncCount] = useState(0);
   const [isCreateStudySetOpen, setIsCreateStudySetOpen] = useState(false);
   const [studySetNameDraft, setStudySetNameDraft] = useState("");
   const [editingFolder, setEditingFolder] = useState<CustomFolder | null>(null);
   const [removeTarget, setRemoveTarget] = useState<CustomFolder | null>(null);
   const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
-  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(
+    null,
+  );
   const [activeStudySetId, setActiveStudySetId] = useState<string | null>(null);
   const [activeAcceptedTags, setActiveAcceptedTags] = useState<string[]>([]);
 
@@ -228,14 +252,15 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   }, [hydrate, isHydrated]);
 
   const orderedFolders = useMemo(
-    () => getSortedPersonalFolders(folders).map((folder) => {
-      const assignment = resolvePersonalAssignment(assignments, folder.id);
-      return {
-        ...folder,
-        tagIds: assignment.tagIds,
-        starred: assignment.starred,
-      } satisfies PersonalFolderViewModel;
-    }),
+    () =>
+      getSortedPersonalFolders(folders).map((folder) => {
+        const assignment = resolvePersonalAssignment(assignments, folder.id);
+        return {
+          ...folder,
+          tagIds: assignment.tagIds,
+          starred: assignment.starred,
+        } satisfies PersonalFolderViewModel;
+      }),
     [assignments, folders],
   );
 
@@ -310,7 +335,11 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         return false;
       }
 
-      const matchesTagAssignments = matchesTagFilters(folder.tagIds, activeFilters, filterMode);
+      const matchesTagAssignments = matchesTagFilters(
+        folder.tagIds,
+        activeFilters,
+        filterMode,
+      );
       if (!matchesTagAssignments) {
         return false;
       }
@@ -336,21 +365,42 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         case "name":
           return left.label.localeCompare(right.label);
         case "metric":
-          return (right.fileCount + right.folderCount) - (left.fileCount + left.folderCount);
+          return (
+            right.fileCount +
+            right.folderCount -
+            (left.fileCount + left.folderCount)
+          );
         case "recent":
         default:
           return right.addedAt - left.addedAt;
       }
     });
-  }, [activeAcceptedTags, activeFilters, filterMode, folderTagsByRootId, personalFilterMode, rootFolders, sortKey]);
+  }, [
+    activeAcceptedTags,
+    activeFilters,
+    filterMode,
+    folderTagsByRootId,
+    personalFilterMode,
+    rootFolders,
+    sortKey,
+  ]);
 
   const localFolders = useMemo(
-    () => orderedFolders.filter((folder) => (folder.sourceKind ?? "drive") === "local"),
+    () =>
+      orderedFolders.filter(
+        (folder) => (folder.sourceKind ?? "drive") === "local",
+      ),
     [orderedFolders],
   );
 
   const tagMap = useMemo(
-    () => new Map(tags.map((tag) => [tag.id, { id: tag.id, name: tag.name, color: tag.color }])),
+    () =>
+      new Map(
+        tags.map((tag) => [
+          tag.id,
+          { id: tag.id, name: tag.name, color: tag.color },
+        ]),
+      ),
     [tags],
   );
 
@@ -378,17 +428,26 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
 
   const hasFolders = rootFolders.length > 0;
   const totalItemsCount = useMemo(
-    () => orderedFolders.reduce((sum, folder) => sum + folder.fileCount + folder.folderCount, 0),
+    () =>
+      orderedFolders.reduce(
+        (sum, folder) => sum + folder.fileCount + folder.folderCount,
+        0,
+      ),
     [orderedFolders],
   );
-  const hasActivePersonalFilters = personalFilterMode !== "all" || activeFilters.length > 0;
-  const reconnectFolderIds = useMemo(() => Array.from(needsReconnect), [needsReconnect]);
+  const hasActivePersonalFilters =
+    personalFilterMode !== "all" || activeFilters.length > 0;
+  const reconnectFolderIds = useMemo(
+    () => Array.from(needsReconnect),
+    [needsReconnect],
+  );
 
   const folderNameById = useMemo(
-    () => new Map<string, string>([
-      [PERSONAL_ROOT_FOLDER_ID, PERSONAL_ROOT_LABEL],
-      ...orderedFolders.map((folder) => [folder.id, folder.label] as const),
-    ]),
+    () =>
+      new Map<string, string>([
+        [PERSONAL_ROOT_FOLDER_ID, PERSONAL_ROOT_LABEL],
+        ...orderedFolders.map((folder) => [folder.id, folder.label] as const),
+      ]),
     [orderedFolders],
   );
 
@@ -416,12 +475,17 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
   }, [folderNameById, indexedEntries]);
 
   const allPersonalFiles = useMemo(
-    () => Array.from(personalFileViewsById.values()).sort((left, right) => left.name.localeCompare(right.name)),
+    () =>
+      Array.from(personalFileViewsById.values()).sort((left, right) =>
+        left.name.localeCompare(right.name),
+      ),
     [personalFileViewsById],
   );
 
   const activeCollection = useMemo(
-    () => collections.find((collection) => collection.id === activeCollectionId) ?? null,
+    () =>
+      collections.find((collection) => collection.id === activeCollectionId) ??
+      null,
     [activeCollectionId, collections],
   );
   const activeCollectionFiles = useMemo(() => {
@@ -432,7 +496,11 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
     return activeCollection.fileIds
       .map((fileId) => personalFileViewsById.get(fileId))
       .filter((file): file is PersonalFileView => Boolean(file))
-      .map((file) => ({ id: file.id, name: file.name, sourceLabel: file.sourceLabel }));
+      .map((file) => ({
+        id: file.id,
+        name: file.name,
+        sourceLabel: file.sourceLabel,
+      }));
   }, [activeCollection, personalFileViewsById]);
 
   const activeStudySet = useMemo(
@@ -440,9 +508,14 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
     [activeStudySetId, sets],
   );
   const rootFileRecords = useMemo(
-    () => personalFileRecords
-      .filter((record) => normalizePersonalFolderId(record.folderId) === PERSONAL_ROOT_FOLDER_ID)
-      .sort((left, right) => right.updatedAt - left.updatedAt),
+    () =>
+      personalFileRecords
+        .filter(
+          (record) =>
+            normalizePersonalFolderId(record.folderId) ===
+            PERSONAL_ROOT_FOLDER_ID,
+        )
+        .sort((left, right) => right.updatedAt - left.updatedAt),
     [personalFileRecords],
   );
   const quickCaptureDestinations = useMemo(
@@ -482,7 +555,10 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         }
       });
 
-      if (lastGeneratedAt === null || Date.now() - lastGeneratedAt > 86_400_000) {
+      if (
+        lastGeneratedAt === null ||
+        Date.now() - lastGeneratedAt > 86_400_000
+      ) {
         void generateCollections();
       }
 
@@ -496,7 +572,13 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
     handler();
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
-  }, [generateCollections, lastGeneratedAt, localFolders, refreshFailedSyncCount, refreshLocalFolder]);
+  }, [
+    generateCollections,
+    lastGeneratedAt,
+    localFolders,
+    refreshFailedSyncCount,
+    refreshLocalFolder,
+  ]);
 
   useEffect(() => {
     const onOnline = () => {
@@ -526,78 +608,128 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         <h2>Personal Repository</h2>
       </header>
 
-      <div className="mb-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card/95 to-primary/5 p-3 shadow-sm backdrop-blur-sm sm:p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
-              Personal Repository
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {orderedFolders.length} folders · {totalItemsCount} items
-            </p>
+      {/* ── Personal Repository Hero Card ── */}
+      <div className="mb-4 overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-card via-card to-primary/5 shadow-sm">
+        {/* Header row: identity + stats + health shortcut */}
+        <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+              <FolderPlus className="size-[18px] text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                Personal Repository
+              </p>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <span className="inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {orderedFolders.length} folder
+                  {orderedFolders.length !== 1 ? "s" : ""}
+                </span>
+                <span className="text-[11px] text-border">·</span>
+                <span className="inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {totalItemsCount} item{totalItemsCount !== 1 ? "s" : ""}
+                </span>
+              </div>
+            </div>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button type="button" size="icon" variant="ghost" aria-label="Personal Repository actions" />}
-            >
-              <MoreHorizontal className="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => setIsFolderHealthOpen(true)}>
-                Open Folder Health
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
-          <Button type="button" size="sm" className="justify-start" onClick={() => setIsAddDialogOpen(true)}>
-            <FolderPlus className="size-4" />
-            Add Folder
-          </Button>
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            className="justify-start"
+            variant="ghost"
+            className="h-8 shrink-0 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setIsFolderHealthOpen(true)}
+          >
+            <HeartPulse className="size-3.5" />
+            <span className="hidden sm:inline">Health</span>
+          </Button>
+        </div>
+
+        {/* Divider */}
+        <div className="mx-4 mt-3 h-px bg-border/40 sm:mx-5" />
+
+        {/* Action tiles: 2-col on mobile, 4-col on lg+ */}
+        <div className="grid grid-cols-2 gap-2 p-3 sm:p-4 lg:grid-cols-4">
+          {/* Add Folder — primary action */}
+          <button
+            type="button"
+            onClick={() => setIsAddDialogOpen(true)}
+            className="group flex items-center gap-3 rounded-xl border border-border/60 bg-background/50 px-3 py-3 text-left transition-all hover:border-primary/30 hover:bg-primary/5 hover:shadow-sm active:scale-[0.97]"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/15">
+              <FolderPlus className="size-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-foreground">
+                Add Folder
+              </p>
+              <p className="truncate text-[11px] leading-tight text-muted-foreground">
+                From Drive
+              </p>
+            </div>
+          </button>
+
+          {/* New Folder */}
+          <button
+            type="button"
             onClick={() => {
               setCreateFolderParentId(null);
               setIsCreateFolderOpen(true);
             }}
+            className="group flex items-center gap-3 rounded-xl border border-border/60 bg-background/50 px-3 py-3 text-left transition-all hover:bg-muted/50 hover:shadow-sm active:scale-[0.97]"
           >
-            <FolderPlus className="size-4" />
-            Create Folder
-          </Button>
-          <Button
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/70 transition-colors group-hover:bg-muted">
+              <FolderPlus className="size-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-foreground">
+                New Folder
+              </p>
+              <p className="truncate text-[11px] leading-tight text-muted-foreground">
+                Local space
+              </p>
+            </div>
+          </button>
+
+          {/* Quick Capture */}
+          <button
             type="button"
-            size="sm"
-            variant="outline"
-            className="justify-start"
             onClick={() => {
               setQuickCaptureMode("photo");
               setQuickCaptureOpen(true);
             }}
+            className="group flex items-center gap-3 rounded-xl border border-border/60 bg-background/50 px-3 py-3 text-left transition-all hover:bg-muted/50 hover:shadow-sm active:scale-[0.97]"
           >
-            <Camera className="size-4" />
-            Quick Capture
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="justify-start"
-            onClick={() => setIsCreateStudySetOpen(true)}
-          >
-            <IconPlus className="size-4" />
-            New Study Set
-          </Button>
-        </div>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/70 transition-colors group-hover:bg-muted">
+              <Camera className="size-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-foreground">
+                Capture
+              </p>
+              <p className="truncate text-[11px] leading-tight text-muted-foreground">
+                Photo · note · voice
+              </p>
+            </div>
+          </button>
 
-        <div className="mt-2 flex justify-end">
-          <Button type="button" size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={() => setIsFolderHealthOpen(true)}>
-            <HeartPulse className="size-4" />
-            Folder Health
-          </Button>
+          {/* Study Set */}
+          <button
+            type="button"
+            onClick={() => setIsCreateStudySetOpen(true)}
+            className="group flex items-center gap-3 rounded-xl border border-border/60 bg-background/50 px-3 py-3 text-left transition-all hover:bg-muted/50 hover:shadow-sm active:scale-[0.97]"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/70 transition-colors group-hover:bg-muted">
+              <IconPlus className="size-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-foreground">
+                Study Set
+              </p>
+              <p className="truncate text-[11px] leading-tight text-muted-foreground">
+                Organise files
+              </p>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -619,7 +751,8 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
             });
           }}
         >
-          {failedSyncCount} sync operation{failedSyncCount === 1 ? "" : "s"} failed. Tap to retry.
+          {failedSyncCount} sync operation{failedSyncCount === 1 ? "" : "s"}{" "}
+          failed. Tap to retry.
         </button>
       ) : null}
 
@@ -627,9 +760,12 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         <section className="mb-3 rounded-2xl border border-border/70 bg-card/80 p-3 shadow-sm sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold text-foreground">{PERSONAL_ROOT_LABEL}</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                {PERSONAL_ROOT_LABEL}
+              </h3>
               <p className="text-xs text-muted-foreground">
-                {rootFileRecords.length} file{rootFileRecords.length === 1 ? "" : "s"} saved at root
+                {rootFileRecords.length} file
+                {rootFileRecords.length === 1 ? "" : "s"} saved at root
               </p>
             </div>
           </div>
@@ -640,20 +776,26 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                 className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">{record.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{record.mimeType || "application/octet-stream"}</p>
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {record.name}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {record.mimeType || "application/octet-stream"}
+                  </p>
                 </div>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    void openLocalFirst(record.id, `/api/file/${encodeURIComponent(record.id)}/stream`)
-                      .then((opened) => {
-                        if (!opened) {
-                          toast.error("This file is unavailable right now.");
-                        }
-                      });
+                    void openLocalFirst(
+                      record.id,
+                      `/api/file/${encodeURIComponent(record.id)}/stream`,
+                    ).then((opened) => {
+                      if (!opened) {
+                        toast.error("This file is unavailable right now.");
+                      }
+                    });
                   }}
                 >
                   Open
@@ -678,17 +820,25 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         onReorder={reorderPinnedFiles}
       />
 
-      <StudySetsShelf
-        sets={sets}
-        onOpenSet={setActiveStudySetId}
-      />
+      <StudySetsShelf sets={sets} onOpenSet={setActiveStudySetId} />
 
       {uniqueAcceptedTags.length >= 3 ? (
-        <section className="mt-3 space-y-2">
-          <header className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Tags
-          </header>
-          <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1">
+        <section className="mt-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Filter by Tag
+            </p>
+            {activeAcceptedTags.length > 0 ? (
+              <button
+                type="button"
+                className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setActiveAcceptedTags([])}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+          <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1">
             {uniqueAcceptedTags.map((tag) => {
               const active = activeAcceptedTags.includes(tag);
               return (
@@ -696,10 +846,10 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                   key={`accepted-tag-${tag}`}
                   type="button"
                   className={cn(
-                    "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-all",
                     active
-                      ? "border-primary/45 bg-primary/12 text-primary"
-                      : "border-border bg-card text-muted-foreground hover:bg-muted/40",
+                      ? "border-primary/50 bg-primary/10 text-primary shadow-sm"
+                      : "border-border/70 bg-card text-muted-foreground hover:border-border hover:bg-muted/40",
                   )}
                   onClick={() => {
                     setActiveAcceptedTags((current) =>
@@ -709,7 +859,7 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                     );
                   }}
                 >
-                  {tag}
+                  #{tag}
                 </button>
               );
             })}
@@ -718,11 +868,39 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
       ) : null}
 
       {!hasFolders ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-border/70 bg-card/50 px-5 py-8 text-center">
-          <h3 className="text-base font-semibold text-foreground">Your personal space is empty</h3>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Use the actions above to add folders, create study sets, and start quick capture.
+        <div className="mt-6 rounded-2xl border border-dashed border-border/60 bg-card/30 px-6 py-10 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50">
+            <FolderPlus className="size-6 text-muted-foreground/50" />
+          </div>
+          <h3 className="text-base font-semibold text-foreground">
+            Nothing here yet
+          </h3>
+          <p className="mx-auto mt-1.5 max-w-xs text-sm leading-relaxed text-muted-foreground">
+            Add a folder from Drive, create a local folder, or start a Quick
+            Capture to fill your repository.
           </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setIsAddDialogOpen(true)}
+            >
+              <FolderPlus className="size-4" />
+              Add Folder
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setQuickCaptureMode("photo");
+                setQuickCaptureOpen(true);
+              }}
+            >
+              <Camera className="size-4" />
+              Quick Capture
+            </Button>
+          </div>
         </div>
       ) : filteredFolders.length === 0 ? (
         <div className="mt-4 rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -743,7 +921,10 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
           ) : null}
         </div>
       ) : viewMode === "grid" ? (
-        <motion.div layout className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <motion.div
+          layout
+          className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+        >
           <AnimatePresence initial={false}>
             {filteredFolders.map((folder, index) => (
               <motion.div
@@ -752,20 +933,36 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                 initial={{ opacity: 0, y: 14, scale: 0.985 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.985 }}
-                transition={{ duration: 0.18, delay: Math.min(index * 0.025, 0.16) }}
+                transition={{
+                  duration: 0.18,
+                  delay: Math.min(index * 0.025, 0.16),
+                }}
               >
                 <PersonalFolderCard
                   folder={folder}
                   starred={folder.starred}
                   tags={folderTagPreviewById.get(folder.id) ?? []}
-                  errorState={folderHealthById.get(folder.id)?.status === "error"}
-                  healthBadge={folderHealthById.get(folder.id) ? (
-                    <FolderHealthBadge health={folderHealthById.get(folder.id)!} />
-                  ) : null}
-                  iconLayoutId={newlyAddedId === folder.id ? `personal-folder-icon-${folder.id}` : undefined}
+                  errorState={
+                    folderHealthById.get(folder.id)?.status === "error"
+                  }
+                  healthBadge={
+                    folderHealthById.get(folder.id) ? (
+                      <FolderHealthBadge
+                        health={folderHealthById.get(folder.id)!}
+                      />
+                    ) : null
+                  }
+                  iconLayoutId={
+                    newlyAddedId === folder.id
+                      ? `personal-folder-icon-${folder.id}`
+                      : undefined
+                  }
                   onOpen={() => {
                     const health = folderHealthById.get(folder.id);
-                    if (health?.status === "error" && (folder.sourceKind ?? "drive") === "local") {
+                    if (
+                      health?.status === "error" &&
+                      (folder.sourceKind ?? "drive") === "local"
+                    ) {
                       void refreshLocalFolder(folder.id);
                       return;
                     }
@@ -780,14 +977,20 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                   }}
                   onRename={(nextLabel) => {
                     renameFolder(folder.id, nextLabel);
-                    toast.success(`${nextLabel} updated in your Personal Repository`);
+                    toast.success(
+                      `${nextLabel} updated in your Personal Repository`,
+                    );
                   }}
                   onRefresh={async () => {
                     try {
                       await refreshFolder(folder.id);
                       toast.success(`${folder.label} refreshed`);
                     } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Couldn't refresh this folder.");
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Couldn't refresh this folder.",
+                      );
                     }
                   }}
                   onNewSubfolder={() => {
@@ -823,7 +1026,10 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.16, delay: Math.min(index * 0.02, 0.12) }}
+                transition={{
+                  duration: 0.16,
+                  delay: Math.min(index * 0.02, 0.12),
+                }}
               >
                 <PersonalFolderListRow
                   entityId={folder.id}
@@ -833,13 +1039,22 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                   sourceKind={folder.sourceKind}
                   starred={folder.starred}
                   tags={folderTagPreviewById.get(folder.id) ?? []}
-                  errorState={folderHealthById.get(folder.id)?.status === "error"}
-                  healthBadge={folderHealthById.get(folder.id) ? (
-                    <FolderHealthBadge health={folderHealthById.get(folder.id)!} />
-                  ) : null}
+                  errorState={
+                    folderHealthById.get(folder.id)?.status === "error"
+                  }
+                  healthBadge={
+                    folderHealthById.get(folder.id) ? (
+                      <FolderHealthBadge
+                        health={folderHealthById.get(folder.id)!}
+                      />
+                    ) : null
+                  }
                   onOpen={() => {
                     const health = folderHealthById.get(folder.id);
-                    if (health?.status === "error" && (folder.sourceKind ?? "drive") === "local") {
+                    if (
+                      health?.status === "error" &&
+                      (folder.sourceKind ?? "drive") === "local"
+                    ) {
                       void refreshLocalFolder(folder.id);
                       return;
                     }
@@ -860,7 +1075,11 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                       await refreshFolder(folder.id);
                       toast.success(`${folder.label} refreshed`);
                     } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Couldn't refresh this folder.");
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Couldn't refresh this folder.",
+                      );
                     }
                   }}
                   onNewSubfolder={() => {
@@ -891,7 +1110,13 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         onOpenChange={setIsAddDialogOpen}
         onFolderAdded={(folderId) => {
           setNewlyAddedId(folderId);
-          window.setTimeout(() => setNewlyAddedId((current) => (current === folderId ? null : current)), 700);
+          window.setTimeout(
+            () =>
+              setNewlyAddedId((current) =>
+                current === folderId ? null : current,
+              ),
+            700,
+          );
         }}
       />
 
@@ -903,7 +1128,10 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
             setCreateFolderParentId(null);
           }
         }}
-        parentOptions={rootFolders.map((folder) => ({ id: folder.id, label: folder.label }))}
+        parentOptions={rootFolders.map((folder) => ({
+          id: folder.id,
+          label: folder.label,
+        }))}
         defaultParentId={createFolderParentId}
         onCreate={({ name, colour, parentFolderId }) => {
           const now = Date.now();
@@ -929,14 +1157,18 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
           addFolder(nextFolder);
 
           const existingFolders = useCustomFoldersStore.getState().folders;
-          const byId = new Map(existingFolders.map((folder) => [folder.id, folder]));
+          const byId = new Map(
+            existingFolders.map((folder) => [folder.id, folder]),
+          );
           byId.set(nextFolder.id, nextFolder);
           const lineage: CustomFolder[] = [];
           let cursor: CustomFolder | undefined = nextFolder;
           let safety = 0;
           while (cursor && safety < 50) {
             lineage.push(cursor);
-            cursor = cursor.parentFolderId ? byId.get(cursor.parentFolderId) : undefined;
+            cursor = cursor.parentFolderId
+              ? byId.get(cursor.parentFolderId)
+              : undefined;
             safety += 1;
           }
           lineage.reverse();
@@ -958,7 +1190,13 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
           ]);
           if (!parentFolderId) {
             setNewlyAddedId(folderId);
-            window.setTimeout(() => setNewlyAddedId((current) => (current === folderId ? null : current)), 700);
+            window.setTimeout(
+              () =>
+                setNewlyAddedId((current) =>
+                  current === folderId ? null : current,
+                ),
+              700,
+            );
           }
           toast.success("Folder created");
         }}
@@ -981,7 +1219,9 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         <DialogContent className="fixed inset-x-0 bottom-0 top-auto left-0 right-0 mx-auto w-full max-w-none translate-x-0 translate-y-0 rounded-t-3xl border-t border-border/70 p-4 sm:inset-auto sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:w-full sm:max-w-sm sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border">
           <DialogHeader>
             <DialogTitle>Create Study Set</DialogTitle>
-            <DialogDescription>Name your set and start adding files.</DialogDescription>
+            <DialogDescription>
+              Name your set and start adding files.
+            </DialogDescription>
           </DialogHeader>
           <Input
             value={studySetNameDraft}
@@ -991,13 +1231,18 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
             autoFocus
           />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsCreateStudySetOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsCreateStudySetOpen(false)}
+            >
               Cancel
             </Button>
             <Button
               type="button"
               onClick={() => {
-                const nextName = studySetNameDraft.trim() || `Study Set ${sets.length + 1}`;
+                const nextName =
+                  studySetNameDraft.trim() || `Study Set ${sets.length + 1}`;
                 const setId = createSet(nextName);
                 setActiveStudySetId(setId);
                 setIsCreateStudySetOpen(false);
@@ -1031,7 +1276,10 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
             });
             toast.success("Capture saved");
           } catch (error) {
-            const message = error instanceof Error ? error.message : "Could not save this capture.";
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Could not save this capture.";
             toast.error(message);
             throw error;
           }
@@ -1093,7 +1341,10 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
         onDeleteSet={deleteSet}
       />
 
-      <Dialog open={removeTarget !== null} onOpenChange={(nextOpen) => !nextOpen && setRemoveTarget(null)}>
+      <Dialog
+        open={removeTarget !== null}
+        onOpenChange={(nextOpen) => !nextOpen && setRemoveTarget(null)}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Remove from Personal Repository</DialogTitle>
@@ -1104,7 +1355,11 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setRemoveTarget(null)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRemoveTarget(null)}
+            >
               Cancel
             </Button>
             <Button
@@ -1115,7 +1370,9 @@ export function PersonalRepositoryGrid({ showSharedChrome = true }: PersonalRepo
                   return;
                 }
                 removeFolder(removeTarget.id);
-                toast.success(`${removeTarget.label} removed from Personal Repository`);
+                toast.success(
+                  `${removeTarget.label} removed from Personal Repository`,
+                );
                 setRemoveTarget(null);
               }}
             >
