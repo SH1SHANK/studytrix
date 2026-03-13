@@ -146,12 +146,24 @@ function resolveErrorMessage(task: DownloadTask): string | null {
     return task.error;
   }
 
+  if (task.errorCode === "OFFLINE") {
+    return "You are offline. Download will resume when reconnected.";
+  }
+
+  if (task.errorCode === "RATE_LIMITED") {
+    return "Rate limited. Will retry automatically.";
+  }
+
   if (task.errorCode === "NETWORK_ERROR") {
     return "Connection lost. Will retry automatically.";
   }
 
-  if (task.errorCode === "QUOTA_EXCEEDED") {
+  if (task.errorCode === "QUOTA" || task.errorCode === "QUOTA_EXCEEDED") {
     return "Not enough storage space.";
+  }
+
+  if (task.errorCode === "NOT_FOUND") {
+    return "File not found.";
   }
 
   if (task.errorCode === "SERVER_ERROR") {

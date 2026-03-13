@@ -64,9 +64,13 @@ export function classifyDownloadErrorCode(error: unknown): DownloadErrorCode {
   if (error instanceof DownloadRequestError) {
     const remoteCode = (error.remoteErrorCode ?? "").toUpperCase();
     if (remoteCode === "RATE_LIMITED") {
-      return "NETWORK_ERROR";
+      return "RATE_LIMITED";
     }
-    if (remoteCode === "FILE_NOT_FOUND" || remoteCode === "FILE_ACCESS_DENIED") {
+    // Drive shortcuts that resolve to a missing target are logically not found from the user's perspective.
+    if (remoteCode === "FILE_NOT_FOUND" || remoteCode === "SHORTCUT_TARGET_NOT_FOUND") {
+      return "NOT_FOUND";
+    }
+    if (remoteCode === "FILE_ACCESS_DENIED") {
       return "SERVER_ERROR";
     }
     if (remoteCode === "INVALID_FILE_ID") {
@@ -86,7 +90,7 @@ export function classifyDownloadErrorCode(error: unknown): DownloadErrorCode {
   const text = error instanceof Error ? error.message.toLowerCase() : String(error ?? "").toLowerCase();
 
   if (text.includes("offline storage limit") || text.includes("quota") || text.includes("storage limit")) {
-    return "QUOTA_EXCEEDED";
+    return "QUOTA";
   }
 
   if (includesAny(text, ["timed out", "timeout"])) {
@@ -97,7 +101,11 @@ export function classifyDownloadErrorCode(error: unknown): DownloadErrorCode {
     return "SERVER_ERROR";
   }
 
-  if (isTransientDownloadError(error) || includesAny(text, ["network", "offline", "connection", "rate limit", "429"])) {
+  if (includesAny(text, ["you are offline", "offline", "connection"])) {
+    return "OFFLINE";
+  }
+
+  if (isTransientDownloadError(error) || includesAny(text, ["network", "rate limit", "429"])) {
     return "NETWORK_ERROR";
   }
 
@@ -114,7 +122,9 @@ export function computeRetryDelayMs(attempt: number, options?: { baseMs?: number
 
   const base = Math.max(50, Math.floor(options.baseMs ?? selected));
   const cap = Math.max(base, Math.floor(options.capMs ?? selected));
-  return Math.min(cap, base);
+  const exponential = base * Math.pow(2, normalizedAttempt - 1);
+  const jitter = (options.jitterRatio ?? 0) * exponential * Math.random();
+  return Math.min(cap, Math.round(exponential + jitter));
 }
 
 export async function waitForRetryDelay(ms: number, signal?: AbortSignal): Promise<void> {
