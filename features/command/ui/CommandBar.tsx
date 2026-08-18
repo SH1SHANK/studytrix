@@ -68,11 +68,16 @@ export function CommandBar({ placeholder = "Search study library or type a comma
     if (!isOpen) return;
 
     let isMounted = true;
-    searchService.search(query, { limit: 16 }).then((items) => {
-      if (isMounted) {
-        setResults(items);
-      }
-    });
+    searchService
+      .search(query, { limit: 16 })
+      .then((items) => {
+        if (isMounted) {
+          setResults(items);
+        }
+      })
+      .catch((err) => {
+        console.warn("[CommandBar] Search error:", err);
+      });
 
     return () => {
       isMounted = false;

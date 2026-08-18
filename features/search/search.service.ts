@@ -24,150 +24,178 @@ export interface SearchOptions {
 
 export class SearchService {
   async search(query: string, options?: SearchOptions): Promise<SearchResultItem[]> {
-    const rawQuery = query.trim().toLowerCase();
-    const limit = options?.limit ?? 20;
-    const types = new Set<SearchResultType>(
-      options?.types ?? ["workspace", "folder", "file", "tag", "source"],
-    );
+    try {
+      const rawQuery = query.trim().toLowerCase();
+      const limit = options?.limit ?? 20;
+      const types = new Set<SearchResultType>(
+        options?.types ?? ["workspace", "folder", "file", "tag", "source"],
+      );
 
-    if (!rawQuery) {
-      return this.getEmptyStateSuggestions(limit);
-    }
+      if (!rawQuery) {
+        return await this.getEmptyStateSuggestions(limit);
+      }
 
-    const results: SearchResultItem[] = [];
+      const results: SearchResultItem[] = [];
 
-    // 1. Search Workspaces
-    if (types.has("workspace")) {
-      const workspaces = await workspaceRepository.getAll();
-      for (const ws of workspaces) {
-        if (
-          ws.name.toLowerCase().includes(rawQuery) ||
-          ws.description?.toLowerCase().includes(rawQuery)
-        ) {
-          results.push({
-            id: `ws-${ws.id}`,
-            type: "workspace",
-            title: ws.name,
-            subtitle: "Workspace",
-            url: `/workspace/${ws.id}`,
-            workspaceId: ws.id,
-          });
+      // 1. Search Workspaces
+      if (types.has("workspace")) {
+        try {
+          const workspaces = await workspaceRepository.getAll();
+          for (const ws of workspaces) {
+            if (
+              ws.name.toLowerCase().includes(rawQuery) ||
+              ws.description?.toLowerCase().includes(rawQuery)
+            ) {
+              results.push({
+                id: `ws-${ws.id}`,
+                type: "workspace",
+                title: ws.name,
+                subtitle: "Workspace",
+                url: `/workspace/${ws.id}`,
+                workspaceId: ws.id,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn("[SearchService] Workspace search failed:", err);
         }
       }
-    }
 
-    // 2. Search Folders
-    if (types.has("folder")) {
-      const db = await (await import("@/db/database")).getDatabase();
-      const folders = await db.folders.find().exec();
-      for (const f of folders) {
-        if (f.name.toLowerCase().includes(rawQuery)) {
-          results.push({
-            id: `folder-${f.id}`,
-            type: "folder",
-            title: f.name,
-            subtitle: "Local Folder",
-            url: `/workspace/${f.workspaceId}/folder/${f.id}`,
-            workspaceId: f.workspaceId,
-          });
+      // 2. Search Folders
+      if (types.has("folder")) {
+        try {
+          const db = await (await import("@/db/database")).getDatabase();
+          const folders = await db.folders.find().exec();
+          for (const f of folders) {
+            if (f.name.toLowerCase().includes(rawQuery)) {
+              results.push({
+                id: `folder-${f.id}`,
+                type: "folder",
+                title: f.name,
+                subtitle: "Local Folder",
+                url: `/workspace/${f.workspaceId}/folder/${f.id}`,
+                workspaceId: f.workspaceId,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn("[SearchService] Folder search failed:", err);
         }
       }
-    }
 
-    // 3. Search Drive Sources
-    if (types.has("source")) {
-      const sources = await driveSourceRepository.getAll();
-      for (const s of sources) {
-        if (s.name.toLowerCase().includes(rawQuery) || s.url.toLowerCase().includes(rawQuery)) {
-          results.push({
-            id: `source-${s.id}`,
-            type: "source",
-            title: s.name,
-            subtitle: `Drive Source · ${s.fileCount} files`,
-            url: `/sources`,
-          });
+      // 3. Search Drive Sources
+      if (types.has("source")) {
+        try {
+          const sources = await driveSourceRepository.getAll();
+          for (const s of sources) {
+            if (s.name.toLowerCase().includes(rawQuery) || s.url.toLowerCase().includes(rawQuery)) {
+              results.push({
+                id: `source-${s.id}`,
+                type: "source",
+                title: s.name,
+                subtitle: `Drive Source · ${s.fileCount} files`,
+                url: `/sources`,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn("[SearchService] Source search failed:", err);
         }
       }
-    }
 
-    // 4. Search Tags
-    if (types.has("tag")) {
-      const tags = await tagRepository.getAllTags();
-      for (const t of tags) {
-        if (t.name.toLowerCase().includes(rawQuery)) {
-          results.push({
-            id: `tag-${t.id}`,
-            type: "tag",
-            title: `#${t.name}`,
-            subtitle: `Tag · ${t.uses} items`,
-            url: `/tags/${t.id}`,
-          });
+      // 4. Search Tags
+      if (types.has("tag")) {
+        try {
+          const tags = await tagRepository.getAllTags();
+          for (const t of tags) {
+            if (t.name.toLowerCase().includes(rawQuery)) {
+              results.push({
+                id: `tag-${t.id}`,
+                type: "tag",
+                title: `#${t.name}`,
+                subtitle: `Tag · ${t.uses} items`,
+                url: `/tags/${t.id}`,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn("[SearchService] Tag search failed:", err);
         }
       }
-    }
 
-    // 5. Search Files
-    if (types.has("file")) {
-      const db = await (await import("@/db/database")).getDatabase();
-      const matchedFiles = await db.drive_files
-        .find({
-          selector: {
-            remoteStatus: { $ne: "deleted" },
-          },
-          limit: 150,
-        })
-        .exec();
+      // 5. Search Files
+      if (types.has("file")) {
+        try {
+          const db = await (await import("@/db/database")).getDatabase();
+          const matchedFiles = await db.drive_files.find().exec();
 
-      for (const doc of matchedFiles) {
-        const file = doc.toJSON() as DriveFileDocType;
-        if (
-          file.name.toLowerCase().includes(rawQuery) ||
-          file.path.toLowerCase().includes(rawQuery)
-        ) {
-          results.push({
-            id: `file-${file.id}`,
-            type: "file",
-            title: file.name,
-            subtitle: file.path || "Drive File",
-            url: file.workspaceId
-              ? `/workspace/${file.workspaceId}`
-              : `/files`,
-            meta: { fileId: file.id, mimeType: file.mimeType },
-          });
+          for (const doc of matchedFiles) {
+            const file = doc.toJSON() as DriveFileDocType;
+            if (file.remoteStatus === "deleted") continue;
+
+            if (
+              file.name.toLowerCase().includes(rawQuery) ||
+              (file.path && file.path.toLowerCase().includes(rawQuery))
+            ) {
+              results.push({
+                id: `file-${file.id}`,
+                type: "file",
+                title: file.name,
+                subtitle: file.path || "Drive File",
+                url: file.workspaceId
+                  ? `/workspace/${file.workspaceId}`
+                  : `/files`,
+                meta: { fileId: file.id, mimeType: file.mimeType },
+              });
+            }
+          }
+        } catch (err) {
+          console.warn("[SearchService] File search failed:", err);
         }
       }
-    }
 
-    return results.slice(0, limit);
+      return results.slice(0, limit);
+    } catch (err) {
+      console.warn("[SearchService] Global search exception:", err);
+      return [];
+    }
   }
 
   private async getEmptyStateSuggestions(limit: number): Promise<SearchResultItem[]> {
     const results: SearchResultItem[] = [];
 
-    // Return recent workspaces
-    const workspaces = await workspaceRepository.getAll();
-    for (const ws of workspaces.slice(0, 4)) {
-      results.push({
-        id: `ws-${ws.id}`,
-        type: "workspace",
-        title: ws.name,
-        subtitle: "Workspace",
-        url: `/workspace/${ws.id}`,
-        workspaceId: ws.id,
-      });
+    try {
+      // Return recent workspaces
+      const workspaces = await workspaceRepository.getAll();
+      for (const ws of workspaces.slice(0, 4)) {
+        results.push({
+          id: `ws-${ws.id}`,
+          type: "workspace",
+          title: ws.name,
+          subtitle: "Workspace",
+          url: `/workspace/${ws.id}`,
+          workspaceId: ws.id,
+        });
+      }
+    } catch {
+      // Ignore
     }
 
-    // Return recent files if any
-    const recentFiles = await driveFileRepository.getRecentFiles(6);
-    for (const file of recentFiles) {
-      results.push({
-        id: `file-${file.id}`,
-        type: "file",
-        title: file.name,
-        subtitle: "Recently opened",
-        url: file.workspaceId ? `/workspace/${file.workspaceId}` : `/files`,
-        meta: { fileId: file.id },
-      });
+    try {
+      // Return recent files if any
+      const recentFiles = await driveFileRepository.getRecentFiles(6);
+      for (const file of recentFiles) {
+        results.push({
+          id: `file-${file.id}`,
+          type: "file",
+          title: file.name,
+          subtitle: "Recently opened",
+          url: file.workspaceId ? `/workspace/${file.workspaceId}` : `/files`,
+          meta: { fileId: file.id },
+        });
+      }
+    } catch {
+      // Ignore
     }
 
     return results.slice(0, limit);
