@@ -1,6 +1,6 @@
 "use client";
 
-import { IconTag } from "@tabler/icons-react";
+import { Tag as IconTag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { FilterMode } from "@/features/tags/tag.types";

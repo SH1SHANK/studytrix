@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { IconAlertTriangle, IconTrash } from "@tabler/icons-react";
+import { AlertTriangle as IconAlertTriangle, Trash2 as IconTrash } from "lucide-react";
 
 import {
   AlertDialog,

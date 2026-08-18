@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { IconAlertTriangle, IconFolder, IconSettings } from "@tabler/icons-react";
+import { AlertTriangle as IconAlertTriangle, Folder as IconFolder, Settings as IconSettings } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";

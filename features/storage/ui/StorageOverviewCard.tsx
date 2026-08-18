@@ -1,6 +1,6 @@
 "use client";
 
-import { IconCircleCheck, IconDatabase, IconFile, IconFolderCog } from "@tabler/icons-react";
+import { CheckCircle2 as IconCircleCheck, Database as IconDatabase, File as IconFile, FolderCog as IconFolderCog } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { computeUsagePercent, formatBytes } from "@/features/storage/storage.quota";

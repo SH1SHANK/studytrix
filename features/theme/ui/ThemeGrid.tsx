@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { IconCheck, IconSun, IconMoon, IconTree, IconSunset, IconCircleDashed, IconMoonStars, IconHexagon, IconSparkles } from "@tabler/icons-react";
+import { Check as IconCheck, Sun as IconSun, Moon as IconMoon, Network as IconTree, Sunset as IconSunset, CircleDashed as IconCircleDashed, Moon as IconMoonStars, Hexagon as IconHexagon, Sparkles as IconSparkles } from "lucide-react";
 
 import {
   type ThemeId,
@@ -97,7 +97,7 @@ export function ThemeGrid({ currentTheme, onSelect }: ThemeGridProps) {
                 transition={{ duration: 0.18 }}
                 className="ml-2 shrink-0 rounded-full bg-primary p-1 text-primary-foreground"
               >
-                <IconCheck className="size-3" stroke={3} />
+                <IconCheck className="size-3" strokeWidth={3} />
               </motion.span>
             ) : null}
           </AnimatePresence>

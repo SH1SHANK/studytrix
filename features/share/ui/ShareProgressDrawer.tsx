@@ -1,6 +1,6 @@
 "use client";
 
-import { IconRobotFace } from "@tabler/icons-react";
+import { Bot as IconRobotFace } from "lucide-react";
 
 import {
   Dialog,

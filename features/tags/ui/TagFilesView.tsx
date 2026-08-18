@@ -2,14 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  IconArrowLeft,
-  IconFile,
-  IconFolder,
-  IconLoader2,
-  IconTag,
-  IconTagOff,
-} from "@tabler/icons-react";
+import { ArrowLeft as IconArrowLeft, File as IconFile, Folder as IconFolder, Loader2 as IconLoader2, Tag as IconTag, Tag as IconTagOff } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@/components/ui/button";

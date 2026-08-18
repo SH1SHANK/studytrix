@@ -1,6 +1,6 @@
 "use client";
 
-import { IconHeartbeat } from "@tabler/icons-react";
+import { Activity as IconHeartbeat } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

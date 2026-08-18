@@ -3,12 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { useShallow } from "zustand/react/shallow";
-import {
-  IconCheck,
-  IconLoader2,
-  IconPlus,
-  IconTag,
-} from "@tabler/icons-react";
+import { Check as IconCheck, Loader2 as IconLoader2, Plus as IconPlus, Tag as IconTag } from "lucide-react";
 
 import {
   Dialog,

@@ -3,18 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import {
-  IconCheck,
-  IconChevronRight,
-  IconDots,
-  IconLoader2,
-  IconPencil,
-  IconSearch,
-  IconTag,
-  IconTags,
-  IconTrash,
-  IconX,
-} from "@tabler/icons-react";
+import { Check as IconCheck, ChevronRight as IconChevronRight, MoreHorizontal as IconDots, Loader2 as IconLoader2, Pencil as IconPencil, Search as IconSearch, Tag as IconTag, Tags as IconTags, Trash2 as IconTrash, X as IconX } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { Badge } from "@/components/ui/badge";

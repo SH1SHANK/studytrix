@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, jest } from "@jest/globals";
+import { addRxPlugin } from "rxdb";
+import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
+import { destroyDatabase } from "@/db/database";
+
+addRxPlugin(RxDBDevModePlugin);
 
 jest.mock("server-only", () => ({}));
 
@@ -244,7 +249,8 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-afterEach(() => {
+afterEach(async () => {
   redisStringStore.clear();
   redisSortedSetStore.clear();
+  await destroyDatabase();
 });

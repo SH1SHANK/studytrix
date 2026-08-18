@@ -1,15 +1,4 @@
-import {
-  createTag as createTagRecord,
-  deleteTag as deleteTagRecord,
-  getAllAssignments,
-  getAllTags,
-  getAssignments,
-  getEntitiesByTag,
-  getTag,
-  removeAssignment,
-  updateTag as updateTagRecord,
-  upsertAssignment,
-} from "./tag.db";
+import { tagRepository } from "@/db/repositories/tag.repository";
 import { markTagTouched, markTagUsed, sortTagsByAnalytics } from "./tag.analytics";
 import type { EntityType, FilterMode, Tag, TagAssignment } from "./tag.types";
 
@@ -59,59 +48,72 @@ function makeTagId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
-
-  return `tag_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+  return `tag_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function normalizeName(name: string): string {
-  return name.trim().replace(/\s+/g, " ");
+function normalizeId(value: string): string {
+  return value.trim();
 }
 
-function normalizeColor(color: string): string {
-  return color.trim().toUpperCase();
+function normalizeName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
 }
 
-function normalizeId(id: string): string {
-  return id.trim();
+function normalizeColor(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function toTagKey(value: string): string {
+  return normalizeName(value).toLowerCase();
+}
+
+function assertValidEntityId(entityId: string): void {
+  if (!entityId || !ENTITY_ID_PATTERN.test(entityId)) {
+    throw new TagServiceError("VALIDATION", "Invalid entity identifier format");
+  }
+}
+
+function assertValidTagId(tagId: string): void {
+  if (!tagId || !TAG_ID_PATTERN.test(tagId)) {
+    throw new TagServiceError("VALIDATION", "Invalid tag identifier format");
+  }
 }
 
 function assertValidTagName(name: string): void {
-  if (name.length < NAME_MIN_LENGTH || name.length > NAME_MAX_LENGTH) {
+  if (!name || name.length < NAME_MIN_LENGTH || name.length > NAME_MAX_LENGTH) {
     throw new TagServiceError(
       "VALIDATION",
       `Tag name must be between ${NAME_MIN_LENGTH} and ${NAME_MAX_LENGTH} characters`,
     );
   }
 
-  if (RESERVED_SYSTEM_TAG_NAMES.has(name.toLocaleLowerCase())) {
-    throw new TagServiceError("VALIDATION", "Tag name is reserved");
+  if (RESERVED_SYSTEM_TAG_NAMES.has(name.toLowerCase())) {
+    throw new TagServiceError("VALIDATION", `Tag name "${name}" is reserved by system`);
   }
 }
 
 function assertValidTagColor(color: string): void {
   if (!TAG_COLOR_PATTERN.test(color)) {
-    throw new TagServiceError("VALIDATION", "Tag color must be a valid HEX value");
+    throw new TagServiceError("VALIDATION", "Tag color must be a valid 6-digit hex string (#RRGGBB)");
   }
 }
 
-function assertValidEntityId(entityId: string): void {
-  if (!ENTITY_ID_PATTERN.test(entityId)) {
-    throw new TagServiceError("VALIDATION", "Invalid entity ID");
+function uniqueTagIds(tagIds: string[]): string[] {
+  const set = new Set<string>();
+  for (const tagId of tagIds) {
+    const normalized = normalizeId(tagId);
+    if (normalized) {
+      set.add(normalized);
+    }
   }
+  return Array.from(set);
 }
 
-function assertValidTagId(tagId: string): void {
-  if (!TAG_ID_PATTERN.test(tagId)) {
-    throw new TagServiceError("VALIDATION", "Invalid tag ID");
+function assignmentShouldPersist(assignment: TagAssignment | null): assignment is TagAssignment {
+  if (!assignment) {
+    return false;
   }
-}
-
-function uniqueTagIds(tagIds: readonly string[]): string[] {
-  return Array.from(new Set(tagIds.map((tagId) => normalizeId(tagId)).filter(Boolean)));
-}
-
-function toTagKey(name: string): string {
-  return name.toLocaleLowerCase();
+  return assignment.starred || assignment.tagIds.length > 0;
 }
 
 function defaultAssignment(entityId: string, entityType: EntityType): TagAssignment {
@@ -124,21 +126,11 @@ function defaultAssignment(entityId: string, entityType: EntityType): TagAssignm
   };
 }
 
-function assignmentShouldPersist(
-  assignment: TagAssignment | null,
-): assignment is TagAssignment {
-  if (!assignment) {
-    return false;
-  }
-
-  return assignment.starred || assignment.tagIds.length > 0;
-}
-
 export class TagService {
   private pendingWrites = new Map<string, PendingAssignmentWrite>();
 
   async listTags(): Promise<Tag[]> {
-    const tags = await getAllTags();
+    const tags = await tagRepository.getAllTags();
     return sortTagsByAnalytics(tags);
   }
 
@@ -149,7 +141,7 @@ export class TagService {
     assertValidTagName(normalizedName);
     assertValidTagColor(normalizedColor);
 
-    const tags = await getAllTags();
+    const tags = await tagRepository.getAllTags();
     const nameKey = toTagKey(normalizedName);
 
     if (tags.some((tag) => toTagKey(tag.name) === nameKey)) {
@@ -167,7 +159,7 @@ export class TagService {
       isSystem: false,
     };
 
-    return await createTagRecord(tag);
+    return await tagRepository.createTag(tag);
   }
 
   async renameTag(id: string, newName: string): Promise<Tag> {
@@ -177,12 +169,12 @@ export class TagService {
     assertValidTagId(normalizedId);
     assertValidTagName(normalizedName);
 
-    const existing = await getTag(normalizedId);
+    const existing = await tagRepository.getTag(normalizedId);
     if (!existing) {
       throw new TagServiceError("NOT_FOUND", "Tag not found");
     }
 
-    const tags = await getAllTags();
+    const tags = await tagRepository.getAllTags();
     const nameKey = toTagKey(normalizedName);
 
     if (
@@ -201,7 +193,7 @@ export class TagService {
       Date.now(),
     );
 
-    return await updateTagRecord(nextTag);
+    return await tagRepository.updateTag(nextTag);
   }
 
   async recolorTag(id: string, newColor: string): Promise<Tag> {
@@ -211,7 +203,7 @@ export class TagService {
     assertValidTagId(normalizedId);
     assertValidTagColor(normalizedColor);
 
-    const existing = await getTag(normalizedId);
+    const existing = await tagRepository.getTag(normalizedId);
     if (!existing) {
       throw new TagServiceError("NOT_FOUND", "Tag not found");
     }
@@ -224,14 +216,14 @@ export class TagService {
       Date.now(),
     );
 
-    return await updateTagRecord(nextTag);
+    return await tagRepository.updateTag(nextTag);
   }
 
   async deleteTag(id: string): Promise<void> {
     const normalizedId = normalizeId(id);
     assertValidTagId(normalizedId);
 
-    const existing = await getTag(normalizedId);
+    const existing = await tagRepository.getTag(normalizedId);
     if (!existing) {
       throw new TagServiceError("NOT_FOUND", "Tag not found");
     }
@@ -240,28 +232,8 @@ export class TagService {
       throw new TagServiceError("VALIDATION", "System tags cannot be deleted");
     }
 
-    const assignments = await getAllAssignments();
-
-    for (const assignment of assignments) {
-      if (!assignment.tagIds.includes(normalizedId)) {
-        continue;
-      }
-
-      const nextTagIds = assignment.tagIds.filter((tagId) => tagId !== normalizedId);
-      const nextAssignment: TagAssignment = {
-        ...assignment,
-        tagIds: nextTagIds,
-        updatedAt: Date.now(),
-      };
-
-      if (assignmentShouldPersist(nextAssignment)) {
-        await upsertAssignment(nextAssignment);
-      } else {
-        await removeAssignment(assignment.entityId);
-      }
-    }
-
-    await deleteTagRecord(normalizedId);
+    // Cascade delete assignments and remove tag record in RxDB
+    await tagRepository.deleteTag(normalizedId);
   }
 
   async assignTag(entityId: string, tagId: string): Promise<void> {
@@ -271,7 +243,7 @@ export class TagService {
     assertValidEntityId(normalizedEntityId);
     assertValidTagId(normalizedTagId);
 
-    const tag = await getTag(normalizedTagId);
+    const tag = await tagRepository.getTag(normalizedTagId);
     if (!tag) {
       throw new TagServiceError("NOT_FOUND", "Tag not found");
     }
@@ -295,7 +267,7 @@ export class TagService {
     assertValidEntityId(normalizedFolderId);
     assertValidTagId(normalizedTagId);
 
-    const tag = await getTag(normalizedTagId);
+    const tag = await tagRepository.getTag(normalizedTagId);
     if (!tag) {
       throw new TagServiceError("NOT_FOUND", "Tag not found");
     }
@@ -359,25 +331,25 @@ export class TagService {
       return null;
     }
 
-    return await getAssignments(normalizedEntityId);
+    return await tagRepository.getCompositeAssignment(normalizedEntityId);
   }
 
   async listAssignments(): Promise<TagAssignment[]> {
-    return await getAllAssignments();
+    return await tagRepository.getAllCompositeAssignments();
   }
 
   async filterEntitiesByTags(tagIds: string[], mode: FilterMode): Promise<string[]> {
     const normalizedTagIds = uniqueTagIds(tagIds);
 
     if (normalizedTagIds.length === 0) {
-      const assignments = await getAllAssignments();
+      const assignments = await tagRepository.getAllCompositeAssignments();
       return assignments.map((assignment) => assignment.entityId);
     }
 
     const sets: Set<string>[] = [];
 
     for (const tagId of normalizedTagIds) {
-      const entityIds = await getEntitiesByTag(tagId);
+      const entityIds = await tagRepository.getEntitiesByTag(tagId);
       sets.push(new Set(entityIds));
     }
 
@@ -391,31 +363,42 @@ export class TagService {
         return [];
       }
 
-      const results: string[] = [];
-      for (const entityId of firstSet) {
-        if (restSets.every((candidateSet) => candidateSet.has(entityId))) {
-          results.push(entityId);
+      const result = new Set<string>();
+      for (const candidate of firstSet) {
+        const matchesAll = restSets.every((set) => set.has(candidate));
+        if (matchesAll) {
+          result.add(candidate);
         }
       }
 
-      return results;
+      return Array.from(result);
     }
 
     const union = new Set<string>();
-    for (const entitySet of sets) {
-      for (const entityId of entitySet) {
-        union.add(entityId);
+    for (const set of sets) {
+      for (const item of set) {
+        union.add(item);
       }
     }
 
     return Array.from(union);
   }
 
+  async clearPendingWritesForTesting(): Promise<void> {
+    for (const pending of this.pendingWrites.values()) {
+      clearTimeout(pending.timer);
+      for (const listener of pending.listeners) {
+        listener.resolve();
+      }
+    }
+    this.pendingWrites.clear();
+  }
+
   private async scheduleAssignmentMutation(
     entityId: string,
     operation: AssignmentOperation,
   ): Promise<void> {
-    return await new Promise<void>((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const existing = this.pendingWrites.get(entityId);
 
       if (existing) {
@@ -451,7 +434,7 @@ export class TagService {
     this.pendingWrites.delete(entityId);
 
     try {
-      const previous = await getAssignments(entityId);
+      const previous = await tagRepository.getCompositeAssignment(entityId);
       let nextAssignment: TagAssignment | null = previous;
 
       for (const operation of pending.operations) {
@@ -462,9 +445,9 @@ export class TagService {
       const nextTagIds = new Set(nextAssignment?.tagIds ?? []);
 
       if (!assignmentShouldPersist(nextAssignment)) {
-        await removeAssignment(entityId);
+        await tagRepository.removeAllAssignmentsForEntity(entityId);
       } else {
-        await upsertAssignment(nextAssignment);
+        await tagRepository.upsertCompositeAssignment(nextAssignment);
       }
 
       const addedTagIds: string[] = [];
@@ -478,12 +461,12 @@ export class TagService {
         const timestamp = Date.now();
 
         for (const addedTagId of addedTagIds) {
-          const tag = await getTag(addedTagId);
+          const tag = await tagRepository.getTag(addedTagId);
           if (!tag) {
             continue;
           }
 
-          await updateTagRecord(markTagUsed(tag, timestamp));
+          await tagRepository.updateTag(markTagUsed(tag, timestamp));
         }
       }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, type ComponentType } from "react";
-import { IconAlertTriangle, IconArchive, IconLoader2, IconShare } from "@tabler/icons-react";
+import { AlertTriangle as IconAlertTriangle, Archive as IconArchive, Loader2 as IconLoader2, Share2 as IconShare } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import {
