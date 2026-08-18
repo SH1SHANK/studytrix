@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { IconFile, IconFolder, IconSearch } from "@tabler/icons-react";
+import { File as IconFile, Folder as IconFolder, Search as IconSearch } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { SkeletonCard } from "@/components/onboarding/shared/SkeletonCard";
@@ -13,7 +13,7 @@ import {
 } from "@/components/onboarding/shared/SlideContainer";
 import { WordReveal } from "@/components/onboarding/shared/WordReveal";
 import { THEMES, type ThemeId } from "@/features/theme/theme.constants";
-import { IconPalette } from "@tabler/icons-react";
+import { Palette as IconPalette } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_FOLDERS = [

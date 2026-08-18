@@ -2,16 +2,7 @@
 
 import { memo } from "react";
 import { motion } from "framer-motion";
-import {
-  IconLoader2,
-  IconPlayerPause,
-  IconPlayerPlay,
-  IconTrash,
-  IconX,
-  IconCheck,
-  IconAlertTriangle,
-  IconRefresh,
-} from "@tabler/icons-react";
+import { Loader2 as IconLoader2, Pause as IconPlayerPause, Play as IconPlayerPlay, Trash2 as IconTrash, X as IconX, Check as IconCheck, AlertTriangle as IconAlertTriangle, RefreshCw as IconRefresh } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";

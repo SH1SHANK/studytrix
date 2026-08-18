@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 
 import { SettingAction } from "./SettingAction";
 import { SettingRowShell } from "./SettingCardShell";
@@ -12,14 +12,9 @@ import { SettingToggle } from "./SettingToggle";
 import { SettingStorageLocation } from "./SettingStorageLocation";
 import { SettingGreetingPreferences } from "./SettingGreetingPreferences";
 import { SettingUserProfile } from "./SettingUserProfile";
-import {
-  IntelligenceExperimentalNoticeRow,
-  IntelligenceIndexStatusRow,
-  IntelligenceLearnMoreRow,
-  IntelligenceModelStatusRow,
-  IntelligenceRemoveModelRow,
-} from "@/features/intelligence/ui/IntelligenceSettingsRows";
-import { deviceFolderSupported } from "@/features/custom-folders/custom-folders.device";
+import { SettingDriveSources } from "./SettingDriveSources";
+import { SettingKeyboardShortcuts } from "./SettingKeyboardShortcuts";
+import { SettingAbout } from "./SettingAbout";
 import { getSettingIcon } from "./setting-icons";
 import type { SettingItem } from "@/features/settings/settings.types";
 
@@ -34,12 +29,6 @@ function SettingsItemRendererComponent({
   onAction,
   onDangerAction,
 }: SettingsItemRendererProps) {
-  const [hasMounted, setHasMounted] = useState(false);
-
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
   if (setting.id === "storage_location") {
     return <SettingStorageLocation setting={setting} />;
   }
@@ -49,35 +38,14 @@ function SettingsItemRendererComponent({
   if (setting.id === "greetingPreferences") {
     return <SettingGreetingPreferences setting={setting} />;
   }
-
-  if (setting.id === "semantic_search_index_status") {
-    return <IntelligenceIndexStatusRow onAction={onAction} onDangerAction={onDangerAction} />;
+  if (setting.id === "drive_sources_info") {
+    return <SettingDriveSources />;
   }
-  if (setting.id === "semantic_search_model_status") {
-    return <IntelligenceModelStatusRow />;
+  if (setting.id === "keyboard_shortcuts_info") {
+    return <SettingKeyboardShortcuts />;
   }
-  if (setting.id === "semantic_search_remove_model") {
-    return <IntelligenceRemoveModelRow onDangerAction={onDangerAction} />;
-  }
-  if (setting.id === "semantic_search_learn_more") {
-    return <IntelligenceLearnMoreRow />;
-  }
-  if (setting.id === "semantic_search_experimental_notice") {
-    return <IntelligenceExperimentalNoticeRow />;
-  }
-
-  if (setting.id === "personal_repository_local_folder_info") {
-    if (!hasMounted) {
-      return null;
-    }
-    if (deviceFolderSupported) {
-      return null;
-    }
-  }
-
-  // Internal state flag; never render in settings UI.
-  if (setting.id === "semantic_search_notice_dismissed") {
-    return null;
+  if (setting.id === "about_studytrix") {
+    return <SettingAbout />;
   }
 
   if (setting.type === "toggle") {
@@ -104,7 +72,14 @@ function SettingsItemRendererComponent({
     return <SettingDanger setting={setting} onDangerAction={onDangerAction} />;
   }
 
-  return <SettingRowShell label={setting.label} description={setting.description} requiresRestart={setting.requiresRestart} icon={getSettingIcon(setting.id)} />;
+  return (
+    <SettingRowShell
+      label={setting.label}
+      description={setting.description}
+      requiresRestart={setting.requiresRestart}
+      icon={getSettingIcon(setting.id)}
+    />
+  );
 }
 
 export const SettingsItemRenderer = memo(SettingsItemRendererComponent);

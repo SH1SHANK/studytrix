@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { IconPalette } from "@tabler/icons-react";
+import { Palette as IconPalette } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useTheme } from "next-themes";
 

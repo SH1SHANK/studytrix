@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { IconChevronRight } from "@tabler/icons-react";
+import { ChevronRight as IconChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/features/settings/settings.store";

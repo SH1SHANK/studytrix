@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useDownloadStore } from "@/features/download/download.store";
 import { useSelectionStore } from "@/features/selection/selection.store";
 import { useTagAssignmentStore } from "@/features/tags/tagAssignment.store";
-import { useStudySetsStore } from "@/features/custom-folders/study-sets.store";
 import { useDownloadRiskDialogState } from "@/ui/hooks/useDownloadRiskGate";
 
 const SelectionToolbar = dynamic(
@@ -35,16 +34,6 @@ const DownloadRiskDialog = dynamic(
   { ssr: false },
 );
 
-const StudySetPickerSheet = dynamic(
-  () => import("@/features/custom-folders/ui/StudySetPickerSheet").then((mod) => mod.StudySetPickerSheet),
-  { ssr: false },
-);
-
-const CodePreviewRuntime = dynamic(
-  () => import("@/features/custom-folders/ui/CodePreviewRuntime").then((mod) => mod.CodePreviewRuntime),
-  { ssr: false },
-);
-
 export function RootRuntimeMounts() {
   const isSelectionMode = useSelectionStore((state) => state.isSelectionMode);
   const selectedCount = useSelectionStore((state) => state.selectedIds.size);
@@ -52,7 +41,6 @@ export function RootRuntimeMounts() {
   const downloadDrawerOpen = useDownloadStore((state) => state.isDrawerOpen);
   const activeDownloadCount = useDownloadStore((state) => state.activeCount);
   const riskDialogOpen = useDownloadRiskDialogState().open;
-  const studySetPickerFileId = useStudySetsStore((state) => state.pickerFileId);
 
   return (
     <>
@@ -61,8 +49,6 @@ export function RootRuntimeMounts() {
       {downloadDrawerOpen ? <DownloadDrawer /> : null}
       {activeDownloadCount > 0 ? <DownloadFloatingIndicator /> : null}
       {riskDialogOpen ? <DownloadRiskDialog /> : null}
-      {studySetPickerFileId ? <StudySetPickerSheet /> : null}
-      <CodePreviewRuntime />
     </>
   );
 }

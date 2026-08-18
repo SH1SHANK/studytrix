@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { IconArrowUpRight, IconBook2, IconFolders, IconSparkles, IconTarget } from "@tabler/icons-react";
+import { ArrowUpRight as IconArrowUpRight, BookOpen as IconBook2, FolderSync as IconFolders, Sparkles as IconSparkles, Target as IconTarget } from "lucide-react";
 import { motion } from "framer-motion";
 
 import {

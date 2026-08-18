@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback } from "react";
-import { IconAt, IconUser } from "@tabler/icons-react";
+import { AtSign as IconAt, User as IconUser } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";

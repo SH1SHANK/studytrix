@@ -4,16 +4,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState } from "react";
-import {
-  IconBolt,
-  IconBook2,
-  IconColorSwatch,
-  IconDatabase,
-  IconHistory,
-  IconKeyboard,
-  IconSettings,
-  IconTag,
-} from "@tabler/icons-react";
+import { Zap as IconBolt, BookOpen as IconBook2, Palette as IconColorSwatch, Database as IconDatabase, History as IconHistory, Keyboard as IconKeyboard, Settings as IconSettings, Tag as IconTag } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {

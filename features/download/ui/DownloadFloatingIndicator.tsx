@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { IconDownload } from "@tabler/icons-react";
+import { Download as IconDownload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useDownloadManager } from "@/ui/hooks/useDownloadManager";

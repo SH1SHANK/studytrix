@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { IconCheck, IconChevronDown } from "@tabler/icons-react";
+import { Check as IconCheck, ChevronDown as IconChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
@@ -132,7 +132,7 @@ export function AnimatedSelect({
                   transition={{ type: "spring", stiffness: 420, damping: 28 }}
                   className="text-primary"
                 >
-                  <IconCheck className="size-4" stroke={2.5} />
+                  <IconCheck className="size-4" strokeWidth={2.5} />
                 </motion.span>
               ) : null}
             </AnimatePresence>
@@ -192,7 +192,7 @@ export function AnimatedSelect({
                       }}
                     >
                       <span>{option.label}</span>
-                      {active ? <IconCheck className="size-3.5 text-primary" stroke={2.5} /> : null}
+                      {active ? <IconCheck className="size-3.5 text-primary" strokeWidth={2.5} /> : null}
                     </button>
                   </motion.li>
                 );

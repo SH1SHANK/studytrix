@@ -1,77 +1,12 @@
-import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-
+import { settingsRepository } from "@/db/repositories/settings.repository";
 import { parseSettingsJson } from "./settings.schema";
 import { getSettingDefinition } from "./settings.registry";
 import { validateSetting } from "./settings.validation";
 
-const DB_NAME = "app-settings-v2";
-const DB_VERSION = 1;
-const STORE_NAME = "settings";
-
-interface SettingRecord {
-  id: string;
-  value: unknown;
-  updatedAt: number;
-}
-
-interface SettingsDbSchema extends DBSchema {
-  [STORE_NAME]: {
-    key: string;
-    value: SettingRecord;
-  };
-}
-
 const memorySettings = new Map<string, unknown>();
-
-let dbPromise: Promise<IDBPDatabase<SettingsDbSchema> | null> | null = null;
-let indexedDbDisabled = false;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-async function getDb(): Promise<IDBPDatabase<SettingsDbSchema> | null> {
-  if (indexedDbDisabled) {
-    return null;
-  }
-
-  if (!dbPromise) {
-    dbPromise = (async () => {
-      try {
-        if (typeof indexedDB === "undefined") {
-          indexedDbDisabled = true;
-          return null;
-        }
-
-        return await openDB<SettingsDbSchema>(DB_NAME, DB_VERSION, {
-          upgrade(db) {
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-              db.createObjectStore(STORE_NAME, { keyPath: "id" });
-            }
-          },
-          blocked() {
-            console.error("Settings DB upgrade blocked by another tab");
-          },
-          blocking() {
-            console.error("Settings DB is blocking a newer version upgrade");
-          },
-          terminated() {
-            dbPromise = null;
-          },
-        });
-      } catch (error) {
-        indexedDbDisabled = true;
-        console.error("Settings DB unavailable, using memory fallback", error);
-        return null;
-      }
-    })();
-  }
-
-  return dbPromise;
-}
-
-function readMemoryValues(): Record<string, unknown> {
-  return Object.fromEntries(memorySettings.entries());
 }
 
 function cloneUnknown(value: unknown): unknown {
@@ -81,11 +16,9 @@ function cloneUnknown(value: unknown): unknown {
 
   if (isRecord(value)) {
     const cloned: Record<string, unknown> = {};
-
     for (const [key, nestedValue] of Object.entries(value)) {
       cloned[key] = cloneUnknown(nestedValue);
     }
-
     return cloned;
   }
 
@@ -93,85 +26,50 @@ function cloneUnknown(value: unknown): unknown {
 }
 
 export async function getAllSettings(): Promise<Record<string, unknown>> {
-  const db = await getDb();
-
-  if (!db) {
-    return readMemoryValues();
-  }
-
   try {
-    const records = await db.getAll(STORE_NAME);
-    const values: Record<string, unknown> = {};
-
-    for (const record of records) {
-      values[record.id] = cloneUnknown(record.value);
-      memorySettings.set(record.id, cloneUnknown(record.value));
+    const records = await settingsRepository.getAll();
+    for (const [k, v] of Object.entries(records)) {
+      memorySettings.set(k, cloneUnknown(v));
     }
-
-    return values;
+    return records;
   } catch (error) {
-    console.error("Failed to read settings from IndexedDB, using memory fallback", error);
-    return readMemoryValues();
+    console.error("Failed to read settings from RxDB, using memory fallback", error);
+    return Object.fromEntries(memorySettings.entries());
   }
 }
 
 export async function setSetting(id: string, value: unknown): Promise<void> {
   const key = id.trim();
-  if (!key) {
-    return;
-  }
+  if (!key) return;
 
-  const clonedValue = cloneUnknown(value);
-  memorySettings.set(key, clonedValue);
-
-  const db = await getDb();
-  if (!db) {
-    return;
-  }
+  const cloned = cloneUnknown(value);
+  memorySettings.set(key, cloned);
 
   try {
-    await db.put(STORE_NAME, {
-      id: key,
-      value: clonedValue,
-      updatedAt: Date.now(),
-    });
+    await settingsRepository.set(key, cloned);
   } catch (error) {
-    console.error("Failed to persist setting to IndexedDB, value kept in memory", error);
+    console.error("Failed to persist setting to RxDB", error);
   }
 }
 
 export async function removeSetting(id: string): Promise<void> {
   const key = id.trim();
-  if (!key) {
-    return;
-  }
+  if (!key) return;
 
   memorySettings.delete(key);
-
-  const db = await getDb();
-  if (!db) {
-    return;
-  }
-
   try {
-    await db.delete(STORE_NAME, key);
+    await settingsRepository.set(key, null);
   } catch (error) {
-    console.error("Failed to remove setting from IndexedDB", error);
+    console.error("Failed to remove setting from RxDB", error);
   }
 }
 
 export async function resetSettings(): Promise<void> {
   memorySettings.clear();
-
-  const db = await getDb();
-  if (!db) {
-    return;
-  }
-
   try {
-    await db.clear(STORE_NAME);
+    await settingsRepository.reset();
   } catch (error) {
-    console.error("Failed to clear IndexedDB settings", error);
+    console.error("Failed to reset settings in RxDB", error);
   }
 }
 
@@ -186,10 +84,7 @@ function parseAndValidateImport(json: string): Record<string, unknown> {
 
   for (const [id, value] of Object.entries(parsed)) {
     const definition = getSettingDefinition(id);
-
-    if (!definition) {
-      continue;
-    }
+    if (!definition) continue;
 
     if (!validateSetting(definition, value)) {
       throw new Error(`Invalid value for setting '${id}'`);
@@ -205,29 +100,17 @@ export async function importSettings(json: string): Promise<void> {
   const validated = parseAndValidateImport(json);
 
   memorySettings.clear();
-  for (const [id, value] of Object.entries(validated)) {
-    memorySettings.set(id, value);
-  }
-
-  const db = await getDb();
-  if (!db) {
-    return;
-  }
+  const now = Date.now();
+  const docs = Object.entries(validated).map(([id, value]) => ({
+    id,
+    value: cloneUnknown(value),
+    updatedAt: now,
+  }));
 
   try {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    await tx.store.clear();
-
-    for (const [id, value] of Object.entries(validated)) {
-      await tx.store.put({
-        id,
-        value: cloneUnknown(value),
-        updatedAt: Date.now(),
-      });
-    }
-
-    await tx.done;
+    await settingsRepository.reset();
+    await settingsRepository.bulkUpsert(docs);
   } catch (error) {
-    console.error("Failed to import settings into IndexedDB", error);
+    console.error("Failed to import settings into RxDB", error);
   }
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { OnboardingLoadingScreen } from "@/components/onboarding/OnboardingLoadingScreen";
-import { DashboardSwipeContainer } from "@/features/dashboard/ui/DashboardSwipeContainer";
+import { WorkspaceGrid } from "@/features/workspace/ui/WorkspaceGrid";
 import { useOnboardingStore } from "@/features/onboarding/onboarding.store";
 import { OnboardingGate } from "@/features/onboarding/ui/OnboardingGate";
 import { useSettingsStore } from "@/features/settings/settings.store";
@@ -34,7 +34,7 @@ export function DashboardOnboardingEntry() {
 
   return (
     <>
-      {completed ? <DashboardSwipeContainer /> : null}
+      {completed ? <WorkspaceGrid /> : null}
       <OnboardingGate />
     </>
   );

@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -14,13 +13,7 @@ import { exportSettings, importSettings } from "@/features/settings/settings.ser
 import { useSettingsStore } from "@/features/settings/settings.store";
 import type { SettingItem } from "@/features/settings/settings.types";
 import { useSettingsSearch } from "@/ui/hooks/useSettings";
-import {
-  IconSearch,
-  IconDownload,
-  IconUpload,
-  IconRotate,
-  IconChevronDown,
-} from "@tabler/icons-react";
+import { Search as IconSearch, Download as IconDownload, Upload as IconUpload, RotateCw as IconRotate, ChevronDown as IconChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSetting } from "@/ui/hooks/useSettings";
 
@@ -77,7 +70,6 @@ function groupByCategory(items: SettingItem[]): CategoryGroup[] {
 }
 
 export function SettingsLayout() {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -199,110 +191,11 @@ export function SettingsLayout() {
     }
   }, [initialize]);
 
-  const handleAction = useCallback(async (id: string) => {
-    if (id === "semantic_search_rebuild_index") {
-      try {
-        const intelligenceStore = await import("@/features/intelligence/intelligence.store");
-        const intelligenceClient = await import("@/features/intelligence/intelligence.client");
-        const customFoldersStore = await import("@/features/custom-folders/custom-folders.store");
-        const { DEFAULT_MODEL_ID } = await import("@/features/intelligence/intelligence.constants");
-
-        const snapshotKey = intelligenceClient.buildIntelligenceSnapshotKey("library", DEFAULT_MODEL_ID);
-        const customFolders = customFoldersStore.useCustomFoldersStore.getState().folders;
-        await intelligenceStore.useIntelligenceStore.getState().clearIntelligenceCache();
-        await intelligenceStore.useIntelligenceStore.getState().initialize({
-          modelId: DEFAULT_MODEL_ID,
-          snapshotKey,
-          customFolders,
-        });
-
-        setStatus("Search index rebuilt");
-        setError(null);
-      } catch {
-        setError("Failed to rebuild search index");
-        setStatus(null);
-      }
-      return;
-    }
-
-    if (id === "personal_repository") {
-      const settingsStore = useSettingsStore.getState();
-      if (settingsStore.values.personal_repository_visible !== true) {
-        settingsStore.setValue("personal_repository_visible", true);
-      }
-      router.push("/?repo=personal");
-      setStatus("Personal Repository opened");
-      setError(null);
-      return;
-    }
-  }, [router]);
+  const handleAction = useCallback(async () => {
+    // Extensible action handler
+  }, []);
 
   const handleDangerAction = useCallback(async (id: string) => {
-    if (id === "personal_repository_clear_all") {
-      try {
-        const customFoldersStore = await import("@/features/custom-folders/custom-folders.store");
-        const customFoldersTabsStore = await import("@/features/custom-folders/custom-folders.tabs.store");
-
-        customFoldersStore.useCustomFoldersStore.getState().clearAllFolders();
-        customFoldersTabsStore.useCustomFoldersTabsStore.getState().setActivePage("global");
-
-        if (useSettingsStore.getState().values.semantic_search_enabled === true) {
-          const intelligenceStore = await import("@/features/intelligence/intelligence.store");
-          const intelligenceClient = await import("@/features/intelligence/intelligence.client");
-          const { DEFAULT_MODEL_ID } = await import("@/features/intelligence/intelligence.constants");
-
-          const snapshotKey = intelligenceClient.buildIntelligenceSnapshotKey("library", DEFAULT_MODEL_ID);
-          await intelligenceStore.useIntelligenceStore.getState().clearIntelligenceCache();
-          await intelligenceStore.useIntelligenceStore.getState().initialize({
-            modelId: DEFAULT_MODEL_ID,
-            snapshotKey,
-            customFolders: [],
-          });
-        }
-
-        setStatus("All Personal Repository folders deleted");
-        setError(null);
-      } catch {
-        setError("Failed to delete Personal Repository folders");
-        setStatus(null);
-      }
-      return;
-    }
-
-    if (id === "semantic_search_clear_index") {
-      try {
-        const intelligenceStore = await import("@/features/intelligence/intelligence.store");
-
-        await intelligenceStore.useIntelligenceStore.getState().clearIntelligenceCache();
-
-        setStatus("Search index cleared");
-        setError(null);
-      } catch {
-        setError("Failed to clear search index");
-        setStatus(null);
-      }
-      return;
-    }
-
-    if (id === "semantic_search_remove_model") {
-      try {
-        const intelligenceClient = await import("@/features/intelligence/intelligence.client");
-        const intelligenceStore = await import("@/features/intelligence/intelligence.store");
-        const settingsStore = await import("@/features/settings/settings.store");
-        await intelligenceClient.getIntelligenceClient().clearModelCache().catch(() => undefined);
-        intelligenceStore.useIntelligenceStore.getState().setModelDownloaded(false);
-        await intelligenceStore.useIntelligenceStore.getState().deactivateRuntime();
-        settingsStore.useSettingsStore.getState().setValue("semantic_search_enabled", false);
-
-        setStatus("Smart Search model removed");
-        setError(null);
-      } catch {
-        setError("Failed to remove model");
-        setStatus(null);
-      }
-      return;
-    }
-
     if (id === "clear_offline_storage") {
       try {
         const offline = await import("@/features/offline/offline.db");

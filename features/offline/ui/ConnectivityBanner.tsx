@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { IconWifiOff, IconX } from "@tabler/icons-react";
+import { WifiOff as IconWifiOff, X as IconX } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { useOfflineConnectivityStore } from "@/features/offline/offline.connectivity.store";

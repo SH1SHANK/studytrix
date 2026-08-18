@@ -1,9 +1,4 @@
-import {
-  IconBrain,
-  IconCloudDownload,
-  IconFolders,
-  IconSearch,
-} from "@tabler/icons-react";
+import { Brain as IconBrain, CloudDownload as IconCloudDownload, FolderSync as IconFolders, Search as IconSearch } from "lucide-react";
 
 import type { OnboardingCapabilityCard } from "./onboarding.types";
 

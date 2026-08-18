@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconRefresh, IconSearch, IconTrash } from "@tabler/icons-react";
+import { RefreshCw as IconRefresh, Search as IconSearch, Trash2 as IconTrash } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";

@@ -6,8 +6,10 @@ import { createJSONStorage, persist } from "zustand/middleware";
 interface OnboardingStoreState {
   completed: boolean;
   active: boolean;
+  isHydrated: boolean;
   markCompleted: () => void;
   setActive: (active: boolean) => void;
+  setHydrated: (isHydrated: boolean) => void;
   reset: () => void;
 }
 
@@ -18,14 +20,19 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
     (set) => ({
       completed: false,
       active: false,
+      isHydrated: false,
       markCompleted: () => set({ completed: true, active: false }),
       setActive: (active) => set({ active }),
+      setHydrated: (isHydrated) => set({ isHydrated }),
       reset: () => set({ completed: false, active: false }),
     }),
     {
       name: ONBOARDING_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ completed: state.completed }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated(true);
+      },
     },
   ),
 );

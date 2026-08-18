@@ -5,7 +5,6 @@ import { isOfflineV3Enabled } from "@/features/offline/offline.flags";
 import { generateChecksum } from "@/features/offline/offline.integrity";
 import { markOfflineAvailability } from "@/features/offline/offline.index.store";
 import { getActiveProvider } from "@/features/offline/offline.storage-location";
-import { getAllNestedCommandSnapshots } from "@/features/command/command.localIndex";
 import { useSettingsStore } from "@/features/settings/settings.store";
 import { storeOfflineFileVerified } from "@/features/storage/storage.service";
 import type { OfflineFileRecord } from "@/features/offline/offline.types";
@@ -13,10 +12,6 @@ import {
   getFileMetadataWithCache,
   writeDownloadMeta,
 } from "@/features/file/file-metadata.client";
-import type {
-  CachedIndexableFileMessage,
-  FilesCachedMessage,
-} from "@/features/intelligence/intelligence.sw.types";
 
 import { emit } from "./download.events";
 import { useDownloadStore } from "./download.store";
@@ -245,93 +240,6 @@ function normalizePositiveInt(value: unknown): number | undefined {
 
   const next = Math.floor(value);
   return next > 0 ? next : undefined;
-}
-
-function toBreadcrumbPath(path: string, fileName: string): string {
-  const normalizedPath = path
-    .split("/")
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-
-  if (normalizedPath.length === 0) {
-    return fileName;
-  }
-
-  return [...normalizedPath, fileName].join(" > ");
-}
-
-async function buildCachedIndexableFileMessage(params: {
-  fileId: string;
-  name: string;
-  mimeType: string;
-  size: number;
-  modifiedTime: string | null;
-}): Promise<{ message: CachedIndexableFileMessage; courseCode: string }> {
-  const snapshots = await getAllNestedCommandSnapshots().catch(() => []);
-  const nestedEntry = snapshots
-    .flatMap((snapshot) => snapshot.entries)
-    .find((entry) => entry.id === params.fileId);
-
-  if (!nestedEntry) {
-    return {
-      message: {
-        fileId: params.fileId,
-        name: params.name,
-        fullPath: params.name,
-        ancestorIds: [],
-        depth: 0,
-        repoKind: "global",
-        isFolder: false,
-        mimeType: params.mimeType,
-        size: params.size,
-        modifiedTime: params.modifiedTime ?? undefined,
-      },
-      courseCode: DEFAULT_STORAGE_COURSE_CODE,
-    };
-  }
-
-  const repoKind = nestedEntry.courseCode.startsWith("PR") ? "personal" : "global";
-
-  return {
-    message: {
-      fileId: params.fileId,
-      name: params.name,
-      fullPath: toBreadcrumbPath(nestedEntry.path, params.name),
-      ancestorIds: [...nestedEntry.ancestorFolderIds],
-      depth: nestedEntry.ancestorFolderIds.length,
-      repoKind,
-      isFolder: false,
-      mimeType: params.mimeType,
-      size: params.size,
-      modifiedTime: params.modifiedTime ?? undefined,
-      customFolderId: repoKind === "personal" ? nestedEntry.rootFolderId : undefined,
-    },
-    courseCode: nestedEntry.courseCode || DEFAULT_STORAGE_COURSE_CODE,
-  };
-}
-
-function postFilesCachedToServiceWorker(files: CachedIndexableFileMessage[]): void {
-  if (typeof window === "undefined" || files.length === 0) {
-    return;
-  }
-
-  const payload: FilesCachedMessage = {
-    type: "FILES_CACHED",
-    files,
-    emittedAt: Date.now(),
-  };
-
-  const controller = navigator.serviceWorker?.controller;
-  if (controller) {
-    controller.postMessage(payload);
-    return;
-  }
-
-  void navigator.serviceWorker?.ready
-    .then((registration) => {
-      registration.active?.postMessage(payload);
-    })
-    .catch(() => undefined);
 }
 
 function resolveStorageLimitBytes(): number {
@@ -1159,23 +1067,18 @@ class DownloadController {
       });
     });
 
-    const cachedContext = await buildCachedIndexableFileMessage({
-      fileId,
-      name: metadata?.name ?? existingTask?.fileName ?? fileId,
-      mimeType,
-      size: blob.size,
-      modifiedTime: metadata?.modifiedTime ?? null,
-    }).catch(() => null);
-
     void withTimeout(
       setMetadata({
         key: `storage-meta:${fileId}`,
         value: JSON.stringify({
           entityId: fileId,
-          courseCode: cachedContext?.courseCode ?? DEFAULT_STORAGE_COURSE_CODE,
+          courseCode: DEFAULT_STORAGE_COURSE_CODE,
           source: "manual",
           downloadedAt: timestamp,
           status: "complete",
+          sizeBytes: blob.size,
+          mimeType,
+          checksum,
         }),
       }),
       NON_CRITICAL_STEP_TIMEOUT_MS,
@@ -1193,10 +1096,6 @@ class DownloadController {
         error: mapErrorMessage(error),
       });
     });
-
-    if (cachedContext) {
-      postFilesCachedToServiceWorker([cachedContext.message]);
-    }
 
     logDownloadDebug("Download finalize stage completed", {
       taskId,

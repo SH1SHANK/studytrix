@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { IconWifiOff } from "@tabler/icons-react";
+import { WifiOff as IconWifiOff } from "lucide-react";
 
 import { getMetadataByPrefix } from "@/features/offline/offline.db";
 

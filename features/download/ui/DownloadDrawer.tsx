@@ -1,6 +1,6 @@
 "use client";
 
-import { IconDownloadOff } from "@tabler/icons-react";
+import { DownloadCloud as IconDownloadOff } from "lucide-react";
 
 import {
   Dialog,

@@ -1,16 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ComponentType } from "react";
-import {
-  IconAlertTriangle,
-  IconBrandChrome,
-  IconDatabase,
-  IconDeviceDesktop,
-  IconFolder,
-  IconFolderPlus,
-  IconInfoCircle,
-  IconRefresh,
-} from "@tabler/icons-react";
+import { AlertTriangle as IconAlertTriangle, Chrome as IconBrandChrome, Database as IconDatabase, Monitor as IconDeviceDesktop, Folder as IconFolder, FolderPlus as IconFolderPlus, Info as IconInfoCircle, RefreshCw as IconRefresh } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";

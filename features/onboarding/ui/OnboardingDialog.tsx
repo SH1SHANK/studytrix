@@ -1,585 +1,356 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTheme } from "next-themes";
-
-import { OnboardingShell } from "@/components/onboarding/OnboardingShell";
+import { useState, useCallback } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { CapabilitiesSlide } from "@/components/onboarding/slides/CapabilitiesSlide";
-import { CompletionSlide } from "@/components/onboarding/slides/CompletionSlide";
-import { FeaturesGuideSlide } from "@/components/onboarding/slides/FeaturesGuideSlide";
-import { GreetingSlide } from "@/components/onboarding/slides/GreetingSlide";
-import { IdentitySlide } from "@/components/onboarding/slides/IdentitySlide";
-import { PersonalSlide } from "@/components/onboarding/slides/PersonalSlide";
-import { AcademicSlide } from "@/components/onboarding/slides/AcademicSlide";
-import { ThemeSlide } from "@/components/onboarding/slides/ThemeSlide";
-import { WelcomeConsentSlide } from "@/components/onboarding/slides/WelcomeConsentSlide";
-import { useAcademicContext } from "@/components/layout/AcademicContext";
-import { ONBOARDING_CAPABILITY_CARDS } from "@/features/onboarding/onboarding.content";
-import { useSettingsStore } from "@/features/settings/settings.store";
-import { resolveUserProfileSettings } from "@/features/profile/user-profile";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  DEFAULT_THEME_ID,
-  THEMES,
-  type ThemeId,
-} from "@/features/theme/theme.constants";
+  Folder,
+  FolderPlus,
+  HardDrive,
+  CheckCircle2,
+  Sparkles,
+  ArrowRight,
+  ArrowLeft,
+  X,
+  Command,
+} from "lucide-react";
+import { workspaceRepository } from "@/db/repositories/workspace.repository";
+import { folderRepository } from "@/db/repositories/folder.repository";
+import { driveSourceRepository } from "@/db/repositories/drive-source.repository";
+import { driveScanner } from "@/features/drive/drive-scanner";
+import { extractDriveFolderId } from "@/features/drive/drive.parser";
+import { toast } from "sonner";
 
-type OnboardingDialogProps = {
+interface OnboardingDialogProps {
   open: boolean;
   onComplete: () => void;
-};
-
-type CatalogIndexEntry = {
-  id: string;
-  name: string;
-  availableSemesters: number[];
-};
-
-type SlideDefinition = {
-  id:
-    | "welcome-consent"
-    | `capability-${string}`
-    | "features-guide"
-    | "identity"
-    | "greeting"
-    | "personal"
-    | "academic"
-    | "theme"
-    | "completion";
-  counted: boolean;
-};
-
-const CATALOG_CACHE_KEY = "studytrix_onboarding_catalog_index_v1";
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function readCachedCatalogIndex(): CatalogIndexEntry[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  try {
-    const raw = window.localStorage.getItem(CATALOG_CACHE_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw) as { departments?: CatalogIndexEntry[] };
-    return Array.isArray(parsed.departments) ? parsed.departments : [];
-  } catch {
-    return [];
-  }
 }
 
-function writeCachedCatalogIndex(departments: CatalogIndexEntry[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
+const WORKSPACE_SUGGESTIONS = [
+  "GATE Preparation",
+  "Algorithms & Data Structures",
+  "Thermodynamics",
+  "Machine Learning",
+  "Semester Studies",
+];
 
-  try {
-    window.localStorage.setItem(
-      CATALOG_CACHE_KEY,
-      JSON.stringify({ departments, cachedAt: Date.now() }),
-    );
-  } catch {
-    // ignore storage failures
-  }
-}
-
-function normalizeThemeId(theme: string | undefined): ThemeId {
-  if (THEMES.some((themeOption) => themeOption.id === theme)) {
-    return theme as ThemeId;
-  }
-  return DEFAULT_THEME_ID;
-}
+const DEFAULT_FOLDERS = ["Lecture Notes", "Problem Sets", "Reference Material"];
 
 export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
-  const { theme, setTheme } = useTheme();
-  const { department, semester, setDepartment, setSemester } = useAcademicContext();
-  const rawUserProfile = useSettingsStore((state) => state.values.userProfile);
-  const personalRepositoryVisible = useSettingsStore((state) => state.values.personal_repository_visible !== false);
-  const setSettingValue = useSettingsStore((state) => state.setValue);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
-  const userProfile = useMemo(() => resolveUserProfileSettings(rawUserProfile), [rawUserProfile]);
+  // Form State
+  const [workspaceName, setWorkspaceName] = useState("My Study Workspace");
+  const [folders, setFolders] = useState<string[]>(DEFAULT_FOLDERS);
+  const [newFolderInput, setNewFolderInput] = useState("");
+  const [driveUrl, setDriveUrl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [direction, setDirection] = useState<1 | -1>(1);
-  const [name, setName] = useState(userProfile.name);
-  const [email, setEmail] = useState(userProfile.email);
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [departmentDraft, setDepartmentDraft] = useState(department);
-  const [semesterDraft, setSemesterDraft] = useState(semester);
-  const [personalRepositoryEnabled, setPersonalRepositoryEnabled] = useState(personalRepositoryVisible);
-  const [themeDraft, setThemeDraft] = useState<ThemeId>(normalizeThemeId(theme));
-  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const handleAddFolder = () => {
+    const trimmed = newFolderInput.trim();
+    if (!trimmed || folders.includes(trimmed)) return;
+    setFolders((prev) => [...prev, trimmed]);
+    setNewFolderInput("");
+  };
 
-  const [nameSuccessTick, setNameSuccessTick] = useState(0);
-  const [emailSuccessTick, setEmailSuccessTick] = useState(0);
-  const [departmentSuccessTick, setDepartmentSuccessTick] = useState(0);
-  const [semesterSuccessTick, setSemesterSuccessTick] = useState(0);
+  const handleRemoveFolder = (folderToRemove: string) => {
+    setFolders((prev) => prev.filter((f) => f !== folderToRemove));
+  };
 
-  const [departments, setDepartments] = useState<CatalogIndexEntry[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-
-  const completionTriggeredRef = useRef(false);
-
-  const slides = useMemo<SlideDefinition[]>(() => [
-    { id: "welcome-consent", counted: true },
-    ...ONBOARDING_CAPABILITY_CARDS.map((card) => ({ id: `capability-${card.id}` as `capability-${string}`, counted: true })),
-    { id: "features-guide", counted: true },
-    { id: "identity", counted: true },
-    { id: "greeting", counted: false },
-    { id: "personal", counted: true },
-    { id: "academic", counted: true },
-    { id: "theme", counted: true },
-    { id: "completion", counted: true },
-  ], []);
-
-  const countedIndices = useMemo(
-    () => slides
-      .map((slide, index) => ({ ...slide, index }))
-      .filter((slide) => slide.counted)
-      .map((slide) => slide.index),
-    [slides],
-  );
-
-  const totalSteps = countedIndices.length;
-
-  const currentCountedIndex = useMemo(() => {
-    const found = countedIndices.findLastIndex((index) => index <= currentIndex);
-    return found >= 0 ? found : 0;
-  }, [countedIndices, currentIndex]);
-
-  const currentStep = currentCountedIndex + 1;
-
-  const currentSlide = slides[currentIndex];
-
-  const currentTheme = useMemo(() => normalizeThemeId(theme), [theme]);
-
-  const activeDepartment = useMemo(
-    () => departments.find((entry) => entry.id === departmentDraft) ?? null,
-    [departmentDraft, departments],
-  );
-
-  const activeSemesterOptions = useMemo(
-    () => activeDepartment?.availableSemesters ?? [],
-    [activeDepartment],
-  );
-
-  const loadAcademicMappings = useCallback(async () => {
-    const cached = readCachedCatalogIndex();
-    if (cached.length > 0) {
-      setDepartments(cached);
-      setCatalogError(null);
-    }
-
-    setCatalogLoading(true);
+  const handleFinish = useCallback(async () => {
+    setSubmitting(true);
     try {
-      const response = await fetch("/api/catalog/index", { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`Request failed (${response.status})`);
-      }
+      // 1. Create Workspace if name is provided
+      let wsId = "";
+      if (workspaceName.trim()) {
+        const createdWs = await workspaceRepository.create({
+          name: workspaceName.trim(),
+          driveFolderId: "",
+          pinned: true,
+        });
+        wsId = createdWs.id;
 
-      const payload = (await response.json()) as { departments?: CatalogIndexEntry[] };
-      const nextDepartments = Array.isArray(payload.departments) ? payload.departments : [];
-      if (nextDepartments.length === 0) {
-        throw new Error("No academic mappings available.");
-      }
-
-      setDepartments(nextDepartments);
-      setCatalogError(null);
-      writeCachedCatalogIndex(nextDepartments);
-    } catch (error) {
-      if (cached.length === 0) {
-        setCatalogError(error instanceof Error ? error.message : "Failed to load academic mappings.");
-      }
-    } finally {
-      setCatalogLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    completionTriggeredRef.current = false;
-    setCurrentIndex(0);
-    setDirection(1);
-    setName(userProfile.name);
-    setEmail(userProfile.email);
-    setNameError(null);
-    setEmailError(null);
-    setNameSuccessTick(0);
-    setEmailSuccessTick(0);
-    setDepartmentSuccessTick(0);
-    setSemesterSuccessTick(0);
-    setDepartmentDraft(department);
-    setSemesterDraft(semester);
-    setPersonalRepositoryEnabled(personalRepositoryVisible);
-    setThemeDraft(currentTheme);
-    setAcceptedLegal(false);
-    void loadAcademicMappings();
-  }, [currentTheme, department, loadAcademicMappings, open, personalRepositoryVisible, semester, userProfile.email, userProfile.name]);
-
-  useEffect(() => {
-    if (departments.length === 0) {
-      return;
-    }
-
-    const currentDepartment = departments.find((entry) => entry.id === departmentDraft);
-    if (!currentDepartment) {
-      const nextDepartment = departments[0];
-      if (nextDepartment) {
-        setDepartmentDraft(nextDepartment.id);
-        setSemesterDraft(nextDepartment.availableSemesters[0] ?? 1);
-      }
-      return;
-    }
-
-    if (!currentDepartment.availableSemesters.includes(semesterDraft)) {
-      setSemesterDraft(currentDepartment.availableSemesters[0] ?? 1);
-    }
-  }, [departmentDraft, departments, semesterDraft]);
-
-  const validateIdentity = useCallback(() => {
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-
-    let valid = true;
-    if (trimmedName.length < 2 || trimmedName.length > 60) {
-      setNameError("Enter a name between 2 and 60 characters.");
-      valid = false;
-    } else {
-      setNameError(null);
-    }
-
-    if (!EMAIL_PATTERN.test(trimmedEmail)) {
-      setEmailError("Enter a valid email address.");
-      valid = false;
-    } else {
-      setEmailError(null);
-    }
-
-    if (valid) {
-      setNameSuccessTick((tick) => tick + 1);
-      setEmailSuccessTick((tick) => tick + 1);
-    }
-
-    return valid;
-  }, [email, name]);
-
-  const validateAcademic = useCallback(() => {
-    if (departments.length === 0) {
-      setCatalogError("Academic mappings are required to continue.");
-      return false;
-    }
-
-    if (!activeDepartment || !activeSemesterOptions.includes(semesterDraft)) {
-      setCatalogError("Select a valid department and semester from available mappings.");
-      return false;
-    }
-
-    setCatalogError(null);
-    setDepartmentSuccessTick((tick) => tick + 1);
-    setSemesterSuccessTick((tick) => tick + 1);
-    return true;
-  }, [activeDepartment, activeSemesterOptions, departments.length, semesterDraft]);
-
-  const canAdvanceFromIndex = useCallback((index: number) => {
-    const slideId = slides[index]?.id;
-    if (!slideId) {
-      return false;
-    }
-
-    if (slideId === "identity") {
-      return validateIdentity();
-    }
-
-    if (slideId === "welcome-consent") {
-      return acceptedLegal;
-    }
-
-    if (slideId === "academic") {
-      return validateAcademic();
-    }
-
-    return true;
-  }, [acceptedLegal, slides, validateAcademic, validateIdentity]);
-
-  const navigateToIndex = useCallback((targetIndex: number) => {
-    if (targetIndex < 0 || targetIndex >= slides.length || targetIndex === currentIndex) {
-      return false;
-    }
-
-    if (targetIndex > currentIndex) {
-      for (let cursor = currentIndex; cursor < targetIndex; cursor += 1) {
-        if (!canAdvanceFromIndex(cursor)) {
-          return false;
+        // 2. Create subfolders
+        for (const fldName of folders) {
+          if (fldName.trim()) {
+            await folderRepository.createFolder({
+              workspaceId: wsId,
+              parentFolderId: "",
+              name: fldName.trim(),
+            });
+          }
         }
       }
-    }
 
-    setDirection(targetIndex > currentIndex ? 1 : -1);
-    setCurrentIndex(targetIndex);
-    return true;
-  }, [canAdvanceFromIndex, currentIndex, slides.length]);
-
-  const completeOnboarding = useCallback(() => {
-    if (completionTriggeredRef.current) {
-      return;
-    }
-
-    completionTriggeredRef.current = true;
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-
-    setSettingValue("userProfile", {
-      name: trimmedName,
-      email: trimmedEmail,
-    });
-    setDepartment(departmentDraft);
-    setSemester(semesterDraft);
-    setSettingValue("personal_repository_visible", personalRepositoryEnabled);
-    setSettingValue("theme", themeDraft);
-    setTheme(themeDraft);
-    onComplete();
-  }, [departmentDraft, email, name, onComplete, personalRepositoryEnabled, semesterDraft, setDepartment, setSemester, setSettingValue, setTheme, themeDraft]);
-
-  const handleNext = useCallback(() => {
-    if (!currentSlide) {
-      return;
-    }
-
-    if (currentSlide.id === "completion") {
-      completeOnboarding();
-      return;
-    }
-
-    void navigateToIndex(currentIndex + 1);
-  }, [completeOnboarding, currentIndex, currentSlide, navigateToIndex]);
-
-  const handlePrev = useCallback(() => {
-    void navigateToIndex(currentIndex - 1);
-  }, [currentIndex, navigateToIndex]);
-
-  const handleStepPress = useCallback((stepIndex: number) => {
-    if (stepIndex > currentCountedIndex) {
-      return;
-    }
-
-    const target = countedIndices[stepIndex];
-    if (typeof target !== "number") {
-      return;
-    }
-
-    void navigateToIndex(target);
-  }, [countedIndices, currentCountedIndex, navigateToIndex]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        handlePrev();
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        handleNext();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleNext, handlePrev, open]);
-
-  const nextDisabled = useMemo(() => {
-    if (!currentSlide) {
-      return true;
-    }
-
-    if (currentSlide.id === "welcome-consent") {
-      return !acceptedLegal;
-    }
-
-    if (currentSlide.id === "identity") {
-      return name.trim().length === 0 || email.trim().length === 0;
-    }
-
-    if (currentSlide.id === "academic") {
-      return departments.length === 0;
-    }
-
-    return false;
-  }, [acceptedLegal, currentSlide, departments.length, email, name]);
-
-  const nextLabel = useMemo(() => {
-    if (currentSlide?.id === "completion") {
-      return "Get Started";
-    }
-    if (currentSlide?.id === "welcome-consent") {
-      return acceptedLegal ? "Continue" : "Accept to Continue";
-    }
-    return "Continue";
-  }, [acceptedLegal, currentSlide?.id]);
-
-  const renderSlide = useCallback((ready: boolean) => {
-    const slideId = currentSlide?.id;
-
-    if (!slideId) {
-      return null;
-    }
-
-    if (slideId.startsWith("capability-")) {
-      const capabilityId = slideId.replace("capability-", "");
-      const capabilityCard = ONBOARDING_CAPABILITY_CARDS.find((card) => card.id === capabilityId);
-
-      if (capabilityCard) {
-        return (
-          <CapabilitiesSlide
-            ready={ready}
-            eyebrow="Capabilities"
-            title={capabilityCard.title}
-            subtitle={capabilityCard.description}
-            hint={capabilityCard.controlHint}
-            icon={<capabilityCard.icon className="size-6" />}
-            accentClassName={capabilityCard.accentClassName}
-          />
-        );
+      // 3. Connect Drive source if provided
+      if (driveUrl.trim()) {
+        const folderId = extractDriveFolderId(driveUrl);
+        if (folderId) {
+          const source = await driveSourceRepository.addSource({
+            folderId,
+            url: driveUrl.trim(),
+            name: `${workspaceName || "Study"} Drive`,
+          });
+          // Initiate scan in background
+          void driveScanner.scanSource(source.id);
+        }
       }
 
+      toast.success("Study library configured!");
+    } catch (err) {
+      console.error("Error setting up onboarding library:", err);
+    } finally {
+      setSubmitting(false);
+      onComplete();
     }
-
-    if (slideId === "welcome-consent") {
-      return (
-        <WelcomeConsentSlide
-          ready={ready}
-          accepted={acceptedLegal}
-          onAcceptedChange={setAcceptedLegal}
-        />
-      );
-    }
-
-    if (slideId === "features-guide") {
-      return <FeaturesGuideSlide ready={ready} />;
-    }
-
-    if (slideId === "identity") {
-      return (
-        <IdentitySlide
-          ready={ready}
-          name={name}
-          email={email}
-          nameError={nameError}
-          emailError={emailError}
-          onNameChange={(value) => {
-            setName(value);
-            if (nameError) {
-              setNameError(null);
-            }
-          }}
-          onEmailChange={(value) => {
-            setEmail(value);
-            if (emailError) {
-              setEmailError(null);
-            }
-          }}
-          nameSuccessTick={nameSuccessTick}
-          emailSuccessTick={emailSuccessTick}
-        />
-      );
-    }
-
-    if (slideId === "greeting") {
-      return (
-        <GreetingSlide
-          ready={ready}
-          name={name}
-          onContinue={() => {
-            void navigateToIndex(currentIndex + 1);
-          }}
-        />
-      );
-    }
-
-    if (slideId === "personal") {
-      return (
-        <PersonalSlide
-          ready={ready}
-          personalRepositoryEnabled={personalRepositoryEnabled}
-          onPersonalRepositoryChange={setPersonalRepositoryEnabled}
-        />
-      );
-    }
-
-    if (slideId === "academic") {
-      return (
-        <AcademicSlide
-          ready={ready}
-          departments={departments}
-          department={departmentDraft}
-          semester={semesterDraft}
-          loading={catalogLoading}
-          error={catalogError}
-          onDepartmentChange={setDepartmentDraft}
-          onSemesterChange={setSemesterDraft}
-          onRetry={() => {
-            void loadAcademicMappings();
-          }}
-          departmentSuccessTick={departmentSuccessTick}
-          semesterSuccessTick={semesterSuccessTick}
-        />
-      );
-    }
-
-    if (slideId === "theme") {
-      return (
-        <ThemeSlide
-          ready={ready}
-          selectedTheme={themeDraft}
-          onThemeSelected={setThemeDraft}
-        />
-      );
-    }
-
-    if (slideId === "completion") {
-      return <CompletionSlide ready={ready} name={name} />;
-    }
-
-    return null;
-  }, [acceptedLegal, catalogError, catalogLoading, currentIndex, currentSlide?.id, departmentDraft, departmentSuccessTick, departments, email, emailError, emailSuccessTick, loadAcademicMappings, name, nameError, nameSuccessTick, navigateToIndex, personalRepositoryEnabled, semesterDraft, semesterSuccessTick, themeDraft]);
+  }, [workspaceName, folders, driveUrl, onComplete]);
 
   return (
-    <Dialog
-      open={open}
-      dismissOnOverlayClick={false}
-      dismissOnEscape={false}
-      onOpenChange={() => undefined}
-    >
+    <Dialog open={open} onOpenChange={() => undefined}>
       <DialogContent
         showCloseButton={false}
-        className="h-[100dvh] max-h-[100dvh] w-[100vw] max-w-[100vw] gap-0 overflow-hidden rounded-none border-0 bg-background p-0 sm:h-[100dvh] sm:max-h-[100dvh] sm:w-[100vw] sm:max-w-[100vw] sm:rounded-none sm:border-0"
+        className="sm:max-w-[540px] p-0 overflow-hidden border-border/80 bg-background shadow-2xl rounded-2xl"
       >
-        <OnboardingShell
-          slideKey={currentSlide?.id ?? "unknown"}
-          direction={direction}
-          renderSlide={renderSlide}
-          allowVerticalScroll={currentSlide?.id === "theme"}
-          currentStep={currentStep}
-          totalSteps={totalSteps}
-          onStepPress={handleStepPress}
-          onNext={handleNext}
-          onPrev={handlePrev}
-          nextDisabled={nextDisabled}
-          nextLabel={nextLabel}
-          showNavigation={true}
-          showBack={currentIndex > 0}
-          isLastStep={currentSlide?.id === "completion"}
-        />
+        {/* Top Header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-border/40">
+          <div className="flex items-center gap-2">
+            <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
+              {step}
+            </span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Step {step} of 4
+            </span>
+          </div>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={onComplete}
+            className="text-xs text-muted-foreground hover:text-foreground h-7"
+          >
+            Skip to App
+          </Button>
+        </div>
+
+        {/* Step Content */}
+        <div className="px-6 py-5 min-h-[300px] flex flex-col justify-center">
+          {/* STEP 1: Workspace */}
+          {step === 1 && (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-foreground tracking-tight sm:text-lg">
+                  Welcome to Studytrix
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Studytrix is your local-first personal study library. Let&apos;s create your first workspace.
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <label className="text-xs font-medium text-foreground">Workspace Name</label>
+                <Input
+                  value={workspaceName}
+                  onChange={(e) => setWorkspaceName(e.target.value)}
+                  placeholder="e.g. GATE Preparation, Algorithms..."
+                  className="text-sm h-9"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[11px] text-muted-foreground">Quick suggestions:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {WORKSPACE_SUGGESTIONS.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => setWorkspaceName(suggestion)}
+                      className="text-[11px] rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Folders */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-foreground tracking-tight sm:text-lg">
+                  Organize into Folders
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Structure your study material into folders inside <strong>{workspaceName}</strong>.
+                </p>
+              </div>
+
+              {/* Interactive Folder Preview */}
+              <div className="rounded-xl border border-border/60 bg-card p-3 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-foreground pb-1 border-b border-border/40">
+                  <Folder className="size-4 text-primary" />
+                  {workspaceName}
+                </div>
+
+                <div className="space-y-1.5 pl-3">
+                  {folders.map((fld) => (
+                    <div
+                      key={fld}
+                      className="flex items-center justify-between rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs text-foreground group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FolderPlus className="size-3.5 text-muted-foreground" />
+                        <span>{fld}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFolder(fld)}
+                        className="text-muted-foreground hover:text-rose-500 p-0.5"
+                        title="Remove folder"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <Input
+                    value={newFolderInput}
+                    onChange={(e) => setNewFolderInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddFolder();
+                      }
+                    }}
+                    placeholder="Add custom folder..."
+                    className="h-7 text-xs flex-1"
+                  />
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="secondary"
+                    onClick={handleAddFolder}
+                    disabled={!newFolderInput.trim()}
+                    className="h-7 text-xs"
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: Google Drive Source */}
+          {step === 3 && (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-foreground tracking-tight sm:text-lg">
+                  Bring in Google Drive Materials
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Have lecture slides or books in a shared Google Drive folder? Link it to index and access offline.
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <label className="text-xs font-medium text-foreground">
+                  Public Drive Folder URL <span className="text-muted-foreground font-normal">(Optional)</span>
+                </label>
+                <div className="relative">
+                  <HardDrive className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                  <Input
+                    value={driveUrl}
+                    onChange={(e) => setDriveUrl(e.target.value)}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    className="text-xs h-9 pl-8"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Folders must be set to &quot;Anyone with the link can view&quot;. No Google login needed.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: Ready */}
+          {step === 4 && (
+            <div className="space-y-4 text-center py-2">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mx-auto">
+                <CheckCircle2 className="size-6" />
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-foreground sm:text-lg">
+                  Your Study Library is Ready!
+                </h3>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+                  <strong>{workspaceName}</strong> has been initialized with {folders.length} folders.
+                  {driveUrl ? " Google Drive discovery is running." : ""}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-left max-w-sm mx-auto space-y-2">
+                <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <Command className="size-3.5 text-primary" />
+                  Pro-tip: Quick Search
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Press <kbd className="font-mono bg-background border px-1 rounded text-[10px]">⌘K</kbd> anywhere in Studytrix to instantly search files, folders, and tags.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Navigation */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border/40 bg-muted/10">
+          <div>
+            {step > 1 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3 | 4)}
+                disabled={submitting}
+                className="h-8 text-xs gap-1"
+              >
+                <ArrowLeft className="size-3" />
+                Back
+              </Button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {step < 4 ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setStep((s) => (s + 1) as 1 | 2 | 3 | 4)}
+                className="h-8 text-xs gap-1 font-medium"
+              >
+                Continue
+                <ArrowRight className="size-3" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void handleFinish()}
+                disabled={submitting}
+                className="h-8 text-xs gap-1 font-medium"
+              >
+                <Sparkles className="size-3.5" />
+                {submitting ? "Opening..." : "Open Study Library"}
+              </Button>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

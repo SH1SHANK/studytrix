@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { IconCheck } from "@tabler/icons-react";
+import { Check as IconCheck } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
@@ -111,7 +111,7 @@ export function AnimatedInput({
               transition={{ type: "spring", stiffness: 420, damping: 28 }}
               className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-primary"
             >
-              <IconCheck className="size-4" stroke={2.5} />
+              <IconCheck className="size-4" strokeWidth={2.5} />
             </motion.span>
           ) : null}
         </AnimatePresence>

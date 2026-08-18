@@ -1,9 +1,9 @@
 import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 
-import { AcademicProvider } from "@/components/layout/AcademicContext";
 import { AppRuntimeBanners } from "@/components/layout/AppRuntimeBanners";
 import { Header } from "@/components/layout/Header";
+import { AppSidebar } from "@/components/layout/AppSidebar";
 import { APP_VERSION, formatVersionLabel } from "@/features/version/version";
 import { AppShellRuntimeMounts } from "@/components/layout/AppShellRuntimeMounts";
 
@@ -18,50 +18,46 @@ type AppShellProps = {
 
 function GlobalFooter({ contentWidth }: { contentWidth: "adaptive" | "compact" }) {
   return (
-    <footer className="mt-6 border-t border-border/45 pt-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)]">
+    <footer className="mt-8 border-t border-border/40 py-6">
       <div
-        className={`mx-auto w-full px-4 sm:px-5 ${
+        className={`mx-auto w-full px-4 sm:px-6 ${
           contentWidth === "compact" ? "max-w-3xl" : "max-w-none"
         }`}
       >
-        <div className="flex flex-col items-center gap-2 text-center">
-          <p className="text-[11px] leading-relaxed text-muted-foreground/70">
-            Built by Attendrix Team · Content via LaunchPad Community Drive
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+          <p className="text-[11px] text-muted-foreground/70">
+            Studytrix · Local-First Study Workspace
           </p>
 
           <nav
             aria-label="Legal and policy links"
-            className="flex flex-wrap items-center justify-center gap-1.5"
+            className="flex flex-wrap items-center justify-center gap-2"
           >
             <Link
               href="/terms"
-              className="rounded-full px-2.5 py-1 text-[11px] text-muted-foreground/80 transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+              className="text-[11px] text-muted-foreground/80 hover:text-foreground transition-colors"
             >
               Terms
             </Link>
+            <span className="text-muted-foreground/40">·</span>
             <Link
               href="/privacy"
-              className="rounded-full px-2.5 py-1 text-[11px] text-muted-foreground/80 transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+              className="text-[11px] text-muted-foreground/80 hover:text-foreground transition-colors"
             >
               Privacy
             </Link>
+            <span className="text-muted-foreground/40">·</span>
             <Link
               href="/disclaimer"
-              className="rounded-full px-2.5 py-1 text-[11px] text-muted-foreground/80 transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+              className="text-[11px] text-muted-foreground/80 hover:text-foreground transition-colors"
             >
               Disclaimer
             </Link>
-            <Link
-              href="/data-handling"
-              className="rounded-full px-2.5 py-1 text-[11px] text-muted-foreground/80 transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
-            >
-              Data Handling
-            </Link>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="text-[10px] font-medium text-muted-foreground/55">
+              {formatVersionLabel(APP_VERSION)}
+            </span>
           </nav>
-
-          <p className="text-[10px] font-medium tracking-wide text-muted-foreground/55">
-            {formatVersionLabel(APP_VERSION)}
-          </p>
         </div>
       </div>
     </footer>
@@ -77,26 +73,25 @@ export function AppShell({
   contentWidth = "adaptive",
 }: AppShellProps) {
   return (
-    <AcademicProvider>
-      <div className="flex min-h-screen flex-col overflow-x-hidden pt-[env(safe-area-inset-top)]">
-        <div
-          className={`mx-auto flex w-full flex-1 flex-col ${
-            contentWidth === "compact" ? "max-w-3xl" : "max-w-none"
-          }`}
-        >
-          <Suspense fallback={null}>
-            {showHeader ? <Header title={headerTitle} hideFilters={hideHeaderFilters} /> : null}
-          </Suspense>
-          <main className="flex-1 min-h-0 scroll-smooth">
-            <div className="px-4 pt-3 sm:px-5">
-              <AppRuntimeBanners />
-            </div>
-            {children}
-            <GlobalFooter contentWidth={contentWidth} />
-          </main>
-        </div>
-        <AppShellRuntimeMounts commandPlaceholder={commandPlaceholder} />
+    <div className="flex min-h-screen bg-background text-foreground">
+      {/* Desktop Persistent Sidebar */}
+      <AppSidebar className="hidden md:flex w-56 lg:w-60 shrink-0 sticky top-0 h-screen" />
+
+      {/* Main View Area */}
+      <div className="flex flex-1 flex-col min-w-0 overflow-x-hidden pt-[env(safe-area-inset-top)]">
+        <Suspense fallback={null}>
+          {showHeader ? <Header title={headerTitle} hideFilters={hideHeaderFilters} /> : null}
+        </Suspense>
+        <main className="flex-1 min-h-0">
+          <div className="px-4 pt-2 sm:px-6">
+            <AppRuntimeBanners />
+          </div>
+          {children}
+        </main>
+        <GlobalFooter contentWidth={contentWidth} />
       </div>
-    </AcademicProvider>
+
+      <AppShellRuntimeMounts commandPlaceholder={commandPlaceholder} />
+    </div>
   );
 }

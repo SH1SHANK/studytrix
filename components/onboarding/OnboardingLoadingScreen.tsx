@@ -1,6 +1,6 @@
 "use client";
 
-import { IconHexagon } from "@tabler/icons-react";
+import { Hexagon as IconHexagon } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { LetterReveal } from "@/components/onboarding/shared/LetterReveal";

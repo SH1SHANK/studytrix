@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useState } from "react";
-import { IconFolder, IconFolderOpen, IconHeartbeat, IconSettings } from "@tabler/icons-react";
+import { Folder as IconFolder, FolderOpen as IconFolderOpen, Activity as IconHeartbeat, Settings as IconSettings } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";

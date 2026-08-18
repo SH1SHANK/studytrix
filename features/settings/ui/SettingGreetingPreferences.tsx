@@ -1,12 +1,7 @@
 "use client";
 
 import { memo, useCallback } from "react";
-import {
-  IconCloudRain,
-  IconMoodSmile,
-  IconUser,
-  IconUserOff,
-} from "@tabler/icons-react";
+import { CloudRain as IconCloudRain, Smile as IconMoodSmile, User as IconUser, UserX as IconUserOff } from "lucide-react";
 
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";

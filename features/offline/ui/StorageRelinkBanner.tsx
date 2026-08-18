@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useState } from "react";
-import { IconAlertTriangle, IconFolder, IconX } from "@tabler/icons-react";
+import { AlertTriangle as IconAlertTriangle, Folder as IconFolder, X as IconX } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useStorageLocationStore } from "@/features/offline/offline.storage-location.store";

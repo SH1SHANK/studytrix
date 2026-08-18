@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { IconLock } from "@tabler/icons-react";
+import { Lock as IconLock } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { Input } from "@/components/ui/input";

@@ -1,29 +1,18 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import {
-  IconArrowLeft,
-  IconChevronDown,
-  IconShare,
-} from "@tabler/icons-react";
-import { useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, BookOpen, Menu, Search, Share2 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  useAcademicContext,
-} from "@/components/layout/AcademicContext";
-import { DEPARTMENT_MAP, getDepartmentName } from "@/lib/academic";
 import { shareCurrentPage } from "@/features/share/share.page";
 import { useSetting } from "@/ui/hooks/useSettings";
+import { useCommandCenterStore } from "@/features/command/command-center.store";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { AppSidebar } from "./AppSidebar";
+import { useState } from "react";
 
-const DEPARTMENT_OPTIONS = Object.keys(DEPARTMENT_MAP);
 const DownloadButton = dynamic(
   () => import("@/features/download/ui/DownloadButton").then((mod) => mod.DownloadButton),
   { ssr: false },
@@ -33,149 +22,121 @@ const SettingsMenu = dynamic(
   { ssr: false },
 );
 
-export function Header({ title, hideFilters }: { title?: string; hideFilters?: boolean } = {}) {
+interface HeaderProps {
+  title?: string;
+  hideFilters?: boolean;
+}
+
+export function Header({ title }: HeaderProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const { department, setDepartment, semester, setSemester } =
-    useAcademicContext();
   const [compactMode] = useSetting("compact_mode");
-  const [showHeaderMotivation] = useSetting("show_header_motivation");
-  const [shareIncludeAcademicContext] = useSetting("share_include_academic_context");
-  const semesters = useMemo(() => Array.from({ length: 8 }, (_, i) => i + 1), []);
   const isCompact = compactMode === true;
-  const departmentLabel = getDepartmentName(department);
   const isRootPage = pathname === "/";
-  const contextTriggerClass =
-    `min-w-0 shrink gap-1 rounded-md px-1.5 font-semibold tracking-tight text-foreground transition-all duration-200 active:scale-[0.98] hover:bg-muted ${
-      isCompact ? "h-9 text-base sm:text-lg" : "h-10 text-lg sm:text-xl"
-    }`;
-  const hasQueryState = searchParams.toString().length > 0;
-  const iconButtonClass = isCompact
-    ? "size-9 rounded-md transition-all duration-200 active:scale-[0.98] hover:bg-muted"
-    : "size-10 rounded-md transition-all duration-200 active:scale-[0.98] hover:bg-muted";
+  const setCommandOpen = useCommandCenterStore((state) => state.setOpen);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className={isCompact ? "px-4 pt-4 sm:pt-5" : "px-4 pt-5 sm:pt-6"}>
-      <div className={isCompact ? "space-y-1" : "space-y-1.5"}>
-        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-2 sm:items-center">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            {!isRootPage ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={iconButtonClass}
-                aria-label="Go back"
-                onClick={() => {
-                  if (window.history.length > 1) {
-                    router.back();
-                    return;
-                  }
-
-                  router.push("/");
-                }}
-              >
-                <IconArrowLeft className="size-4" />
-              </Button>
-            ) : null}
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-              {hideFilters ? (
-                <h1 className={isCompact ? "truncate pl-1 text-lg font-semibold tracking-tight text-foreground sm:text-xl" : "truncate pl-1 text-xl font-semibold tracking-tight text-foreground sm:text-2xl"}>
-                  {title}
-                </h1>
-              ) : (
-                <>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          variant="ghost"
-                          className={`${contextTriggerClass} max-w-[clamp(9rem,35vw,28rem)]`}
-                        />
-                      }
-                    >
-                      <span className="min-w-0 truncate">{departmentLabel}</span>
-                      <IconChevronDown className="size-3.5 shrink-0 opacity-60" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="w-44 origin-top-left border-border"
-                    >
-                      {DEPARTMENT_OPTIONS.map((id) => (
-                        <DropdownMenuItem key={id} onClick={() => setDepartment(id)}>
-                          {getDepartmentName(id)}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <span className="text-lg text-muted-foreground/80 dark:text-muted-foreground">
-                    ·
-                  </span>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          variant="ghost"
-                          className={`${contextTriggerClass} relative max-w-[clamp(6.5rem,24vw,14rem)]`}
-                        />
-                      }
-                    >
-                      <span className="min-w-0 truncate">{`Semester ${semester}`}</span>
-                      <IconChevronDown className="size-3.5 shrink-0 opacity-60" />
-                      <span className="pointer-events-none absolute -bottom-0.5 left-1.5 h-[2px] w-7 rounded-full bg-primary" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="start"
-                      className="w-40 origin-top-left border-border"
-                    >
-                      {semesters.map((value) => (
-                        <DropdownMenuItem key={value} onClick={() => setSemester(value)}>
-                          {`Semester ${value}`}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-            </div>
+    <header className={isCompact ? "px-4 pt-3 pb-2 sm:px-6" : "px-4 pt-3 pb-3 sm:px-6"}>
+      <div className="flex items-center justify-between gap-3">
+        {/* Left Side: Mobile Drawer / Back Button / Breadcrumb Title */}
+        <div className="flex min-w-0 items-center gap-2">
+          {/* Mobile Menu Trigger */}
+          <div className="md:hidden">
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
+                  aria-label="Open navigation menu"
+                >
+                  <Menu className="size-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-64">
+                <AppSidebar onNavigate={() => setMobileMenuOpen(false)} className="h-full border-r-0" />
+              </SheetContent>
+            </Sheet>
           </div>
 
-          <div className="ml-auto flex w-full shrink-0 items-center justify-end gap-1.5 sm:w-auto sm:justify-start sm:gap-2">
+          {!isRootPage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
+              aria-label="Go back"
+              onClick={() => {
+                if (window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push("/");
+                }
+              }}
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+          ) : (
+            <Link
+              href="/"
+              className="hidden md:flex items-center gap-2 font-bold text-base tracking-tight text-foreground"
+            >
+              <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs">
+                <BookOpen className="size-4" />
+              </div>
+              <span className="font-semibold">Studytrix</span>
+            </Link>
+          )}
+
+          {title && !isRootPage ? (
+            <h1 className="truncate text-sm font-semibold tracking-tight text-foreground">
+              {title}
+            </h1>
+          ) : null}
+        </div>
+
+        {/* Center / Right: Quick Search Button & Actions */}
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setCommandOpen(true)}
+            className="h-8 gap-2 rounded-lg px-2.5 text-xs text-muted-foreground hover:text-foreground md:w-56 justify-between bg-muted/40"
+          >
+            <div className="flex items-center gap-1.5">
+              <Search className="size-3.5" />
+              <span className="hidden sm:inline">Search library...</span>
+              <span className="sm:hidden">Search</span>
+            </div>
+            <kbd className="hidden md:inline-flex h-4 select-none items-center gap-0.5 rounded border bg-background px-1 text-[10px] font-medium text-muted-foreground">
+              ⌘K
+            </kbd>
+          </Button>
+
+          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
             <Button
               type="button"
               aria-label="Share current page"
               variant="ghost"
               size="icon"
-              className={isCompact ? "size-9 rounded-lg transition-all hover:bg-muted/60 active:scale-[0.97]" : "size-10 rounded-lg transition-all hover:bg-muted/60 active:scale-[0.97]"}
+              className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
               onClick={() => {
                 void shareCurrentPage({
                   title: title ?? "Studytrix",
-                  text: hasQueryState
-                    ? "Open this Studytrix page with my active filters."
-                    : "Open this Studytrix page.",
-                  department: shareIncludeAcademicContext === false ? undefined : department,
-                  semester: shareIncludeAcademicContext === false ? undefined : semester,
+                  text: "Open this Studytrix workspace.",
                 });
               }}
             >
-              <IconShare className="size-[18px] text-muted-foreground" />
+              <Share2 className="size-4" />
             </Button>
-            <DownloadButton className={isCompact ? "h-8 gap-1.5 rounded-md px-2 text-xs" : "h-9 gap-1.5 rounded-md px-2.5 text-sm"} compact />
-            <SettingsMenu className={isCompact ? "size-9" : undefined} />
+            <DownloadButton className="h-8 gap-1.5 rounded-lg px-2 text-xs" compact />
+            <SettingsMenu className="size-8" />
           </div>
         </div>
-
-        {isRootPage && showHeaderMotivation !== false && (
-          <p className={isCompact ? "pl-0.5 text-xs leading-snug text-muted-foreground" : "pl-0.5 text-sm leading-snug text-muted-foreground"}>
-            Keep momentum with one focused session today.
-          </p>
-        )}
       </div>
-
     </header>
   );
 }

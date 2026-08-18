@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { IconBellRinging, IconX } from "@tabler/icons-react";
+import { BellRing as IconBellRinging, X as IconX } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";

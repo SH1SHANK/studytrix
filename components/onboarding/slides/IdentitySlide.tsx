@@ -1,6 +1,6 @@
 "use client";
 
-import { IconLock, IconUserCircle } from "@tabler/icons-react";
+import { Lock as IconLock, UserCircle as IconUserCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { AnimatedInput } from "@/components/onboarding/shared/AnimatedInput";

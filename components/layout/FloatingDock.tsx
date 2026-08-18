@@ -2,13 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  IconDatabase,
-  IconDownload,
-  IconHome,
-  IconSearch,
-  IconSettings,
-} from "@tabler/icons-react";
+import { Database as IconDatabase, Download as IconDownload, Home as IconHome, Search as IconSearch, Settings as IconSettings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";

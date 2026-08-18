@@ -1,6 +1,6 @@
 "use client";
 
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { AlertTriangle as IconAlertTriangle } from "lucide-react";
 
 import {
   AlertDialog,

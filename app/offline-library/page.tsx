@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { IconCloudOff, IconFolder, IconRefresh } from "@tabler/icons-react";
+import { CloudOff as IconCloudOff, Folder as IconFolder, RefreshCw as IconRefresh } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";

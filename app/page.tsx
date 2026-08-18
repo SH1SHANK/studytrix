@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { OnboardingLoadingScreen } from "@/components/onboarding/OnboardingLoadingScreen";
-import { DashboardOnboardingEntry } from "@/features/onboarding/ui/DashboardOnboardingEntry";
+import { WorkspaceGrid } from "@/features/workspace/ui/WorkspaceGrid";
 
 export const metadata: Metadata = {
-  title: "Dashboard",
+  title: "Workspaces",
   description:
-    "Open your Studytrix dashboard to browse courses, continue study sessions, and access scoped command search quickly.",
+    "Open your Studytrix workspace to browse course folders, lectures, and study materials.",
   alternates: {
     canonical: "/",
   },
@@ -15,10 +13,8 @@ export const metadata: Metadata = {
 
 export default function Page() {
   return (
-    <AppShell showHeader={false}>
-      <Suspense fallback={<OnboardingLoadingScreen />}>
-        <DashboardOnboardingEntry />
-      </Suspense>
+    <AppShell showHeader={true}>
+      <WorkspaceGrid />
     </AppShell>
   );
 }
