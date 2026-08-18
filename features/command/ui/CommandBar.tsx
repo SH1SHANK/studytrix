@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import {
   Folder,
   Plus,
   Settings,
-  Moon,
-  Sun,
+  Palette,
   HardDrive,
   FileText,
   Tag,
   Clock,
+  Database,
 } from "lucide-react";
 
 import {
@@ -29,6 +29,11 @@ import { searchService, type SearchResultItem } from "@/features/search/search.s
 import { AddWorkspaceDialog } from "@/features/workspace/ui/AddWorkspaceDialog";
 import { AddDriveSourceDialog } from "@/features/drive/ui/AddDriveSourceDialog";
 
+const ThemeBottomSheet = dynamic(
+  () => import("@/features/theme/ui/ThemeBottomSheet").then((mod) => mod.ThemeBottomSheet),
+  { ssr: false },
+);
+
 interface CommandBarProps {
   placeholder?: string;
   navigationScope?: unknown;
@@ -36,7 +41,6 @@ interface CommandBarProps {
 
 export function CommandBar({ placeholder = "Search study library or type a command..." }: CommandBarProps) {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
   const isOpen = useCommandCenterStore((state) => state.isOpen);
   const setOpen = useCommandCenterStore((state) => state.setOpen);
 
@@ -44,6 +48,7 @@ export function CommandBar({ placeholder = "Search study library or type a comma
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [addWorkspaceOpen, setAddWorkspaceOpen] = useState(false);
   const [addSourceOpen, setAddSourceOpen] = useState(false);
+  const [themeSheetOpen, setThemeSheetOpen] = useState(false);
 
   // Shortcut handler for Cmd+K / Ctrl+K
   useEffect(() => {
@@ -104,6 +109,7 @@ export function CommandBar({ placeholder = "Search study library or type a comma
         }}
         title="Search & Commands"
         description="Search your study library or execute quick actions"
+        commandProps={{ shouldFilter: false }}
       >
         <CommandInput
           placeholder={placeholder}
@@ -189,18 +195,39 @@ export function CommandBar({ placeholder = "Search study library or type a comma
             </CommandItem>
 
             <CommandItem
-              value="action-toggle-theme"
+              value="action-tags"
               onSelect={() => {
-                setTheme(theme === "dark" ? "light" : "dark");
+                setOpen(false);
+                router.push("/tags");
               }}
               className="gap-2.5 text-xs"
             >
-              {theme === "dark" ? (
-                <Sun className="size-4 text-amber-400" />
-              ) : (
-                <Moon className="size-4 text-violet-500" />
-              )}
-              <span>Switch Theme</span>
+              <Tag className="size-4 text-amber-500" />
+              <span>Manage Tags</span>
+            </CommandItem>
+
+            <CommandItem
+              value="action-storage"
+              onSelect={() => {
+                setOpen(false);
+                router.push("/storage");
+              }}
+              className="gap-2.5 text-xs"
+            >
+              <Database className="size-4 text-primary" />
+              <span>Storage & Downloads</span>
+            </CommandItem>
+
+            <CommandItem
+              value="action-switch-theme"
+              onSelect={() => {
+                setOpen(false);
+                setThemeSheetOpen(true);
+              }}
+              className="gap-2.5 text-xs"
+            >
+              <Palette className="size-4 text-violet-500" />
+              <span>Change Visual Theme...</span>
             </CommandItem>
 
             <CommandItem
@@ -227,6 +254,13 @@ export function CommandBar({ placeholder = "Search study library or type a comma
         open={addSourceOpen}
         onOpenChange={setAddSourceOpen}
       />
+
+      {themeSheetOpen ? (
+        <ThemeBottomSheet
+          open={themeSheetOpen}
+          onOpenChange={setThemeSheetOpen}
+        />
+      ) : null}
     </>
   );
 }
