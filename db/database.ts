@@ -24,9 +24,7 @@ if (process.env.NODE_ENV === "development") {
 
 /**
  * Use globalThis to persist the database singleton across Next.js HMR reloads.
- * Module-level `let` variables are discarded when webpack re-evaluates the module,
- * which causes a second `createRxDatabase("studytrix")` call while the old instance
- * is still alive — triggering RxDB error DB9.
+ * Module-level `let` variables are discarded when webpack re-evaluates the module.
  */
 const GLOBAL_KEY = "__studytrix_db" as const;
 const GLOBAL_PROMISE_KEY = "__studytrix_db_promise" as const;
@@ -45,27 +43,31 @@ const g = globalThis as unknown as StudytrixGlobal;
  * Backed by Dexie RxStorage (IndexedDB) in browser, and Memory storage in tests.
  */
 export async function getDatabase(isTest = false): Promise<StudytrixDatabase> {
-  // For tests, bypass the global singleton — tests manage their own lifecycle
-  if (isTest) {
-    return createTestDatabase();
-  }
-
+  // Fast path: return the existing live database (works for both test and prod)
   const existingDb = g[GLOBAL_KEY];
   if (existingDb && !existingDb.closed) {
     return existingDb;
   }
 
+  // If the existing DB was closed, clear stale references so we recreate
+  if (existingDb && existingDb.closed) {
+    g[GLOBAL_KEY] = null;
+    g[GLOBAL_PROMISE_KEY] = null;
+  }
+
+  // Coalesce concurrent callers onto a single in-flight promise
   const existingPromise = g[GLOBAL_PROMISE_KEY];
   if (existingPromise) {
     return existingPromise;
   }
 
-  const promise = initDatabase();
+  const promise = isTest ? createTestDatabase() : initDatabase();
   g[GLOBAL_PROMISE_KEY] = promise;
 
   try {
     const db = await promise;
     g[GLOBAL_KEY] = db;
+    g[GLOBAL_PROMISE_KEY] = null;
     return db;
   } catch (err) {
     g[GLOBAL_PROMISE_KEY] = null;
@@ -74,18 +76,23 @@ export async function getDatabase(isTest = false): Promise<StudytrixDatabase> {
   }
 }
 
+const DB_NAME = "studytrix";
+
 async function initDatabase(): Promise<StudytrixDatabase> {
   if (devModePromise) {
     await devModePromise;
   }
 
   const storage = getStorage(false);
+  const isDev = process.env.NODE_ENV === "development";
 
   const db = await createRxDatabase<StudytrixDatabase>({
-    name: "studytrix",
+    name: DB_NAME,
     storage,
     multiInstance: true,
-    ignoreDuplicate: true,
+    // Note: RxDB strictly forbids `ignoreDuplicate: true` in production builds and throws DB9.
+    // We only pass `ignoreDuplicate: true` in development mode where dev-mode plugin is active.
+    ...(isDev ? { ignoreDuplicate: true } : {}),
   });
 
   // addCollections is idempotent when called with the same schemas on an
@@ -118,18 +125,14 @@ async function initDatabase(): Promise<StudytrixDatabase> {
       },
     });
   } catch (collectionErr: unknown) {
-    // If addCollections fails but the database already has the collections
-    // (e.g. after HMR reload), verify the critical collections exist and proceed.
     const hasCollections =
       db.collections &&
       "drive_sources" in db.collections &&
       "workspaces" in db.collections;
 
     if (!hasCollections) {
-      // Genuine failure — rethrow
       throw collectionErr;
     }
-    // Collections already present — safe to continue
     console.warn("[RxDB] addCollections skipped (already initialized):", collectionErr);
   }
 
@@ -143,8 +146,6 @@ async function createTestDatabase(): Promise<StudytrixDatabase> {
 
   const storage = getStorage(true);
 
-  // Use a unique name per invocation to avoid DB9 / collection-exists errors
-  // when tests call getDatabase(true) multiple times without full cleanup.
   const testDbCounter = (globalThis as any).__studytrix_test_counter ?? 0;
   (globalThis as any).__studytrix_test_counter = testDbCounter + 1;
   const dbName = `studytrix_test_db_${testDbCounter}`;
