@@ -188,7 +188,10 @@ function toFileEntry(task: NestedFolderTask, item: DriveItem): NestedFileEntry {
   };
 }
 
-async function crawlNestedFiles(roots: NestedRootInput[]): Promise<NestedFileEntry[]> {
+async function crawlNestedFiles(roots: NestedRootInput[]): Promise<{
+  files: NestedFileEntry[];
+  truncated: boolean;
+}> {
   const queue: NestedFolderTask[] = roots.map((root) => ({
     folderId: root.folderId,
     courseCode: root.courseCode,
@@ -201,17 +204,27 @@ async function crawlNestedFiles(roots: NestedRootInput[]): Promise<NestedFileEnt
   const visitedFolders = new Set<string>();
   const fileMap = new Map<string, NestedFileEntry>();
   let cursor = 0;
+  let activeWorkers = 0;
+  let isTruncated = false;
 
   const worker = async () => {
     while (true) {
       if (fileMap.size >= MAX_FILES || visitedFolders.size >= MAX_FOLDERS) {
+        isTruncated = true;
         return;
       }
 
-      const currentIndex = cursor;
-      if (currentIndex >= queue.length) {
-        return;
+      if (cursor >= queue.length) {
+        // If all workers are idle and queue has no more tasks, we're completely done
+        if (activeWorkers === 0) {
+          return;
+        }
+        // Other workers are still processing folders that may add subfolders to the queue; wait briefly
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        continue;
       }
+
+      const currentIndex = cursor;
       cursor += 1;
 
       const task = queue[currentIndex];
@@ -220,11 +233,13 @@ async function crawlNestedFiles(roots: NestedRootInput[]): Promise<NestedFileEnt
       }
 
       visitedFolders.add(task.folderId);
+      activeWorkers += 1;
 
       let items: DriveItem[] = [];
       try {
         items = await listFolderItems(task.folderId);
       } catch {
+        activeWorkers -= 1;
         continue;
       }
 
@@ -239,20 +254,28 @@ async function crawlNestedFiles(roots: NestedRootInput[]): Promise<NestedFileEnt
               ancestryIds: [...task.ancestryIds, item.id],
               ancestry: [...task.ancestry, item.name],
             });
+          } else if (queue.length >= MAX_FOLDERS) {
+            isTruncated = true;
           }
           continue;
         }
 
-        if (!fileMap.has(item.id) && fileMap.size < MAX_FILES) {
-          fileMap.set(item.id, toFileEntry(task, item));
+        if (!fileMap.has(item.id)) {
+          if (fileMap.size < MAX_FILES) {
+            fileMap.set(item.id, toFileEntry(task, item));
+          } else {
+            isTruncated = true;
+          }
         }
       }
+
+      activeWorkers -= 1;
     }
   };
 
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
-  return Array.from(fileMap.values()).sort((left, right) => {
+  const sortedFiles = Array.from(fileMap.values()).sort((left, right) => {
     if (left.courseCode !== right.courseCode) {
       return left.courseCode.localeCompare(right.courseCode);
     }
@@ -267,6 +290,11 @@ async function crawlNestedFiles(roots: NestedRootInput[]): Promise<NestedFileEnt
 
     return left.id.localeCompare(right.id);
   });
+
+  return {
+    files: sortedFiles,
+    truncated: isTruncated || fileMap.size >= MAX_FILES || visitedFolders.size >= MAX_FOLDERS,
+  };
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -280,15 +308,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const roots = parseRoots(body);
   if (roots.length === 0) {
-    return NextResponse.json({ files: [] });
+    return NextResponse.json({ files: [], truncated: false, indexedAt: Date.now() });
   }
 
   try {
-    const files = await crawlNestedFiles(roots);
+    const { files, truncated } = await crawlNestedFiles(roots);
     return NextResponse.json({
       files,
       indexedAt: Date.now(),
-      truncated: files.length >= MAX_FILES,
+      truncated,
     });
   } catch (error) {
     if (error instanceof DriveServiceError) {

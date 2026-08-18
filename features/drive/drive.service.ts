@@ -178,4 +178,26 @@ export class DriveService {
       throw mapDriveError(error);
     }
   }
+
+  async getFolderMetadata(folderId: string): Promise<{ id: string; name: string; mimeType: string }> {
+    try {
+      const response = await this.drive.files.get({
+        fileId: folderId,
+        fields: "id,name,mimeType",
+        supportsAllDrives: true,
+      });
+
+      if (!response.data.id || !response.data.name) {
+        throw new DriveServiceError("Folder not found", 404);
+      }
+
+      return {
+        id: response.data.id,
+        name: response.data.name,
+        mimeType: response.data.mimeType || DRIVE_FOLDER_MIME,
+      };
+    } catch (error) {
+      throw mapDriveError(error);
+    }
+  }
 }
