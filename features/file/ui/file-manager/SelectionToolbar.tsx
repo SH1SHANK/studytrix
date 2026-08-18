@@ -2,16 +2,7 @@
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  IconArchive,
-  IconCloudDown,
-  IconDownload,
-  IconLoader2,
-  IconShare,
-  IconTag,
-  IconTrash,
-  IconX,
-} from "@tabler/icons-react";
+import { Archive as IconArchive, CloudDownload as IconCloudDown, Download as IconDownload, Loader2 as IconLoader2, Share2 as IconShare, Tag as IconTag, Trash2 as IconTrash, X as IconX } from "lucide-react";
 import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
 

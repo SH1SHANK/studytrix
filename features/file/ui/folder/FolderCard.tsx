@@ -1,4 +1,4 @@
-import { IconFolder, IconStarFilled } from "@tabler/icons-react";
+import { Folder as IconFolder, Star as IconStarFilled } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import { cn } from "@/lib/utils";

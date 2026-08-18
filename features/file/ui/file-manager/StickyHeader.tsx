@@ -1,19 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import {
-  IconArrowLeft,
-  IconChevronRight,
-  IconCopy,
-  IconDatabase,
-  IconDotsVertical,
-  IconDownload,
-  IconHistory,
-  IconHome,
-  IconSettings,
-  IconShare,
-  IconTag,
-} from "@tabler/icons-react";
+import { ArrowLeft as IconArrowLeft, ChevronRight as IconChevronRight, Copy as IconCopy, Database as IconDatabase, MoreVertical as IconDotsVertical, Download as IconDownload, History as IconHistory, Home as IconHome, Settings as IconSettings, Share2 as IconShare, Tag as IconTag } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { cn } from "@/lib/utils";

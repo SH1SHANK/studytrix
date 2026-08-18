@@ -9,13 +9,7 @@ import {
   useTransform,
   type PanInfo,
 } from "framer-motion";
-import {
-  IconCloudDown,
-  IconFolder,
-  IconStar,
-  IconStarFilled,
-  IconTag,
-} from "@tabler/icons-react";
+import { CloudDownload as IconCloudDown, Folder as IconFolder, Star as IconStar, Star as IconStarFilled, Tag as IconTag } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@/lib/utils";

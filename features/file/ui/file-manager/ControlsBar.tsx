@@ -1,11 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import {
-  IconChevronDown,
-  IconLayoutGrid,
-  IconList,
-} from "@tabler/icons-react";
+import { ChevronDown as IconChevronDown, LayoutGrid as IconLayoutGrid, List as IconList } from "lucide-react";
 
 import { useShallow } from "zustand/react/shallow";
 import { useSelectionStore } from "@/features/selection/selection.store";

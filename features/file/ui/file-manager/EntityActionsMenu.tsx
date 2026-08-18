@@ -1,16 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  IconCloudDown,
-  IconCopy,
-  IconDeviceFloppy,
-  IconDownload,
-  IconDotsVertical,
-  IconShare,
-  IconStar,
-  IconTag,
-} from "@tabler/icons-react";
+import { CloudDownload as IconCloudDown, Copy as IconCopy, Save as IconDeviceFloppy, Download as IconDownload, MoreVertical as IconDotsVertical, Share2 as IconShare, Star as IconStar, Tag as IconTag } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@/lib/utils";
