@@ -17,6 +17,10 @@ export const driveSourceSchema: RxJsonSchema<DriveSourceDocType> = {
     name: {
       type: "string",
     },
+    workspaceId: {
+      type: ["string", "null"],
+      maxLength: 256,
+    },
     addedAt: {
       type: "number",
       minimum: 0,

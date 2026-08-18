@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -12,16 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import {
-  FolderPlus,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  Link2,
-  Sparkles,
-} from "lucide-react";
-import { useWorkspaceStore } from "../workspace.store";
-import type { DriveResolveResponse } from "../workspace.types";
+import { FolderPlus, Loader2 } from "lucide-react";
+import { workspaceRepository } from "@/db/repositories/workspace.repository";
 import { cn } from "@/lib/utils";
 
 interface AddWorkspaceDialogProps {
@@ -39,67 +32,19 @@ const COLOR_SWATCHES = [
 ];
 
 export function AddWorkspaceDialog({ open, onOpenChange }: AddWorkspaceDialogProps) {
-  const addWorkspace = useWorkspaceStore((state) => state.addWorkspace);
+  const router = useRouter();
 
-  const [inputUrl, setInputUrl] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedColor, setSelectedColor] = useState("indigo");
-  const [pinned, setPinned] = useState(false);
-
-  const [resolvedFolderId, setResolvedFolderId] = useState<string | null>(null);
-  const [isResolving, setIsResolving] = useState(false);
-  const [resolveError, setResolveError] = useState<string | null>(null);
-  const [resolvedSuccess, setResolvedSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const resetState = useCallback(() => {
-    setInputUrl("");
     setName("");
     setDescription("");
     setSelectedColor("indigo");
-    setPinned(false);
-    setResolvedFolderId(null);
-    setIsResolving(false);
-    setResolveError(null);
-    setResolvedSuccess(false);
+    setIsSubmitting(false);
   }, []);
-
-  const handleResolveLink = useCallback(async () => {
-    if (!inputUrl.trim()) {
-      setResolveError("Please paste a Google Drive link or Folder ID.");
-      return;
-    }
-
-    setIsResolving(true);
-    setResolveError(null);
-    setResolvedSuccess(false);
-
-    try {
-      const response = await fetch("/api/drive/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: inputUrl }),
-      });
-
-      const data = (await response.json()) as DriveResolveResponse;
-
-      if (!response.ok || !data.accessible) {
-        setResolveError(data.error || "Could not access this Google Drive folder. Ensure link sharing is public.");
-        setResolvedFolderId(null);
-      } else {
-        setResolvedFolderId(data.folderId);
-        if (!name.trim()) {
-          setName(data.name || "Drive Workspace");
-        }
-        setResolvedSuccess(true);
-        toast.success("Folder connected successfully!");
-      }
-    } catch {
-      setResolveError("Failed to connect to Google Drive. Check internet connection.");
-    } finally {
-      setIsResolving(false);
-    }
-  }, [inputUrl, name]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -111,24 +56,30 @@ export function AddWorkspaceDialog({ open, onOpenChange }: AddWorkspaceDialogPro
         return;
       }
 
+      setIsSubmitting(true);
+
       try {
-        await addWorkspace({
-          driveFolderId: resolvedFolderId || "",
+        const created = await workspaceRepository.create({
           name: finalName,
           description: description.trim() || null,
           color: selectedColor,
-          pinned,
+          pinned: false,
+          driveFolderId: "",
+          category: null,
+          itemCount: 0,
         });
 
         toast.success(`Workspace "${finalName}" created!`);
         onOpenChange(false);
         resetState();
+        router.push(`/workspace/${created.id}`);
       } catch (error) {
         toast.error("Failed to create workspace.");
         console.error(error);
+        setIsSubmitting(false);
       }
     },
-    [addWorkspace, description, name, onOpenChange, pinned, resetState, resolvedFolderId, selectedColor],
+    [description, name, onOpenChange, resetState, router, selectedColor],
   );
 
   return (
@@ -139,16 +90,16 @@ export function AddWorkspaceDialog({ open, onOpenChange }: AddWorkspaceDialogPro
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <FolderPlus className="size-4" />
             </div>
-            Create Study Workspace
+            Create New Workspace
           </DialogTitle>
           <DialogDescription className="text-xs">
-            A workspace organizes your folders, study notes, formula sheets, and study materials in one place.
+            Create a dedicated study space for your course, subject, or exam preparation.
           </DialogDescription>
         </DialogHeader>
 
@@ -160,12 +111,26 @@ export function AddWorkspaceDialog({ open, onOpenChange }: AddWorkspaceDialogPro
             </label>
             <Input
               id="ws-name-input"
-              placeholder="e.g. GATE Preparation, Machine Learning, Semester 5"
+              placeholder="e.g. Machine Learning, GATE 2026, Semester 5"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="text-sm"
               autoFocus
               required
+            />
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1.5">
+            <label htmlFor="ws-desc-input" className="text-xs font-medium text-muted-foreground">
+              Description (Optional)
+            </label>
+            <Input
+              id="ws-desc-input"
+              placeholder="e.g. Lecture notes, problem sheets, formula sheets"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="text-xs"
             />
           </div>
 
@@ -191,69 +156,7 @@ export function AddWorkspaceDialog({ open, onOpenChange }: AddWorkspaceDialogPro
             </div>
           </div>
 
-          {/* Optional Google Drive Source Link */}
-          <div className="space-y-2 border-t border-border/40 pt-3">
-            <div className="flex items-center justify-between">
-              <label htmlFor="ws-drive-url" className="text-xs font-medium text-muted-foreground">
-                Optional Google Drive Folder Link
-              </label>
-              <span className="text-[11px] text-muted-foreground/60">Public link</span>
-            </div>
-
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Link2 className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="ws-drive-url"
-                  placeholder="https://drive.google.com/drive/folders/..."
-                  value={inputUrl}
-                  onChange={(e) => {
-                    setInputUrl(e.target.value);
-                    setResolveError(null);
-                    setResolvedSuccess(false);
-                  }}
-                  className="pl-8 text-xs"
-                />
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => void handleResolveLink()}
-                disabled={isResolving || !inputUrl.trim()}
-                className="shrink-0 text-xs h-8"
-              >
-                {isResolving ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="size-3.5" />
-                )}
-                <span className="ml-1">Connect</span>
-              </Button>
-            </div>
-
-            {resolveError ? (
-              <div
-                role="alert"
-                className="flex items-start gap-1.5 rounded-lg bg-destructive/10 p-2 text-xs text-destructive"
-              >
-                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-                <span>{resolveError}</span>
-              </div>
-            ) : null}
-
-            {resolvedSuccess ? (
-              <div
-                role="status"
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 p-2 text-xs text-emerald-600 dark:text-emerald-400"
-              >
-                <CheckCircle2 className="size-3.5 shrink-0" />
-                <span>Drive folder connected and verified!</span>
-              </div>
-            ) : null}
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+          <DialogFooter className="gap-2 sm:gap-0 pt-3">
             <Button
               type="button"
               variant="ghost"
@@ -265,8 +168,15 @@ export function AddWorkspaceDialog({ open, onOpenChange }: AddWorkspaceDialogPro
             >
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={!name.trim()}>
-              Create Workspace
+            <Button type="submit" size="sm" disabled={isSubmitting || !name.trim()}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                  Creating...
+                </>
+              ) : (
+                "Create Workspace"
+              )}
             </Button>
           </DialogFooter>
         </form>

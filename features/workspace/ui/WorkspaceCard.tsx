@@ -22,12 +22,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { DriveWorkspace } from "../workspace.types";
-import { useWorkspaceStore } from "../workspace.store";
+import type { WorkspaceDocType } from "@/db/types";
+import { workspaceRepository } from "@/db/repositories/workspace.repository";
 import { toast } from "sonner";
 
 interface WorkspaceCardProps {
-  workspace: DriveWorkspace;
+  workspace: WorkspaceDocType;
 }
 
 const COLOR_MAP: Record<string, { bg: string; text: string; ring: string }> = {
@@ -40,24 +40,31 @@ const COLOR_MAP: Record<string, { bg: string; text: string; ring: string }> = {
 };
 
 export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
-  const togglePin = useWorkspaceStore((state) => state.togglePinWorkspace);
-  const deleteWorkspace = useWorkspaceStore((state) => state.deleteWorkspace);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const colors = useMemo(() => {
     return COLOR_MAP[workspace.color || "indigo"] || COLOR_MAP.indigo;
   }, [workspace.color]);
 
-  const handleDelete = () => {
-    deleteWorkspace(workspace.id);
-    toast.success(`Removed "${workspace.name}"`);
-    setIsDeleteDialogOpen(false);
+  const handleDelete = async () => {
+    try {
+      await workspaceRepository.delete(workspace.id);
+      toast.success(`Removed "${workspace.name}"`);
+    } catch {
+      toast.error("Failed to remove workspace");
+    } finally {
+      setIsDeleteDialogOpen(false);
+    }
   };
 
-  const handleTogglePin = (e: React.MouseEvent) => {
+  const handleTogglePin = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    togglePin(workspace.id);
+    try {
+      await workspaceRepository.togglePin(workspace.id);
+    } catch {
+      toast.error("Failed to update pin status");
+    }
   };
 
   const hasDriveLink = Boolean(workspace.driveFolderId);
@@ -94,7 +101,7 @@ export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={handleTogglePin}
+              onClick={(e) => void handleTogglePin(e)}
               className={cn(
                 "size-7 rounded text-muted-foreground hover:text-foreground",
                 workspace.pinned && "text-amber-500 hover:text-amber-600 dark:text-amber-400",
@@ -141,7 +148,7 @@ export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
         </div>
 
         <div className="relative z-10 mt-4 flex items-center justify-between border-t border-border/40 pt-2.5 text-[11px] text-muted-foreground">
-          <span>{hasDriveLink ? "Google Drive Source" : "Local Workspace"}</span>
+          <span>{hasDriveLink ? "Drive Source Connected" : "Local Workspace"}</span>
           {hasDriveLink ? (
             <span className="font-mono text-[10px] opacity-70">
               ID: {workspace.driveFolderId.slice(0, 6)}...
@@ -160,7 +167,7 @@ export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} variant="destructive">
+            <AlertDialogAction onClick={() => void handleDelete()} variant="destructive">
               Remove
             </AlertDialogAction>
           </AlertDialogFooter>

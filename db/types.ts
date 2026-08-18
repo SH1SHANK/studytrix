@@ -70,6 +70,7 @@ export interface DriveSourceDocType {
   id: string; // Google Drive folder ID
   url: string;
   name: string;
+  workspaceId?: string | null;
   addedAt: number;
   lastScannedAt: number | null;
   fileCount: number;

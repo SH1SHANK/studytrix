@@ -137,7 +137,7 @@ export class DriveScanner {
             path: rf.path || rf.name,
             remoteStatus: "available",
             contentStatus: "not-downloaded",
-            workspaceId: "",
+            workspaceId: source.workspaceId || "",
             localFolderId: "",
             errorMessage: null,
             indexedAt: null,
@@ -150,8 +150,9 @@ export class DriveScanner {
           // Existing file: check if remote modifiedTime or metadata changed
           const isModified = rf.modifiedTime && rf.modifiedTime !== existing.modifiedTime;
           const wasDeleted = existing.remoteStatus === "deleted";
+          const needsWorkspaceSync = !existing.workspaceId && Boolean(source.workspaceId);
 
-          if (isModified || wasDeleted || existing.name !== rf.name || existing.path !== rf.path) {
+          if (isModified || wasDeleted || existing.name !== rf.name || existing.path !== rf.path || needsWorkspaceSync) {
             filesToUpsert.push({
               ...existing,
               name: rf.name,
@@ -160,6 +161,7 @@ export class DriveScanner {
               modifiedTime: rf.modifiedTime,
               webViewUrl: rf.webViewLink,
               path: rf.path || rf.name,
+              workspaceId: existing.workspaceId || source.workspaceId || "",
               remoteStatus: "available",
               contentStatus: isModified ? "not-downloaded" : existing.contentStatus,
               updatedAt: now,

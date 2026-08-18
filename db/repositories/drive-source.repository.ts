@@ -15,10 +15,19 @@ export class DriveSourceRepository {
     return doc ? (doc.toJSON() as DriveSourceDocType) : null;
   }
 
+  async getSourcesForWorkspace(workspaceId: string): Promise<DriveSourceDocType[]> {
+    const db = await getDatabase();
+    const docs = await db.drive_sources.find().exec();
+    return docs
+      .map((d) => d.toJSON() as DriveSourceDocType)
+      .filter((s) => s.workspaceId === workspaceId);
+  }
+
   async addSource(data: {
     folderId: string;
     url: string;
     name: string;
+    workspaceId?: string | null;
     fileCount?: number;
   }): Promise<DriveSourceDocType> {
     const db = await getDatabase();
@@ -29,6 +38,7 @@ export class DriveSourceRepository {
       const patched = await existing.incrementalPatch({
         name: data.name.trim() || existing.name,
         url: data.url.trim() || existing.url,
+        workspaceId: data.workspaceId !== undefined ? data.workspaceId : existing.workspaceId,
         fileCount: data.fileCount ?? existing.fileCount,
         status: "ready",
         errorMessage: null,
@@ -40,6 +50,7 @@ export class DriveSourceRepository {
       id: folderId,
       url: data.url.trim(),
       name: data.name.trim() || "Drive Folder",
+      workspaceId: data.workspaceId || null,
       addedAt: Date.now(),
       lastScannedAt: null,
       fileCount: data.fileCount ?? 0,
@@ -49,6 +60,17 @@ export class DriveSourceRepository {
 
     const inserted = await db.drive_sources.insert(newSource);
     return inserted.toJSON() as DriveSourceDocType;
+  }
+
+  async setWorkspaceForSource(folderId: string, workspaceId: string | null): Promise<DriveSourceDocType | null> {
+    const db = await getDatabase();
+    const doc = await db.drive_sources.findOne(folderId).exec();
+    if (!doc) return null;
+
+    const patched = await doc.incrementalPatch({
+      workspaceId,
+    });
+    return patched.toJSON() as DriveSourceDocType;
   }
 
   async updateStatus(
@@ -134,6 +156,36 @@ export class DriveSourceRepository {
           if (!isSubscribed) return;
           const query$ = db.drive_sources.findOne(folderId).$.pipe(
             map((doc) => (doc ? (doc.toJSON() as DriveSourceDocType) : null)),
+          );
+          subscription = query$.subscribe({
+            next: (data) => subscriber.next(data),
+            error: (err) => subscriber.error(err),
+            complete: () => subscriber.complete(),
+          });
+        })
+        .catch((err) => subscriber.error(err));
+
+      return () => {
+        isSubscribed = false;
+        subscription?.unsubscribe();
+      };
+    });
+  }
+
+  observeSourcesForWorkspace(workspaceId: string): Observable<DriveSourceDocType[]> {
+    return new Observable<DriveSourceDocType[]>((subscriber) => {
+      let isSubscribed = true;
+      let subscription: { unsubscribe: () => void } | null = null;
+
+      getDatabase()
+        .then((db) => {
+          if (!isSubscribed) return;
+          const query$ = db.drive_sources.find().$.pipe(
+            map((docs) =>
+              docs
+                .map((d) => d.toJSON() as DriveSourceDocType)
+                .filter((s) => s.workspaceId === workspaceId),
+            ),
           );
           subscription = query$.subscribe({
             next: (data) => subscriber.next(data),

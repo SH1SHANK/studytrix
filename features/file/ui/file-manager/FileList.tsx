@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Folder, FolderPlus, Plus, HardDrive, AlertCircle } from "lucide-react";
+import {
+  Folder,
+  FolderPlus,
+  Plus,
+  HardDrive,
+  AlertCircle,
+  Loader2,
+  ChevronDown,
+} from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
@@ -16,6 +24,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useDriveFolder } from "@/features/drive/drive.hooks";
 import { openLocalFirst } from "@/features/offline/offline.access";
 import { useOfflineIndexStore } from "@/features/offline/offline.index.store";
@@ -23,18 +37,21 @@ import { useDownloadManager } from "@/ui/hooks/useDownloadManager";
 import { formatFileSize, getMimeLabel, type DriveItem } from "@/features/drive/drive.types";
 import { folderRepository } from "@/db/repositories/folder.repository";
 import { driveFileRepository } from "@/db/repositories/drive-file.repository";
-import type { FolderDocType } from "@/db/types";
+import { driveSourceRepository } from "@/db/repositories/drive-source.repository";
+import { ConnectDriveDialog } from "@/features/drive/ui/ConnectDriveDialog";
+import type { DriveSourceDocType, FolderDocType } from "@/db/types";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FileRowSkeleton, FolderRowSkeleton } from "@/components/ui/skeleton-layouts";
 
 interface FileListProps {
-  driveFolderId: string;
-  workspaceId?: string;
+  workspaceId: string;
+  folderId?: string;
   folderName?: string;
+  driveFolderId?: string;
 }
 
-export function FileList({ driveFolderId, workspaceId }: FileListProps) {
+export function FileList({ workspaceId, folderId = "", folderName, driveFolderId }: FileListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { viewMode } = useFileManagerViewMode();
@@ -44,22 +61,54 @@ export function FileList({ driveFolderId, workspaceId }: FileListProps) {
   const [localFolders, setLocalFolders] = useState<FolderDocType[]>([]);
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [connectDriveOpen, setConnectDriveOpen] = useState(false);
 
-  const { folders: driveFolders, files, isLoading, error } = useDriveFolder(driveFolderId);
-  const offlineFiles = useOfflineIndexStore((state) => state.snapshot.offlineFiles);
-  const { startDownload, tasks } = useDownloadManager();
+  // Connected Drive Sources for this workspace
+  const [connectedSources, setConnectedSources] = useState<DriveSourceDocType[]>([]);
 
-  // Load local user-created folders for this workspace
+  // Load connected Drive sources for this workspace
   useEffect(() => {
     if (!workspaceId) return;
     let isMounted = true;
 
-    folderRepository.getFoldersInFolder(workspaceId, driveFolderId).then((items) => {
+    driveSourceRepository.getSourcesForWorkspace(workspaceId).then((sources) => {
+      if (isMounted) setConnectedSources(sources);
+    });
+
+    const sub = driveSourceRepository.observeSourcesForWorkspace(workspaceId).subscribe({
+      next: (sources) => {
+        if (isMounted) setConnectedSources(sources);
+      },
+    });
+
+    return () => {
+      isMounted = false;
+      sub.unsubscribe();
+    };
+  }, [workspaceId]);
+
+  // Determine effective remote Drive folder ID (if inside a subfolder or if root has a connected source)
+  const effectiveDriveFolderId =
+    folderId || driveFolderId || (connectedSources.length > 0 ? connectedSources[0].id : "");
+
+  const { folders: driveFolders, files: driveFiles, isLoading: isDriveLoading, error: driveError } =
+    useDriveFolder(effectiveDriveFolderId || null);
+
+  const offlineFiles = useOfflineIndexStore((state) => state.snapshot.offlineFiles);
+  const { startDownload, tasks } = useDownloadManager();
+
+  // Load local user-created folders for this location
+  useEffect(() => {
+    if (!workspaceId) return;
+    let isMounted = true;
+
+    const parentId = folderId || "";
+    folderRepository.getFoldersInFolder(workspaceId, parentId).then((items) => {
       if (isMounted) setLocalFolders(items);
     });
 
     const sub = folderRepository
-      .observeFoldersInFolder(workspaceId, driveFolderId)
+      .observeFoldersInFolder(workspaceId, parentId)
       .subscribe((items) => {
         if (isMounted) setLocalFolders(items);
       });
@@ -68,7 +117,7 @@ export function FileList({ driveFolderId, workspaceId }: FileListProps) {
       isMounted = false;
       sub.unsubscribe();
     };
-  }, [driveFolderId, workspaceId]);
+  }, [folderId, workspaceId]);
 
   const handleCreateLocalFolder = async () => {
     if (!workspaceId || !newFolderName.trim()) return;
@@ -76,7 +125,7 @@ export function FileList({ driveFolderId, workspaceId }: FileListProps) {
     try {
       await folderRepository.createFolder({
         workspaceId,
-        parentFolderId: driveFolderId || null,
+        parentFolderId: folderId || "",
         name: newFolderName.trim(),
       });
       toast.success(`Created folder "${newFolderName.trim()}"`);
@@ -95,11 +144,7 @@ export function FileList({ driveFolderId, workspaceId }: FileListProps) {
       params.set("name", folder.name);
       params.set("trail", nextTrail);
 
-      if (workspaceId) {
-        router.push(`/workspace/${workspaceId}/folder/${folder.id}?${params.toString()}`);
-      } else {
-        router.push(`/workspace/${folder.id}?${params.toString()}`);
-      }
+      router.push(`/workspace/${workspaceId}/folder/${folder.id}?${params.toString()}`);
     },
     [router, searchParams, workspaceId],
   );
@@ -138,31 +183,67 @@ export function FileList({ driveFolderId, workspaceId }: FileListProps) {
     ...driveFolders.map((fld) => ({ ...fld, isLocal: false })),
   ];
 
-  const isEmpty = !isLoading && allFolders.length === 0 && files.length === 0 && !error;
+  const files = driveFiles;
+  const isScanning = connectedSources.some((s) => s.status === "scanning");
+  const isEmpty = !isDriveLoading && allFolders.length === 0 && files.length === 0 && !driveError;
 
   return (
     <div className="space-y-4">
-      {/* Folder Header Toolbar */}
-      {workspaceId ? (
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">
-            {allFolders.length} {allFolders.length === 1 ? "folder" : "folders"} · {files.length}{" "}
-            {files.length === 1 ? "file" : "files"}
-          </span>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => setNewFolderDialogOpen(true)}
-            className="h-7 gap-1 text-xs font-medium"
-          >
-            <FolderPlus className="size-3.5" />
-            New Folder
-          </Button>
+      {/* Inline Sync / Scanning Status Banner */}
+      {isScanning ? (
+        <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 text-xs text-primary animate-pulse">
+          <div className="flex items-center gap-2">
+            <Loader2 className="size-3.5 animate-spin shrink-0" />
+            <span>Indexing Google Drive files for this workspace in the background...</span>
+          </div>
+          <span className="text-[11px] opacity-80">Syncing</span>
         </div>
       ) : null}
 
+      {/* Folder Header Toolbar */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">
+          {allFolders.length} {allFolders.length === 1 ? "folder" : "folders"} · {files.length}{" "}
+          {files.length === 1 ? "file" : "files"}
+        </span>
+
+        {/* Add Material Dropdown Menu */}
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5 rounded-lg px-3 text-xs font-medium shadow-xs"
+                />
+              }
+            >
+              <Plus className="size-3.5" />
+              <span>Add Material</span>
+              <ChevronDown className="size-3 opacity-60 ml-0.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 p-1">
+              <DropdownMenuItem
+                onClick={() => setNewFolderDialogOpen(true)}
+                className="gap-2 rounded-md text-xs py-2"
+              >
+                <FolderPlus className="size-3.5 text-amber-500" />
+                <span>Create Folder</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setConnectDriveOpen(true)}
+                className="gap-2 rounded-md text-xs py-2"
+              >
+                <HardDrive className="size-3.5 text-indigo-500" />
+                <span>Connect Google Drive</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
       {/* Loading Skeletons */}
-      {isLoading ? (
+      {isDriveLoading ? (
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -178,7 +259,7 @@ export function FileList({ driveFolderId, workspaceId }: FileListProps) {
       ) : null}
 
       {/* Error state */}
-      {error && !isLoading ? (
+      {driveError && !isDriveLoading ? (
         <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card text-xs text-muted-foreground">
           <AlertCircle className="size-4 text-amber-500 shrink-0" />
           <span>Couldn&apos;t refresh remote folder contents. Your local offline files are still available.</span>
@@ -189,32 +270,22 @@ export function FileList({ driveFolderId, workspaceId }: FileListProps) {
       {isEmpty ? (
         <EmptyState
           icon={Folder}
-          title={driveFolderId ? "Nothing in this folder yet" : "This workspace is empty"}
+          title={folderId ? "This folder is empty" : "This workspace is empty"}
           description={
-            driveFolderId
-              ? "Create a subfolder or organize study material here."
-              : "Create your first folder or connect Google Drive to organize lecture notes and documents."
+            folderId
+              ? "Create a subfolder or add study materials here."
+              : "Create your first folder or connect a Google Drive folder to organize study materials."
           }
-          primaryAction={
-            workspaceId
-              ? {
-                  label: "New Folder",
-                  icon: Plus,
-                  onClick: () => setNewFolderDialogOpen(true),
-                }
-              : undefined
-          }
-          secondaryAction={
-            !driveFolderId
-              ? {
-                  label: "Connect Drive",
-                  icon: HardDrive,
-                  onClick: () => {
-                    router.push("/sources");
-                  },
-                }
-              : undefined
-          }
+          primaryAction={{
+            label: "Create Folder",
+            icon: Plus,
+            onClick: () => setNewFolderDialogOpen(true),
+          }}
+          secondaryAction={{
+            label: "Connect Google Drive",
+            icon: HardDrive,
+            onClick: () => setConnectDriveOpen(true),
+          }}
         />
       ) : null}
 
@@ -315,7 +386,7 @@ export function FileList({ driveFolderId, workspaceId }: FileListProps) {
           </DialogHeader>
           <div className="py-2">
             <Input
-              placeholder="e.g. Lecture Notes, Practice Sets"
+              placeholder="e.g. Lecture Notes, Assignment Solutions"
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               onKeyDown={(e) => {
@@ -349,6 +420,16 @@ export function FileList({ driveFolderId, workspaceId }: FileListProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Connect Google Drive Dialog */}
+      {connectDriveOpen ? (
+        <ConnectDriveDialog
+          open={connectDriveOpen}
+          onOpenChange={setConnectDriveOpen}
+          workspaceId={workspaceId}
+          workspaceName={folderName}
+        />
+      ) : null}
     </div>
   );
 }

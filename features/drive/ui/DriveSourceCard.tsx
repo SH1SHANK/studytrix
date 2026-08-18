@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ExternalLink,
+  Folder,
   FolderSync,
   HardDrive,
   Loader2,
@@ -32,6 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { driveScanner } from "@/features/drive/drive-scanner";
 import { driveSourceRepository } from "@/db/repositories/drive-source.repository";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import type { DriveSourceDocType } from "@/db/types";
 
 interface DriveSourceCardProps {
@@ -39,6 +42,9 @@ interface DriveSourceCardProps {
 }
 
 export function DriveSourceCard({ source }: DriveSourceCardProps) {
+  const router = useRouter();
+  const { workspace } = useWorkspace(source.workspaceId || null);
+
   const [isScanning, setIsScanning] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -75,8 +81,8 @@ export function DriveSourceCard({ source }: DriveSourceCardProps) {
     <>
       <div className="group relative flex flex-col justify-between rounded-xl border border-border/60 bg-card p-4 transition-all duration-200 hover:border-border hover:shadow-sm">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
               <HardDrive className="size-5" />
             </div>
             <div className="min-w-0">
@@ -85,6 +91,7 @@ export function DriveSourceCard({ source }: DriveSourceCardProps) {
               </h4>
               <p className="truncate text-xs text-muted-foreground">
                 {source.fileCount} {source.fileCount === 1 ? "file" : "files"} indexed
+                {workspace ? ` · ${workspace.name}` : ""}
               </p>
             </div>
           </div>
@@ -103,6 +110,12 @@ export function DriveSourceCard({ source }: DriveSourceCardProps) {
               }
             />
             <DropdownMenuContent align="end" className="w-40">
+              {source.workspaceId ? (
+                <DropdownMenuItem onClick={() => router.push(`/workspace/${source.workspaceId}`)}>
+                  <Folder className="mr-2 size-3.5 text-primary" />
+                  View Workspace
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem onClick={() => void handleRefresh()} disabled={isScanActive}>
                 <RefreshCw className="mr-2 size-3.5" />
                 Scan Now
@@ -130,6 +143,19 @@ export function DriveSourceCard({ source }: DriveSourceCardProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {source.workspaceId ? (
+          <div className="mt-2.5">
+            <button
+              type="button"
+              onClick={() => router.push(`/workspace/${source.workspaceId}`)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              <Folder className="size-3 text-primary" />
+              <span className="truncate max-w-[200px]">{workspace?.name || "Open Workspace"}</span>
+            </button>
+          </div>
+        ) : null}
 
         <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-3 text-xs">
           <div className="flex items-center gap-1.5" aria-live="polite">
